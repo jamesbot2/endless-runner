@@ -15,7 +15,7 @@
     const SPAWN_AHEAD = 200;
     const DESPAWN_BEHIND = 30;
     const GRAVITY = -0.012;
-    const JUMP_VELOCITY = 0.19;
+    const JUMP_VELOCITY = 0.23;
     const PLAYER_Y = 0.15;
     const ROLL_HEIGHT = 0;
     const COIN_RADIUS = 0.35;
@@ -827,14 +827,18 @@
         pauseBtnEl.style.display = 'none';
         uiOverlay.appendChild(pauseBtnEl);
         
-        // ===== MOBILE CONTROLS (virtual buttons) =====
+        // ===== MOBILE CONTROLS (cross layout at center bottom) =====
         const mobileCtrl = document.createElement('div');
         mobileCtrl.id = 'mobile-controls';
         mobileCtrl.innerHTML = `
-            <button class="m-btn" id="m-left">◀</button>
-            <button class="m-btn" id="m-jump">▲</button>
-            <button class="m-btn" id="m-roll">▼</button>
-            <button class="m-btn" id="m-right">▶</button>
+            <div class="m-row">
+                <button class="m-btn" id="m-jump">▲</button>
+            </div>
+            <div class="m-row">
+                <button class="m-btn" id="m-left">◀</button>
+                <button class="m-btn" id="m-roll">▼</button>
+                <button class="m-btn" id="m-right">▶</button>
+            </div>
         `;
         uiOverlay.appendChild(mobileCtrl);
 
@@ -978,17 +982,27 @@
         }
         
         // Mobile buttons
-        function bindMobileBtn(id, action) {
+        function bindMobileBtn(id, action, key) {
             const btn = document.getElementById(id);
             if (!btn) return;
-            const handler = (e) => { e.preventDefault(); e.stopPropagation(); if (state.started && !state.paused && !state.gameOver) action(); };
-            btn.addEventListener('touchstart', handler, { passive: false });
-            btn.addEventListener('mousedown', handler);
+            const start = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                if (key) keys[key] = true;
+                if (state.started && !state.paused && !state.gameOver) action();
+            };
+            const end = (e) => {
+                if (key) keys[key] = false;
+            };
+            btn.addEventListener('touchstart', start, { passive: false });
+            btn.addEventListener('touchend', end, { passive: false });
+            btn.addEventListener('touchcancel', end, { passive: false });
+            btn.addEventListener('mousedown', start);
+            btn.addEventListener('mouseup', end);
         }
         bindMobileBtn('m-left', moveLeft);
         bindMobileBtn('m-right', moveRight);
-        bindMobileBtn('m-jump', jump);
-        bindMobileBtn('m-roll', roll);
+        bindMobileBtn('m-jump', jump, 'w');
+        bindMobileBtn('m-roll', roll, 's');
     }
 
     // ========== CONTROLS ==========
@@ -1497,7 +1511,7 @@
 
         // Jump physics - roll in air = fall faster
         if (state.isJumping) {
-            state.playerHeight += state.jumpVelocity;
+            state.playerHeight += state.jumpVelocity * delta * 60;
             const gravMult = state.isRolling ? 2.5 : 1.0;
             state.jumpVelocity += GRAVITY * gravMult * delta * 60;
             if (state.playerHeight <= PLAYER_Y) {
