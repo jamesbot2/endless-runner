@@ -9,8 +9,8 @@
     const LANE_COUNT = 3;
     const LANE_POSITIONS = [-LANE_WIDTH, 0, LANE_WIDTH];
     const START_SPEED = 0.35;
-    const MAX_SPEED = 0.9;
-    const SPEED_INCREMENT = 0.0001;
+    const MAX_SPEED = 2.25;
+    const SPEED_INCREMENT = 0.0005;
     const TRACK_SEGMENT_LENGTH = 24;
     const SPAWN_AHEAD = 200;
     const DESPAWN_BEHIND = 30;
@@ -612,7 +612,7 @@
         if (state.obstacles.length === 0) {
             // Initial: scatter one per lane with big gaps
             // Pattern: each obstacle blocks 1 lane, player dodges to other 2
-            const positions = [-30, -46, -62, -78, -94, -110, -126, -142, -158, -174];
+            const positions = [-30, -45, -60, -75, -90, -105, -120, -135, -150, -165, -180, -195, -210, -225, -240];
             // Every 3rd obstacle is a double (blocks 2 lanes)
             for (let i = 0; i < positions.length; i++) {
                 const z = positions[i];
@@ -658,8 +658,10 @@
             if (o.position.z < farthestZ) farthestZ = o.position.z;
         }
         // Spawn one new obstacle when the farthest has moved close (past -20)
-        if (farthestZ > -20) {
-            const z = -40 - Math.random() * 15;
+        // Speed-dependent spawn: more warning at higher speeds
+        const spawnTrigger = -(15 + state.speed * 30);
+        if (farthestZ > spawnTrigger) {
+            const z = -(25 + state.speed * 16) - Math.random() * 15;
             // Occasionally spawn a double obstacle
             if (Math.random() < 0.15) {
                 const openLane = Math.floor(Math.random() * 3);
@@ -1340,9 +1342,9 @@
         // Speed indicator
         const speedEl = document.getElementById('speed-indicator');
         if (speedEl) {
-            const speedLevel = Math.floor((state.speed - START_SPEED) / (MAX_SPEED - START_SPEED) * 19) + 1;
-            speedEl.textContent = `SPD: ${Math.min(speedLevel, 20)}x`;
-            speedEl.style.color = speedLevel > 14 ? 'rgba(255,50,50,0.9)' : speedLevel > 7 ? 'rgba(255,100,100,0.7)' : 'rgba(255,255,255,0.5)';
+            const speedLevel = Math.floor((state.speed - START_SPEED) / (MAX_SPEED - START_SPEED) * 49) + 1;
+            speedEl.textContent = `SPD: ${Math.min(speedLevel, 50)}x`;
+            speedEl.style.color = speedLevel > 35 ? 'rgba(255,30,30,1)' : speedLevel > 15 ? 'rgba(255,100,50,0.9)' : 'rgba(255,255,255,0.5)';
         }
         
         // Update best score HUD
