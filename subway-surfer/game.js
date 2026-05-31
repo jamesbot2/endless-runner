@@ -611,9 +611,9 @@
 
         // Determine farthest obstacle
         let farthestZ = -SPAWN_AHEAD;
+        // Faster initial obstacle density
         if (state.obstacles.length === 0) {
-            // First spawn: populate the track ahead
-            for (let z = -15; z > -SPAWN_AHEAD; z -= 20 + Math.random() * 10) {
+            for (let z = -8; z > -SPAWN_AHEAD; z -= 12 + Math.random() * 6) {
                 const lane = Math.floor(Math.random() * 3);
                 const type = Math.random();
                 let obs;
@@ -1094,6 +1094,13 @@
         for (const obj of state.coinObjects) { scene.remove(obj); disposeObject(obj); }
         for (const obj of state.buildings) { scene.remove(obj); disposeObject(obj); }
         for (const obj of state.particles) { scene.remove(obj); disposeObject(obj); }
+        // Clear arrays
+        state.trackSegments = [];
+        state.obstacles = [];
+        state.coinObjects = [];
+        state.coinObstacleMap = new Map();
+        state.buildings = [];
+        state.particles = [];
     }
 
     function quitToMenu() {
