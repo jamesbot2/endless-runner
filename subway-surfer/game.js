@@ -608,10 +608,14 @@
             }
         }
 
-        // Determine farthest obstacle or last track
+        // Determine farthest obstacle
         let farthestZ = -SPAWN_AHEAD;
-        for (const obs of state.obstacles) {
-            if (obs.position.z < farthestZ) farthestZ = obs.position.z;
+        if (state.obstacles.length === 0) {
+            farthestZ = -SPAWN_AHEAD - 1; // trigger first spawn
+        } else {
+            for (const obs of state.obstacles) {
+                if (obs.position.z < farthestZ) farthestZ = obs.position.z;
+            }
         }
 
         // Spawn new obstacles
