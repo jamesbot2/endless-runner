@@ -1418,17 +1418,14 @@
 
     // ========== RENDER LOOP ==========
     function animate() {
+        requestAnimationFrame(animate);
         try {
-            requestAnimationFrame(animate);
             update();
-            // Safety: ensure camera is valid before rendering
             if (camera && !isNaN(camera.position.x)) {
                 renderer.render(scene, camera);
             }
         } catch(e) {
             console.error('Game error:', e);
-            // Try to recover on next frame
-            requestAnimationFrame(animate);
         }
     }
 
@@ -1453,6 +1450,8 @@
         // Show menu initially
         menuOverlay.style.display = 'flex';
         state.started = false;
+        
+        window.__neoGame = { state, scene, camera, player, renderer, animate, restartGame, quitToMenu, togglePause };
         
         animate();
     }
