@@ -8,9 +8,9 @@
     const LANE_WIDTH = 2.2;
     const LANE_COUNT = 3;
     const LANE_POSITIONS = [-LANE_WIDTH, 0, LANE_WIDTH];
-    const START_SPEED = 0.25;
+    const START_SPEED = 0.35;
     const MAX_SPEED = 0.9;
-    const SPEED_INCREMENT = 0.0003;
+    const SPEED_INCREMENT = 0.0001;
     const TRACK_SEGMENT_LENGTH = 24;
     const SPAWN_AHEAD = 200;
     const DESPAWN_BEHIND = 30;
@@ -612,20 +612,36 @@
         if (state.obstacles.length === 0) {
             // Initial: scatter one per lane with big gaps
             // Pattern: each obstacle blocks 1 lane, player dodges to other 2
-            const positions = [-30, -48, -66, -84, -102, -120, -138];
-            const laneOrder = [0, 1, 2];
+            const positions = [-30, -46, -62, -78, -94, -110, -126, -142, -158, -174];
+            // Every 3rd obstacle is a double (blocks 2 lanes)
             for (let i = 0; i < positions.length; i++) {
-                const lane = laneOrder[i % 3];
                 const z = positions[i];
-                const type = Math.random();
-                let obs;
-                if (type < 0.5) obs = createTrain(lane, z);
-                else if (type < 0.8) obs = createBarrier(lane, z);
-                else obs = createRollUnderTrain(lane, z);
-                scene.add(obs);
-                state.obstacles.push(obs);
-                state.coinObstacleMap.set(obs.uuid, []);
-                spawnCoinsNearObstacle(obs, lane, z);
+                if (i % 3 === 2) {
+                    // Double obstacle: block 2 lanes, leave 1 open
+                    const openLane = Math.floor(Math.random() * 3);
+                    const lanes = [0,1,2].filter(l => l !== openLane);
+                    for (const lane of lanes) {
+                        let obs;
+                        if (Math.random() < 0.6) obs = createTrain(lane, z);
+                        else obs = createBarrier(lane, z);
+                        scene.add(obs);
+                        state.obstacles.push(obs);
+                        state.coinObstacleMap.set(obs.uuid, []);
+                        spawnCoinsNearObstacle(obs, lane, z);
+                    }
+                } else {
+                    // Single obstacle: block 1 lane
+                    const lane = i % 3;
+                    const type = Math.random();
+                    let obs;
+                    if (type < 0.4) obs = createTrain(lane, z);
+                    else if (type < 0.7) obs = createBarrier(lane, z);
+                    else obs = createRollUnderTrain(lane, z);
+                    scene.add(obs);
+                    state.obstacles.push(obs);
+                    state.coinObstacleMap.set(obs.uuid, []);
+                    spawnCoinsNearObstacle(obs, lane, z);
+                }
             }
             // Coins in the safe zone
             for (let z = -5; z > -28; z -= 5) {
@@ -641,31 +657,44 @@
         for (const o of state.obstacles) {
             if (o.position.z < farthestZ) farthestZ = o.position.z;
         }
-        // Spawn one new obstacle when the farthest has moved close (past -45)
-        if (farthestZ > -25) {
-            // Check which lanes are blocked near the spawn area
-            const busy = new Set();
-            for (const o of state.obstacles) {
-                if (o.position.z > -40 && o.position.z < 10) {
-                    const l = Math.round((o.position.x + LANE_WIDTH) / LANE_WIDTH);
-                    if (l >= 0 && l <= 2) busy.add(l);
+        // Spawn one new obstacle when the farthest has moved close (past -20)
+        if (farthestZ > -20) {
+            const z = -40 - Math.random() * 15;
+            // Occasionally spawn a double obstacle
+            if (Math.random() < 0.15) {
+                const openLane = Math.floor(Math.random() * 3);
+                for (const lane of [0,1,2].filter(l => l !== openLane)) {
+                    let obs;
+                    if (Math.random() < 0.5) obs = createTrain(lane, z);
+                    else obs = createBarrier(lane, z);
+                    scene.add(obs);
+                    state.obstacles.push(obs);
+                    state.coinObstacleMap.set(obs.uuid, []);
+                    spawnCoinsNearObstacle(obs, lane, z);
                 }
+            } else {
+                // Check which lanes are blocked near the spawn area
+                const busy = new Set();
+                for (const o of state.obstacles) {
+                    if (o.position.z > -40 && o.position.z < 10) {
+                        const l = Math.round((o.position.x + LANE_WIDTH) / LANE_WIDTH);
+                        if (l >= 0 && l <= 2) busy.add(l);
+                    }
+                }
+                const safe = [0,1,2].filter(l => !busy.has(l));
+                const lane = safe.length > 0 ? safe[Math.floor(Math.random() * safe.length)] : Math.floor(Math.random() * 3);
+                
+                const type = Math.random();
+                let obs;
+                if (type < 0.4) obs = createTrain(lane, z);
+                else if (type < 0.7) obs = createBarrier(lane, z);
+                else obs = createRollUnderTrain(lane, z);
+                scene.add(obs);
+                state.obstacles.push(obs);
+                state.coinObstacleMap.set(obs.uuid, []);
+                spawnCoinsNearObstacle(obs, lane, z);
             }
-            // Always leave at least 1 lane open
-            const safe = [0,1,2].filter(l => !busy.has(l));
-            const lane = safe.length > 0 ? safe[Math.floor(Math.random() * safe.length)] : Math.floor(Math.random() * 3);
-            
-            const z = -45 - Math.random() * 15;
-            const type = Math.random();
-            let obs;
-            if (type < 0.5) obs = createTrain(lane, z);
-            else if (type < 0.8) obs = createBarrier(lane, z);
-            else obs = createRollUnderTrain(lane, z);
-            scene.add(obs);
-            state.obstacles.push(obs);
-            state.coinObstacleMap.set(obs.uuid, []);
-            spawnCoinsNearObstacle(obs, lane, z);
-        }
+    }
     }
 
     function spawnCoinsNearObstacle(obstacle, lane, z) {
