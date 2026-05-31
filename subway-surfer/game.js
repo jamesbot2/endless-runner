@@ -737,9 +737,17 @@
                 if (type >= 0.4 && type < 0.55) {
                     const hasRollUnderNearby = state.obstacles.some(o =>
                         o.userData.type === 'roll_under' &&
-                        Math.abs(o.position.z - z) < 8
+                        Math.abs(o.position.z - z) < 10
                     );
                     if (hasRollUnderNearby) type = 0.8;
+                }
+                // Roll-under shouldn't be near ramp trains
+                if (type >= 0.55) {
+                    const hasRampNearby = state.obstacles.some(o =>
+                        o.userData.hasRamp &&
+                        Math.abs(o.position.z - z) < 8
+                    );
+                    if (hasRampNearby) type = 0.3;
                 }
 
                 let obs;
@@ -1178,6 +1186,9 @@
         for (const obs of state.obstacles) {
             const od = obs.userData;
             
+            // On roof: skip all collisions (ride over everything)
+            if (state.onRoof) continue;
+            
             // Train: height=1.8, visual body center at y=0.9
             // Barrier: height=0.6, visual body center at y=0.3
             // Roll-under: height=0.5 (gap), top bar at y=1.4
@@ -1563,18 +1574,16 @@
             }
         }
         
-        // Roof mechanics: ride on train roofs
+        // Roof mechanics: ride on any obstacle roofs, jump between them
         if (state.onRoof) {
-            // Stay at roof height
             state.playerHeight = 1.8 + PLAYER_Y;
             player.position.y = state.playerHeight;
-            // Check if player should fall off (roof ended)
-            const hasRoofBelow = state.obstacles.some(o => 
-                o.userData.type === 'train' && 
-                Math.abs(o.position.z - 0) < 3 &&
+            // Check if there's a surface beneath (train or roll-under)
+            const hasSurfaceBelow = state.obstacles.some(o =>
+                Math.abs(o.position.z) < 4 &&
                 Math.abs(o.position.x - player.position.x) < 1.5
             );
-            if (!hasRoofBelow) {
+            if (!hasSurfaceBelow) {
                 state.onRoof = false;
             }
         }
