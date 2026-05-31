@@ -646,11 +646,11 @@
             const positions = [];
             // Pre-load obstacles from z=-30 to z=-330 with 15-unit spacing
             for (let z = -30; z > -330; z -= 15) positions.push(z);
-            // Every 3rd obstacle is a double (blocks 2 lanes)
+            // Occasionally spawn double obstacles, but not too often
             for (let i = 0; i < positions.length; i++) {
                 const z = positions[i];
-                if (i % 3 === 2) {
-                    // Double obstacle: block 2 lanes, leave 1 open
+                // Double obstacle ~every 5th, blocks 2 lanes
+                if (i % 5 === 0 && Math.random() < 0.5) {
                     const openLane = Math.floor(Math.random() * 3);
                     const lanes = [0,1,2].filter(l => l !== openLane);
                     for (const lane of lanes) {
@@ -663,12 +663,11 @@
                         spawnCoinsNearObstacle(obs, lane, z);
                     }
                 } else {
-                    // Single obstacle: block 1 lane
                     const lane = i % 3;
                     const type = Math.random();
                     let obs;
                     if (type < 0.4) obs = createTrain(lane, z);
-                    else if (type < 0.7) obs = createBarrier(lane, z);
+                    else if (type < 0.55) obs = createBarrier(lane, z);
                     else obs = createRollUnderTrain(lane, z);
                     scene.add(obs);
                     state.obstacles.push(obs);
@@ -694,8 +693,8 @@
             // Spawn one at the far edge of visible range
             const z = -55 - Math.random() * 25;
             
-            // Occasionally spawn a double obstacle (15%)
-            if (Math.random() < 0.15) {
+            // Rare double obstacle (8%)
+            if (Math.random() < 0.08) {
                 const openLane = Math.floor(Math.random() * 3);
                 for (const lane of [0,1,2].filter(l => l !== openLane)) {
                     let obs;
@@ -721,7 +720,7 @@
                 const type = Math.random();
                 let obs;
                 if (type < 0.4) obs = createTrain(lane, z);
-                else if (type < 0.7) obs = createBarrier(lane, z);
+                else if (type < 0.55) obs = createBarrier(lane, z);
                 else obs = createRollUnderTrain(lane, z);
                 scene.add(obs);
                 state.obstacles.push(obs);
