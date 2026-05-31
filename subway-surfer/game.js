@@ -696,23 +696,17 @@
         // Fill the pipe: keep enough obstacles ahead of the player
         const ahead = state.obstacles.filter(o => o.position.z > -90 && o.position.z < 0);
 
-        
-
-        // Speed-dependent pipe: more obstacles at higher speed
-
+        // Speed-dependent pipe: more obstacles at higher speeds
         const targetCount = Math.min(6 + Math.floor(state.speed * 6), 18);
-
         const spawnZ = -(45 + state.speed * 30) - Math.random() * 15;
 
-        
-
         if (ahead.length < targetCount) {
-
             const z = spawnZ;
 
-            
+            // Skip spawn if any obstacle already in this Z range (overlap prevention)
+            const zBlocked = state.obstacles.some(o => Math.abs(o.position.z - z) < 4);
+            if (!zBlocked) {
 
-            // Rare double obstacle (8%)
             // Rare double obstacle (8%)
             if (Math.random() < 0.08) {
                 const openLane = Math.floor(Math.random() * 3);
@@ -736,17 +730,17 @@
                 }
                 const safe = [0,1,2].filter(l => !busy.has(l));
                 const lane = safe.length > 0 ? safe[Math.floor(Math.random() * safe.length)] : Math.floor(Math.random() * 3);
-                
+
                 // Don't place barriers near roll-under gates
                 let type = Math.random();
-                if (type >= 0.4 && type < 0.55) { // barrier candidate
-                    const hasRollUnderNearby = state.obstacles.some(o => 
+                if (type >= 0.4 && type < 0.55) {
+                    const hasRollUnderNearby = state.obstacles.some(o =>
                         o.userData.type === 'roll_under' &&
                         Math.abs(o.position.z - z) < 8
                     );
-                    if (hasRollUnderNearby) type = 0.8; // change to roll-under
+                    if (hasRollUnderNearby) type = 0.8;
                 }
-                
+
                 let obs;
                 if (type < 0.4) obs = createTrain(lane, z);
                 else if (type < 0.55) obs = createBarrier(lane, z);
@@ -755,6 +749,7 @@
                 state.obstacles.push(obs);
                 state.coinObstacleMap.set(obs.uuid, []);
                 spawnCoinsNearObstacle(obs, lane, z);
+            }
             }
         }
     }
