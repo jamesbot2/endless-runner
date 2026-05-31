@@ -251,14 +251,6 @@
         roof.position.set(0, 1.85, 0);
         group.add(roof);
 
-        // Bottom frame
-        const frame = new THREE.Mesh(
-            new THREE.BoxGeometry(2.2, 0.2, 5.6),
-            new THREE.MeshLambertMaterial({ color: 0x444444 })
-        );
-        frame.position.set(0, 0.1, 0);
-        group.add(frame);
-
         // Door line (center)
         const doorMat = new THREE.MeshBasicMaterial({ color: 0xCCCCCC });
         const door = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.9, 0.6), doorMat);
@@ -333,13 +325,13 @@
         const stripeMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
         for (let i = -2; i <= 2; i++) {
             const s = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.06, 0.08), stripeMat);
-            s.position.set(i * 0.2, 0.4 + (i % 2) * 0.1, 0.5);
+            s.position.set(i * 0.2, 0.4 + (i % 2) * 0.1, 0.55);
             s.rotation.x = 0.1;
             group.add(s);
         }
         for (let i = -2; i <= 2; i++) {
             const s = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.06, 0.08), stripeMat);
-            s.position.set(i * 0.2, 0.4 + ((i+1) % 2) * 0.1, -0.5);
+            s.position.set(i * 0.2, 0.4 + ((i+1) % 2) * 0.1, -0.55);
             s.rotation.x = -0.1;
             group.add(s);
         }
