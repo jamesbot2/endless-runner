@@ -611,23 +611,46 @@
         if (state.obstacles.length === 0) {
             // Initial spawn: fill visible range
             for (let z = -8; z > -80; z -= 12 + Math.random() * 6) {
-                spawnOneObstacle(z);
+                // Alternate lanes to avoid wall of obstacles
+                const lane = (state.obstacles.length % 3);
+                spawnOneObstacle(z, lane);
             }
             return;
         }
 
-        // Ongoing: check if we need more obstacles in visible range (-55 to -5)
-        const hasNearby = state.obstacles.some(o => o.position.z > -55 && o.position.z < -5);
-        if (!hasNearby) {
-            // Spawn at fog edge so they fade in naturally
-            for (let z = -60; z > -85; z -= 14 + Math.random() * 6) {
-                spawnOneObstacle(z);
-            }
+        // Ongoing: if closest obstacle is near the player, spawn one more ahead
+        let closestZ = -999;
+        for (const o of state.obstacles) {
+            if (o.position.z > closestZ && o.position.z < 0) closestZ = o.position.z;
+        }
+        // Only spawn when the closest obstacle has passed z=-5 (close to player)
+        // and there's an obstacle-free gap ahead
+        if (closestZ > -30 || state.obstacles.length < 3) {
+            // Pick a lane that's not the same as the two closest obstacles
+            const busyLanes = new Set();
+            state.obstacles
+                .filter(o => o.position.z > -60 && o.position.z < 0)
+                .forEach(o => busyLanes.add(Math.round((o.position.x + LANE_WIDTH) / LANE_WIDTH)));
+            
+            let lane;
+            const available = [0, 1, 2].filter(l => !busyLanes.has(l));
+            if (available.length > 0) lane = available[Math.floor(Math.random() * available.length)];
+            else lane = Math.floor(Math.random() * 3);
+            
+            const type = Math.random();
+            let obs;
+            if (type < 0.45) obs = createTrain(lane, -55 - Math.random() * 15);
+            else if (type < 0.75) obs = createBarrier(lane, -55 - Math.random() * 15);
+            else obs = createRollUnderTrain(lane, -55 - Math.random() * 15);
+            scene.add(obs);
+            state.obstacles.push(obs);
+            state.coinObstacleMap.set(obs.uuid, []);
+            spawnCoinsNearObstacle(obs, lane, obs.position.z);
         }
     }
     
-    function spawnOneObstacle(z) {
-        const lane = Math.floor(Math.random() * 3);
+    function spawnOneObstacle(z, forcedLane) {
+        const lane = forcedLane !== undefined ? forcedLane : Math.floor(Math.random() * 3);
         const type = Math.random();
         let obs;
         if (type < 0.45) obs = createTrain(lane, z);
