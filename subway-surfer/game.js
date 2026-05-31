@@ -1675,11 +1675,12 @@
         if (isNaN(player.position.z)) player.position.z = 0;
 
         if (state.firstPerson) {
-            // First person: camera at player's eye level, looking forward
-            const eyeY = (state.isRolling ? 0.5 : 1.6);
+            // Eye follows player Y (jump up, roll down)
+            const eyeY = player.position.y + (state.isRolling ? 0.3 : 1.3);
             const eyeZ = player.position.z + 0.5;
             camera.position.set(player.position.x, eyeY, eyeZ);
-            camera.lookAt(player.position.x, 0.8, player.position.z - 30);
+            const lookY = player.position.y + 0.3;
+            camera.lookAt(player.position.x, lookY, player.position.z - 30);
             // Hide player model
             if (player) player.visible = false;
         } else {
