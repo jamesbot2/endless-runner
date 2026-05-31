@@ -14,7 +14,6 @@
     const TRACK_SEGMENT_LENGTH = 24;
     const SPAWN_AHEAD = 200;
     const DESPAWN_BEHIND = 30;
-    const MIN_OBSTACLE_GAP = 15;
     const GRAVITY = -0.012;
     const JUMP_VELOCITY = 0.25;
     const PLAYER_Y = 0.15;
@@ -609,55 +608,36 @@
             }
         }
 
-        // Determine farthest obstacle
-        let farthestZ = -SPAWN_AHEAD;
-        // Faster initial obstacle density
         if (state.obstacles.length === 0) {
-            for (let z = -8; z > -SPAWN_AHEAD; z -= 12 + Math.random() * 6) {
-                const lane = Math.floor(Math.random() * 3);
-                const type = Math.random();
-                let obs;
-                if (type < 0.45) obs = createTrain(lane, z);
-                else if (type < 0.75) obs = createBarrier(lane, z);
-                else obs = createRollUnderTrain(lane, z);
-                scene.add(obs);
-                state.obstacles.push(obs);
-                state.lastObstacleZ = z;
-                state.coinObstacleMap.set(obs.uuid, []);
-                spawnCoinsNearObstacle(obs, lane, z);
+            // Initial spawn: fill visible range
+            for (let z = -8; z > -80; z -= 12 + Math.random() * 6) {
+                spawnOneObstacle(z);
             }
             return;
         }
-        for (const obs of state.obstacles) {
-            if (obs.position.z < farthestZ) farthestZ = obs.position.z;
-        }
 
-        // Spawn new obstacles to fill gap
-        while (farthestZ > -SPAWN_AHEAD) {
-            const gap = MIN_OBSTACLE_GAP + Math.random() * 8;
-            const z = farthestZ - gap;
-            if (z < -SPAWN_AHEAD + 5) break;
-
-            const lane = Math.floor(Math.random() * 3);
-            const type = Math.random();
-
-            let obstacle;
-            if (type < 0.45) {
-                obstacle = createTrain(lane, z);
-            } else if (type < 0.75) {
-                obstacle = createBarrier(lane, z);
-            } else {
-                obstacle = createRollUnderTrain(lane, z);
+        // Ongoing: check if we need more obstacles in visible range (-55 to -5)
+        const hasNearby = state.obstacles.some(o => o.position.z > -55 && o.position.z < -5);
+        if (!hasNearby) {
+            // Spawn at fog edge so they fade in naturally
+            for (let z = -60; z > -85; z -= 14 + Math.random() * 6) {
+                spawnOneObstacle(z);
             }
-
-            scene.add(obstacle);
-            state.obstacles.push(obstacle);
-            state.lastObstacleZ = z;
-            farthestZ = z;
-
-            state.coinObstacleMap.set(obstacle.uuid, []);
-            spawnCoinsNearObstacle(obstacle, lane, z);
         }
+    }
+    
+    function spawnOneObstacle(z) {
+        const lane = Math.floor(Math.random() * 3);
+        const type = Math.random();
+        let obs;
+        if (type < 0.45) obs = createTrain(lane, z);
+        else if (type < 0.75) obs = createBarrier(lane, z);
+        else obs = createRollUnderTrain(lane, z);
+        scene.add(obs);
+        state.obstacles.push(obs);
+        state.lastObstacleZ = z;
+        state.coinObstacleMap.set(obs.uuid, []);
+        spawnCoinsNearObstacle(obs, lane, z);
     }
 
     function spawnCoinsNearObstacle(obstacle, lane, z) {
@@ -1167,6 +1147,7 @@
         state.paused = false;
         pauseBtnEl.style.display = 'block';
         pauseBtnEl.textContent = '\u23F8';
+        gameOverEl.classList.remove('visible');
         pauseOverlay.style.display = 'none';
         clock.getDelta();
 
