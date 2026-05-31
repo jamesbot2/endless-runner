@@ -12,8 +12,9 @@
     const MAX_SPEED = 0.55;
     const SPEED_INCREMENT = 0.00008;
     const TRACK_SEGMENT_LENGTH = 24;
-    const SPAWN_AHEAD = 140;
+    const SPAWN_AHEAD = 200;
     const DESPAWN_BEHIND = 30;
+    const MIN_OBSTACLE_GAP = 15;
     const GRAVITY = -0.012;
     const JUMP_VELOCITY = 0.25;
     const PLAYER_Y = 0.15;
@@ -611,18 +612,31 @@
         // Determine farthest obstacle
         let farthestZ = -SPAWN_AHEAD;
         if (state.obstacles.length === 0) {
-            farthestZ = -SPAWN_AHEAD - 1; // trigger first spawn
-        } else {
-            for (const obs of state.obstacles) {
-                if (obs.position.z < farthestZ) farthestZ = obs.position.z;
+            // First spawn: populate the track ahead
+            for (let z = -15; z > -SPAWN_AHEAD; z -= 20 + Math.random() * 10) {
+                const lane = Math.floor(Math.random() * 3);
+                const type = Math.random();
+                let obs;
+                if (type < 0.45) obs = createTrain(lane, z);
+                else if (type < 0.75) obs = createBarrier(lane, z);
+                else obs = createRollUnderTrain(lane, z);
+                scene.add(obs);
+                state.obstacles.push(obs);
+                state.lastObstacleZ = z;
+                state.coinObstacleMap.set(obs.uuid, []);
+                spawnCoinsNearObstacle(obs, lane, z);
             }
+            return;
+        }
+        for (const obs of state.obstacles) {
+            if (obs.position.z < farthestZ) farthestZ = obs.position.z;
         }
 
-        // Spawn new obstacles
+        // Spawn new obstacles to fill gap
         while (farthestZ > -SPAWN_AHEAD) {
-            const gap = state.minObstacleGap + Math.random() * 20 - state.speed * 30;
-            const z = farthestZ - Math.max(gap, 15);
-            if (z < -SPAWN_AHEAD) break;
+            const gap = MIN_OBSTACLE_GAP + Math.random() * 8;
+            const z = farthestZ - gap;
+            if (z < -SPAWN_AHEAD + 5) break;
 
             const lane = Math.floor(Math.random() * 3);
             const type = Math.random();
@@ -641,35 +655,34 @@
             state.lastObstacleZ = z;
             farthestZ = z;
 
-            // Update coin-obstacle map
             state.coinObstacleMap.set(obstacle.uuid, []);
+            spawnCoinsNearObstacle(obstacle, lane, z);
+        }
+    }
 
-            // Spawn coins in non-occupied lanes near obstacles
-            const coinChance = Math.random();
-            if (coinChance < 0.5) {
-                // Single coin
-                let coinLane = Math.floor(Math.random() * 3);
-                while (coinLane === lane && Math.random() > 0.3) {
-                    coinLane = (coinLane + 1) % 3;
-                }
-                const coin = createCoin(coinLane, z - 3 - Math.random() * 5, 0.3);
-                scene.add(coin);
-                state.coinObjects.push(coin);
-                state.coinObstacleMap.get(obstacle.uuid).push(coin);
-            } else if (coinChance < 0.7) {
-                // Coin pattern
-                let coinLane = Math.floor(Math.random() * 3);
-                while (coinLane === lane && Math.random() > 0.4) {
-                    coinLane = (coinLane + 1) % 3;
-                }
-                const patterns = ['line', 'arc', 'double', 'zigzag', 'arc', 'zigzag'];
-                const pattern = patterns[Math.floor(Math.random() * patterns.length)];
-                const coins = createCoinPattern(coinLane, z - 4, pattern);
-                for (const c of coins) {
-                    scene.add(c);
-                    state.coinObjects.push(c);
-                    state.coinObstacleMap.get(obstacle.uuid).push(c);
-                }
+    function spawnCoinsNearObstacle(obstacle, lane, z) {
+        const coinChance = Math.random();
+        if (coinChance < 0.5) {
+            let coinLane = Math.floor(Math.random() * 3);
+            while (coinLane === lane && Math.random() > 0.3) {
+                coinLane = (coinLane + 1) % 3;
+            }
+            const coin = createCoin(coinLane, z - 3 - Math.random() * 5, 0.3);
+            scene.add(coin);
+            state.coinObjects.push(coin);
+            state.coinObstacleMap.get(obstacle.uuid).push(coin);
+        } else if (coinChance < 0.7) {
+            let coinLane = Math.floor(Math.random() * 3);
+            while (coinLane === lane && Math.random() > 0.4) {
+                coinLane = (coinLane + 1) % 3;
+            }
+            const patterns = ['line', 'arc', 'double', 'zigzag', 'arc', 'zigzag'];
+            const pattern = patterns[Math.floor(Math.random() * patterns.length)];
+            const coins = createCoinPattern(coinLane, z - 4, pattern);
+            for (const c of coins) {
+                scene.add(c);
+                state.coinObjects.push(c);
+                state.coinObstacleMap.get(obstacle.uuid).push(c);
             }
         }
     }
