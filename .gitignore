@@ -1,0 +1,19 @@
+# Secrets
+.github/github-token*
+**/*.token
+**/*credentials*
+.env
+*.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Agent workspace cruft
+HEARTBEAT.md
