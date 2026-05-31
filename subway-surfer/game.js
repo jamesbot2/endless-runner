@@ -17,7 +17,7 @@
     const GRAVITY = -0.012;
     const JUMP_VELOCITY = 0.25;
     const PLAYER_Y = 0.15;
-    const ROLL_HEIGHT = 0.35;
+    const ROLL_HEIGHT = 0;
     const COIN_RADIUS = 0.35;
     const GROUND_WIDTH = LANE_WIDTH * LANE_COUNT + 1;
 
@@ -565,8 +565,14 @@
         menuOverlay.innerHTML = `
             <div class="menu-content">
                 <h1 class="menu-title">SUBWAY SURFER</h1>
-                <div class="tap-to-start">TAP TO START</div>
-                <div class="menu-controls">← → Move  |  ↑ Jump  |  ↓ Roll</div>
+                <p class="menu-subtitle">Neo Edition</p>
+                <div class="tap-to-start pulse">TAP TO START</div>
+                <div class="menu-controls">
+                    <span class="key">←</span> <span class="key">→</span> Move &nbsp;|&nbsp;
+                    <span class="key">↑</span> Jump &nbsp;|&nbsp;
+                    <span class="key">↓</span> Roll
+                </div>
+                <div class="menu-keys">ESC / P = Pause &nbsp;|&nbsp; M = Menu</div>
                 <div class="menu-mobile-hint">Swipe to play on mobile</div>
             </div>
         `;
@@ -581,6 +587,7 @@
             <div class="menu-content">
                 <h1 class="menu-title">PAUSED</h1>
                 <div class="tap-to-start">TAP TO CONTINUE</div>
+                <div class="menu-btn" id="pause-menu-btn">RETURN TO MENU</div>
             </div>
         `;
         uiOverlay.appendChild(pauseOverlay);
@@ -702,6 +709,13 @@
         // Pause button click
         pauseBtnEl.addEventListener('click', togglePause);
         pauseBtnEl.addEventListener('touchend', (e) => { e.preventDefault(); togglePause(); });
+        
+        // Pause menu - return to menu
+        const pauseMenuBtn = document.getElementById('pause-menu-btn');
+        if (pauseMenuBtn) {
+            pauseMenuBtn.addEventListener('click', quitToMenu);
+            pauseMenuBtn.addEventListener('touchend', (e) => { e.preventDefault(); quitToMenu(); });
+        }
     }
 
     // ========== CONTROLS ==========
@@ -721,6 +735,16 @@
             // Pause toggle
             if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && state.started && !state.gameOver) {
                 togglePause();
+                return;
+            }
+            // Return to menu (M key)
+            if ((e.key === 'm' || e.key === 'M') && state.started) {
+                if (!state.gameOver) {
+                    togglePause();
+                    setTimeout(quitToMenu, 100);
+                } else {
+                    quitToMenu();
+                }
                 return;
             }
             
@@ -1160,9 +1184,9 @@
             player.scale.y += (1 - player.scale.y) * 0.15;
         }
 
-        // Running animation
+        // Running animation - skip during roll
         const runCycle = state.gameTime * 8;
-        if (!state.isJumping) {
+        if (!state.isJumping && !state.isRolling) {
             const bobAmount = 0.04;
             player.position.y += Math.sin(runCycle) * bobAmount;
         }
