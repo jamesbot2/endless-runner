@@ -8,9 +8,9 @@
     const LANE_WIDTH = 2.2;
     const LANE_COUNT = 3;
     const LANE_POSITIONS = [-LANE_WIDTH, 0, LANE_WIDTH];
-    const START_SPEED = 0.18;
-    const MAX_SPEED = 0.55;
-    const SPEED_INCREMENT = 0.00008;
+    const START_SPEED = 0.25;
+    const MAX_SPEED = 0.9;
+    const SPEED_INCREMENT = 0.0003;
     const TRACK_SEGMENT_LENGTH = 24;
     const SPAWN_AHEAD = 200;
     const DESPAWN_BEHIND = 30;
@@ -1311,9 +1311,9 @@
         // Speed indicator
         const speedEl = document.getElementById('speed-indicator');
         if (speedEl) {
-            const speedLevel = Math.floor((state.speed - START_SPEED) / (MAX_SPEED - START_SPEED) * 10) + 1;
-            speedEl.textContent = `SPD: ${Math.min(speedLevel, 10)}x`;
-            speedEl.style.color = speedLevel > 7 ? 'rgba(255,100,100,0.7)' : 'rgba(255,255,255,0.5)';
+            const speedLevel = Math.floor((state.speed - START_SPEED) / (MAX_SPEED - START_SPEED) * 19) + 1;
+            speedEl.textContent = `SPD: ${Math.min(speedLevel, 20)}x`;
+            speedEl.style.color = speedLevel > 14 ? 'rgba(255,50,50,0.9)' : speedLevel > 7 ? 'rgba(255,100,100,0.7)' : 'rgba(255,255,255,0.5)';
         }
         
         // Update best score HUD
