@@ -276,23 +276,25 @@
         // Ramp (30% of trains - lets player run onto roof)
         const hasRamp = Math.random() < 0.3;
         if (hasRamp) {
+            // Main ramp plate: slopes from ground to roof
             const rampMat = new THREE.MeshLambertMaterial({ color: 0xFF8800 });
-            const ramp = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.08, 0.8), rampMat);
-            ramp.position.set(0, 0.3, -3.3);
-            ramp.rotation.x = -0.5;
+            const ramp = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.1, 2.5), rampMat);
+            ramp.position.set(0, 0.8, -2.8);
+            ramp.rotation.x = -0.6;
             group.add(ramp);
-            // Side rails on ramp
+            // Side rails
             const railMat = new THREE.MeshLambertMaterial({ color: 0xDD6600 });
             for (let side = -1; side <= 1; side += 2) {
-                const rail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.8), railMat);
-                rail.position.set(side * 1.1, 0.4, -3.3);
+                const rail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.6, 2.5), railMat);
+                rail.position.set(side * 1.1, 1.0, -2.8);
+                rail.rotation.x = -0.6;
                 group.add(rail);
             }
-            // Warning stripes on ramp
+            // Warning stripes
             const warnMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
             for (let i = -1; i <= 1; i += 2) {
-                const strip = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.02, 0.06), warnMat);
-                strip.position.set(i * 0.4, 0.04, -3.05);
+                const strip = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.02, 0.06), warnMat);
+                strip.position.set(i * 0.5, 0.05, -2.0);
                 group.add(strip);
             }
             group.userData.hasRamp = true;
@@ -1181,7 +1183,7 @@
             if (od.type === 'train' && od.hasRamp && !state.onRoof) {
                 const trainFront = obs.position.z - (od.depth || 5.5) / 2;
                 // Player can board from the front edge of the train
-                if (playerPos.z >= trainFront - 1.0 && playerPos.z <= trainFront + 2.5 &&
+                if (playerPos.z >= trainFront - 1.0 && playerPos.z <= trainFront + 3.5 &&
                     Math.abs(playerPos.x - obsBox.x) < 1.5) {
                     state.onRoof = true;
                     continue;
