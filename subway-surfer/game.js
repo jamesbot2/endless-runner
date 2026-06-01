@@ -3,15 +3,6 @@
 
 (function() {
     'use strict';
-    
-    // Wait for THREE to be available (async CDN loading)
-    function waitForThree() {
-        if (typeof THREE !== 'undefined') {
-            init();
-        } else {
-            setTimeout(waitForThree, 200);
-        }
-    }
 
     // ========== CONSTANTS ==========
     const LANE_WIDTH = 2.2;
@@ -875,6 +866,15 @@
         fpvBtn.addEventListener('click', () => { state.firstPerson = !state.firstPerson; fpvBtn.textContent = state.firstPerson ? '\uD83D\uDC41' : '\uD83D\uDC41'; });
         fpvBtn.addEventListener('touchend', (e) => { e.preventDefault(); state.firstPerson = !state.firstPerson; });
         
+        // ===== CONSOLE BUTTON =====
+        const conBtn = document.createElement('div');
+        conBtn.id = 'con-btn';
+        conBtn.textContent = '>_';
+        conBtn.style.display = 'none';
+        uiOverlay.appendChild(conBtn);
+        conBtn.addEventListener('click', toggleConsole);
+        conBtn.addEventListener('touchend', (e) => { e.preventDefault(); toggleConsole(); });
+        
         // ===== MOBILE CONTROLS (cross layout at center bottom) =====
         const mobileCtrl = document.createElement('div');
         mobileCtrl.id = 'mobile-controls';
@@ -1313,10 +1313,26 @@
         state.started = true;
         menuOverlay.style.display = 'none';
         pauseBtnEl.style.display = 'block';
+        const cb = document.getElementById('con-btn');
+        if (cb) cb.style.display = 'block';
         if (!audioCtx) initAudio();
         clock.getDelta();
         const f = document.getElementById('fpv-btn');
         if (f) f.style.display = 'block';
+    }
+    
+    function toggleConsole() {
+        const con = document.getElementById('dev-console');
+        if (!con) return;
+        if (con.style.display === 'flex') {
+            con.style.display = 'none';
+            state.paused = false;
+        } else {
+            con.style.display = 'flex';
+            state.paused = true;
+            const ci = document.getElementById('console-input');
+            if (ci) { ci.value = ''; ci.focus(); }
+        }
     }
 
     function togglePause() {
@@ -1955,11 +1971,11 @@
         animate();
     }
 
-    // Start when DOM ready
+    // Start when DOM ready (THREE is loaded synchronously from CDN)
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', waitForThree);
+        document.addEventListener('DOMContentLoaded', init);
     } else {
-        waitForThree();
+        init();
     }
 
 })();
