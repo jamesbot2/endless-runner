@@ -294,7 +294,7 @@
     function createTrain(lane, zPos, isMoving) {
         const group = new THREE.Group();
         const laneX = LANE_POSITIONS[lane];
-        const moving = (isMoving !== false) && Math.random() < 0.12;
+        const moving = (isMoving !== false) && Math.random() < 0.18;
         const colors = [0xE53935, 0x1E88E5, 0x43A047, 0xFB8C00, 0x8E24AA];
         const mainColor = colors[Math.floor(Math.random() * colors.length)];
 
@@ -829,8 +829,11 @@
                     const lanes = [0,1,2].filter(l => l !== openLane);
                     for (const lane of lanes) {
                         let obs;
-                        if (Math.random() < 0.6) obs = createTrain(lane, z);
-                        else obs = createBarrier(lane, z);
+                        const t = Math.random();
+                        if (t < 0.5) obs = createTrain(lane, z, false);
+                        else if (t < 0.8) obs = createBarrier(lane, z);
+                        else if (t < 0.9) obs = createLowFlyingObstacle(lane, z);
+                        else obs = createRollUnderTrain(lane, z);
                         scene.add(obs);
                         state.obstacles.push(obs);
                         state.coinObstacleMap.set(obs.uuid, []);
@@ -850,8 +853,8 @@
                     let obs;
                     if (type < 0.30) obs = createTrain(lane, z, false);
                     else if (type < 0.50) obs = createBarrier(lane, z);
-                    else if (type < 0.55) obs = createFullLaneBarrier(z);
-                    else if (type < 0.75) obs = createLowFlyingObstacle(lane, z);
+                    else if (type < 0.70) obs = createLowFlyingObstacle(lane, z);
+                    else if (type < 0.78) obs = createFullLaneBarrier(z);
                     else obs = createRollUnderTrain(lane, z);
                     scene.add(obs);
                     state.obstacles.push(obs);
@@ -883,13 +886,16 @@
             const zBlocked = state.obstacles.some(o => Math.abs(o.position.z - z) < 4);
             if (!zBlocked) {
 
-            // Rare double obstacle (8%)
-            if (Math.random() < 0.08) {
+            // Rare double obstacle (10%)
+            if (Math.random() < 0.10) {
                 const openLane = Math.floor(Math.random() * 3);
                 for (const lane of [0,1,2].filter(l => l !== openLane)) {
                     let obs;
-                    if (Math.random() < 0.5) obs = createTrain(lane, z);
-                    else obs = createBarrier(lane, z);
+                    const t = Math.random();
+                    if (t < 0.5) obs = createTrain(lane, z, true);
+                    else if (t < 0.8) obs = createBarrier(lane, z);
+                    else if (t < 0.9) obs = createLowFlyingObstacle(lane, z);
+                    else obs = createRollUnderTrain(lane, z);
                     scene.add(obs);
                     state.obstacles.push(obs);
                     state.coinObstacleMap.set(obs.uuid, []);
@@ -928,8 +934,8 @@
                 let obs;
                 if (type < 0.30) obs = createTrain(lane, z, true);
                 else if (type < 0.50) obs = createBarrier(lane, z);
-                else if (type < 0.55) obs = createFullLaneBarrier(z);
-                else if (type < 0.75) obs = createLowFlyingObstacle(lane, z);
+                else if (type < 0.70) obs = createLowFlyingObstacle(lane, z);
+                else if (type < 0.78) obs = createFullLaneBarrier(z);
                 else obs = createRollUnderTrain(lane, z);
                 scene.add(obs);
                 state.obstacles.push(obs);
@@ -1536,23 +1542,23 @@
             }
             
             // Low flying: can roll under OR jump over
+            // Use state.playerHeight (actual jump height), not player.position.y (always 0)
             if (od.type === 'low_flying') {
                 if (state.isRolling) {
-                    continue; // roll under
+                    continue; // roll under drones
                 }
-                if (state.isJumping && player.position.y > 0.8) {
-                    continue; // jump over
-                }
-            }
-            
-            // Full lane barrier: must jump (not roll, it's on the ground)
-            if (od.type === 'full_barrier') {
-                if (state.isJumping && player.position.y > 0.8) {
+                if (state.isJumping && state.playerHeight > 0.9) {
                     continue; // jumped over
                 }
-                if (state.isRolling) {
-                    return true; // rolling hits it
+                // Standing: collides
+            }
+            
+            // Full lane barrier: must jump over, rolling still hits
+            if (od.type === 'full_barrier') {
+                if (state.isJumping && state.playerHeight > 0.9) {
+                    continue; // jumped over
                 }
+                // Standing or rolling: collides
             }
             
             // Ramp train: board from the BACK of the train (ramp is behind)
