@@ -1837,6 +1837,7 @@
         homelanderGroup = new THREE.Group();
         homelanderGroup.position.copy(player.position);
         homelanderGroup.position.y = 6;
+        homelanderGroup.rotation.y = Math.PI; // face -Z (back to camera)
         
         // === BODY ===
         // Torso (blue suit)
