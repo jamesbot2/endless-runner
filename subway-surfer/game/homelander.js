@@ -11,6 +11,7 @@
     SG.homelanderCape = null;
 
     SG.activateHomelander = function() {
+        SG.state.legitRun = false; // Homelander: exclude from leaderboard
         if (!SG.player) return;
         SG.player.visible = false;
         SG.homelanderGroup = new THREE.Group();

@@ -1,8 +1,8 @@
-// ===== SUBWAY SURFER - Account System =====
+// ===== SUBWAY SURFER - Account System v2 =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
-    var ACCOUNT_API = 'http://' + (window.location.hostname || '35.212.200.85') + ':3000';
+    var API = 'http://' + (window.location.hostname || '35.212.200.85') + ':3000';
 
     SG.account = {
         token: localStorage.getItem('subwayToken') || null,
@@ -10,48 +10,53 @@
         loggedIn: !!localStorage.getItem('subwayToken')
     };
 
-    SG.showAccountModal = function() {
-        var overlay = document.getElementById('account-overlay');
-        if (overlay) { overlay.style.display = 'flex'; return; }
+    // Show login overlay (blocks game start until logged in)
+    SG.showLogin = function(firstTime) {
+        var overlay = document.getElementById('login-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'login-overlay';
+            overlay.className = 'overlay';
+            overlay.style.display = 'flex';
+            overlay.style.zIndex = '100';
 
-        overlay = document.createElement('div');
-        overlay.id = 'account-overlay';
-        overlay.className = 'overlay';
-        overlay.style.display = 'flex';
-
-        var html = '<div class="menu-content" style="max-width:350px;">';
-        html += '<h1 class="menu-title" style="font-size:24px;margin-bottom:5px;">' + (SG.account.loggedIn ? 'ACCOUNT' : 'SIGN IN') + '</h1>';
-
-        if (SG.account.loggedIn) {
-            html += '<div style="color:#aaa;font-size:13px;margin-bottom:10px;">Logged in as <b>' + SG.account.email + '</b></div>';
-        } else {
-            html += '<div style="color:#aaa;font-size:13px;margin-bottom:10px;"></div>';
-            html += '<input id="acc-email" placeholder="Email (qq/163/gmail)" style="width:90%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;">';
-            html += '<br><input id="acc-pass" type="password" placeholder="Password (6+ chars)" style="width:90%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;">';
+            var html = '<div class="menu-content" style="max-width:360px;">';
+            html += '<h1 class="menu-title" style="font-size:28px;">SUBWAY SURFER</h1>';
+            html += '<div style="color:#888;font-size:13px;margin:-15px 0 15px;">Sign in to play</div>';
+            html += '<input id="login-email" placeholder="Email (qq/163/gmail)" style="width:90%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;">';
+            html += '<br><input id="login-pass" type="password" placeholder="Password" style="width:90%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;">';
             html += '<br>';
-            html += '<button class="diff-btn" onclick="SG.accountLogin()" style="margin:5px;padding:8px 20px;">LOGIN</button>';
-            html += '<button class="diff-btn" onclick="SG.accountRegister()" style="margin:5px;padding:8px 20px;">REGISTER</button>';
+            html += '<button class="diff-btn" onclick="SG.doLogin()" style="margin:5px;padding:10px 30px;font-size:16px;">LOGIN</button>';
+            html += '<button class="diff-btn" onclick="SG.doRegister()" style="margin:5px;padding:10px 20px;">REGISTER</button>';
+            html += '<div id="login-msg" style="color:#ffaa00;font-size:12px;margin:8px 0;"></div>';
+            html += '<div style="color:#555;font-size:11px;margin-top:10px;">Play anywhere • Cloud saves • Leaderboard</div>';
+            html += '</div>';
+
+            overlay.innerHTML = html;
+            document.body.appendChild(overlay);
+
+            // Enter key triggers login
+            document.getElementById('login-pass').addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') SG.doLogin();
+            });
         }
-
-        html += '<div id="account-msg" style="color:#ffaa00;font-size:12px;margin:5px 0;word-break:break-all;"></div>';
-
-        if (SG.account.loggedIn) {
-            html += '<button class="diff-btn" onclick="SG.accountLogout()" style="margin:5px;padding:8px 20px;border-color:#ff4444;">LOGOUT</button>';
+        overlay.style.display = 'flex';
+        if (firstTime) {
+            document.getElementById('login-email').focus();
         }
-
-        html += '<div class="menu-btn" onclick="document.getElementById(\'account-overlay\').style.display=\'none\'">CLOSE</div>';
-        html += '</div>';
-
-        overlay.innerHTML = html;
-        document.body.appendChild(overlay);
     };
 
-    SG.accountLogin = function() {
-        var email = document.getElementById('acc-email').value.trim();
-        var pass = document.getElementById('acc-pass').value;
-        var msg = document.getElementById('account-msg');
+    SG.hideLogin = function() {
+        var overlay = document.getElementById('login-overlay');
+        if (overlay) overlay.style.display = 'none';
+    };
 
-        fetch(ACCOUNT_API + '/api/login', {
+    SG.doLogin = function() {
+        var email = document.getElementById('login-email').value.trim();
+        var pass = document.getElementById('login-pass').value;
+        var msg = document.getElementById('login-msg');
+
+        fetch(API + '/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: email, password: pass })
@@ -63,29 +68,42 @@
             localStorage.setItem('subwayToken', data.token);
             localStorage.setItem('subwayEmail', data.email);
             msg.textContent = 'Logged in!';
-            var ab = document.getElementById('account-btn-menu');
-            if (ab) ab.textContent = '👤 ' + data.email;
             msg.style.color = '#4CAF50';
+            SG.hideLogin();
+
+            // Sync game data from server
             if (data.gameData) {
-                if (data.gameData.highScore > SG.state.bestScore) SG.state.bestScore = data.gameData.highScore;
-                if (data.gameData.credits > SG.state.credits) SG.state.credits = data.gameData.credits;
+                SG.state.bestScore = Math.max(SG.state.bestScore, data.gameData.maxDistance || 0);
+                SG.state.credits = data.gameData.credits || 0;
+                SG.state.totalCoins = data.gameData.totalCoins || 0;
+                SG.state.equippedAbility = data.gameData.equippedAbility || 0;
+                var owned = data.gameData.ownedAbilities || [0];
+                SG.state.canDoubleJump = owned.indexOf(1) >= 0;
+                SG.state.canJetpack = owned.indexOf(2) >= 0;
+                SG.state.canRoofWalk = owned.indexOf(3) >= 0;
             }
-            setTimeout(function() { SG.showAccountModal(); }, 800);
+
+            // Update button text
+            var btn = document.getElementById('account-btn-menu');
+            if (btn) btn.textContent = '👤 ' + data.email;
+
+            // Show main menu
+            if (SG.menuOverlay) SG.menuOverlay.style.display = 'flex';
         }).catch(function() { msg.textContent = 'X Server error'; });
     };
 
-    SG.accountRegister = function() {
-        var email = document.getElementById('acc-email').value.trim();
-        var pass = document.getElementById('acc-pass').value;
-        var msg = document.getElementById('account-msg');
+    SG.doRegister = function() {
+        var email = document.getElementById('login-email').value.trim();
+        var pass = document.getElementById('login-pass').value;
+        var msg = document.getElementById('login-msg');
 
-        fetch(ACCOUNT_API + '/api/register', {
+        fetch(API + '/api/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: email, password: pass })
         }).then(function(r) { return r.json(); }).then(function(data) {
             if (data.error) { msg.textContent = 'X ' + data.error; return; }
-            msg.textContent = 'Registered! Server sends verify link. Ask Neo for it.';
+            msg.textContent = 'Registered! Now log in.';
             msg.style.color = '#4CAF50';
         }).catch(function() { msg.textContent = 'X Server error'; });
     };
@@ -96,14 +114,20 @@
         SG.account.loggedIn = false;
         localStorage.removeItem('subwayToken');
         localStorage.removeItem('subwayEmail');
-        var ab = document.getElementById('account-btn-menu');
-        if (ab) ab.textContent = '🔑 SIGN IN';
-        SG.showAccountModal();
+        var btn = document.getElementById('account-btn-menu');
+        if (btn) btn.textContent = '🔑 SIGN IN';
+        if (SG.menuOverlay) SG.menuOverlay.style.display = 'none';
+        SG.showLogin(true);
     };
 
     SG.accountSave = function() {
         if (!SG.account.loggedIn || !SG.account.token) return;
-        fetch(ACCOUNT_API + '/api/save', {
+        var owned = [0];
+        if (SG.state.canDoubleJump) owned.push(1);
+        if (SG.state.canJetpack) owned.push(2);
+        if (SG.state.canRoofWalk) owned.push(3);
+
+        fetch(API + '/api/save', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -111,32 +135,61 @@
             },
             body: JSON.stringify({
                 gameData: {
-                    highScore: SG.state.bestScore,
-                    totalCoins: SG.state.totalCoins || SG.state.coins,
-                    credits: SG.state.credits,
-                    equippedAbility: SG.state.equippedAbility || 0
+                    coins: SG.state.coins || 0,
+                    credits: SG.state.credits || 0,
+                    equippedAbility: SG.state.equippedAbility || 0,
+                    ownedAbilities: owned,
+                    maxDistance: SG.state.bestScore || SG.state.maxLegitDistance || 0,
+                    runCount: (SG.state.runCount || 0),
+                    highScore: SG.state.bestScore || 0,
+                    totalCoins: SG.state.totalCoins || SG.state.coins || 0
                 }
             })
         }).catch(function() {});
     };
 
+    SG.startGameFromMenu = (function(orig) {
+        return function() {
+            // Increment run count on game start (not Homelander)
+            SG.state.runCount = (SG.state.runCount || 0) + 1;
+            // Track max legit distance (Homelander runs excluded)
+            SG.state.legitRun = !SG.state.homelander;
+            if (orig) return orig();
+        };
+    })(SG.startGameFromMenu);
+
+    // Override game over to track max legit distance
+    var origGameOver = SG.gameOver;
+    SG.gameOver = function() {
+        if (origGameOver) origGameOver();
+        // Update max legit distance (exclude Homelander)
+        if (SG.state.legitRun !== false) {
+            var score = Math.floor(SG.state.score || 0);
+            SG.state.maxLegitDistance = Math.max(SG.state.maxLegitDistance || 0, score);
+            SG.state.bestScore = Math.max(SG.state.bestScore || 0, SG.state.maxLegitDistance);
+        }
+        // Save after game over
+        SG.accountSave();
+    };
+
+    // Auto-save every 30s
     setInterval(function() {
-        if (SG.account.loggedIn && SG.state && SG.state.started) SG.accountSave();
+        if (SG.account.loggedIn && SG.state && SG.state.started && !SG.state.gameOver) SG.accountSave();
     }, 30000);
 
-    var origCreateMenu = SG.createMainMenu;
-    SG.createMainMenu = function() {
-        if (origCreateMenu) origCreateMenu();
-        var shopBtn = document.getElementById('shop-btn-menu');
-        if (shopBtn && !document.getElementById('account-btn-menu')) {
-            var accBtn = document.createElement('div');
-            accBtn.id = 'account-btn-menu';
-            accBtn.className = 'menu-btn';
-            accBtn.style.cssText = 'margin-top:5px;font-size:13px;padding:6px 14px;';
-            accBtn.textContent = SG.account.loggedIn ? '👤 ' + SG.account.email : '🔑 SIGN IN';
-            accBtn.onclick = function(e) { e.stopPropagation(); SG.showAccountModal(); };
-            accBtn.ontouchend = function(e) { e.preventDefault(); e.stopPropagation(); SG.showAccountModal(); };
-            shopBtn.parentNode.insertBefore(accBtn, shopBtn.nextSibling);
-        }
+    // Override init to show login first
+    var origInit = SG.init;
+    SG.init = function() {
+        // Temporarily hide menu - we'll show it after login
+        var origSetup = SG.setupUI;
+        SG.setupUI = function() {
+            if (origSetup) origSetup();
+            // Hide menu initially, show login
+            if (!SG.account.loggedIn) {
+                if (SG.menuOverlay) SG.menuOverlay.style.display = 'none';
+                setTimeout(function() { SG.showLogin(true); }, 100);
+            }
+        };
+        if (origInit) origInit();
     };
 })();

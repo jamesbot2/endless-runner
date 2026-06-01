@@ -61,6 +61,9 @@
         policeDistance: 8.0,
         policeChasing: false,
         policeSiren: false,
-        policeTotalDistance: 0
+        policeTotalDistance: 0,
+        maxLegitDistance: 0,
+        legitRun: true,
+        runCount: 0
     };
 })();

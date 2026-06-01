@@ -1,16 +1,21 @@
 {
-  "neo@test.com": {
-    "email": "neo@test.com",
-    "passwordHash": "fb1ab8cf4ea1b92a8bb2e8718543afa337c81d24838dcde863f55cc1cc30f173",
-    "passwordSalt": "5d0076b46b85061b8c0021ae6988cc9d",
-    "verified": false,
-    "verifyToken": "87eb993b6ce643d28de19c97fe3172b16f153efcf5aed6ae04e44424ed38c492",
-    "createdAt": 1780313510550,
+  "player1@163.com": {
+    "email": "player1@163.com",
+    "passwordHash": "3fba801bf98eecfecc2cad810a9b2ed173440300be3af18ff99b03d54bb2dfa3",
+    "passwordSalt": "dc00a80b3aa7c7ff20f16ad43217f253",
+    "createdAt": 1780314986569,
+    "verified": true,
     "gameData": {
-      "highScore": 0,
-      "totalCoins": 0,
+      "coins": 0,
       "credits": 0,
-      "equippedAbility": 0
+      "equippedAbility": 0,
+      "ownedAbilities": [
+        0
+      ],
+      "maxDistance": 0,
+      "runCount": 0,
+      "highScore": 0,
+      "totalCoins": 0
     }
   }
 }
