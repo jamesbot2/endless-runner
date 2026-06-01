@@ -1046,6 +1046,31 @@
             pauseMenuBtn.addEventListener('click', (e) => { e.stopPropagation(); quitToMenu(); });
             pauseMenuBtn.addEventListener('touchend', (e) => { e.stopPropagation(); e.preventDefault(); quitToMenu(); });
         }
+
+        // Console input handler
+        const conInput = document.getElementById('console-input');
+        if (conInput) {
+            conInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    const val = conInput.value.trim().toLowerCase();
+                    conInput.value = '';
+                    document.getElementById('dev-console').style.display = 'none';
+                    if (state.paused) state.paused = false;
+                    if (val === 'homelander') {
+                        state.homelander = true;
+                        activateHomelander();
+                    }
+                    if (val === 'quit' && state.homelander) {
+                        deactivateHomelander();
+                    }
+                }
+                if (e.key === 'Escape') {
+                    document.getElementById('dev-console').style.display = 'none';
+                    if (state.paused) state.paused = false;
+                }
+                e.stopPropagation();
+            });
+        }
         
         // Mobile buttons
         function bindMobileBtn(id, action, key) {
@@ -1850,6 +1875,22 @@
         state.isRolling = false;
     }
 
+    function deactivateHomelander() {
+        state.homelander = false;
+        if (homelanderGroup) {
+            scene.remove(homelanderGroup);
+            homelanderGroup = null;
+        }
+        // Clean up lasers
+        for (const b of laserBeams) {
+            scene.remove(b.mesh);
+        }
+        laserBeams = [];
+        homelanderCape = null;
+        // Show original player
+        if (player) player.visible = true;
+    }
+
     function updateHomelander(delta) {
         if (!state.homelander || !homelanderGroup) return;
         
@@ -1885,8 +1926,6 @@
             }
         }
         
-        // Homelander can't die
-        state.gameOver = false;
     }
 
     function fireLaser() {
