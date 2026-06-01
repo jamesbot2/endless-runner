@@ -66,6 +66,7 @@
         firstPerson: false,
         difficulty: 2,
         homelander: false,
+        cyberMode: false,
         laserTimer: 0,
         muted: false,
         lastPlayedCoin: 0
@@ -1674,6 +1675,51 @@
         }
     }
 
+    // ========== CYBER MODE ==========
+    function applyCyberColors(on) {
+        if (!scene) return;
+        // Helper: grayscale a hex color
+        function gray(c) {
+            const r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
+            const lum = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+            // Dark obstacles become white, bright objects become dark
+            // Map lum (0-255) to high contrast range
+            const target = lum > 127 ? 200 : 220;
+            return (target << 16) | (target << 8) | target;
+        }
+        function darkGray(c) {
+            return 0x222222;
+        }
+        
+        // Iterate ALL scene children recursively
+        scene.traverse(function(child) {
+            if (!child.isMesh || !child.material) return;
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            for (const mat of mats) {
+                if (!mat.color) continue;
+                const hex = mat.color.getHex();
+                if (on) {
+                    // Store original color if not already stored
+                    if (child.userData._origColor === undefined) {
+                        child.userData._origColor = hex;
+                    }
+                    // Apply grayscale based on original brightness
+                    const g = gray(hex);
+                    mat.color.setHex(g);
+                } else if (child.userData._origColor !== undefined) {
+                    mat.color.setHex(child.userData._origColor);
+                    delete child.userData._origColor;
+                }
+            }
+        });
+        
+        // Also change lighting for cyber mode
+        if (ambientLight) {
+            ambientLight.intensity = on ? 1.2 : 0.7;
+            ambientLight.color.setHex(on ? 0xFFFFFF : 0xFFFFFF);
+        }
+    }
+
     function resetAllGameObjects() {
         for (const obj of state.trackSegments) { scene.remove(obj); disposeObject(obj); }
         for (const obj of state.obstacles) { scene.remove(obj); disposeObject(obj); }
@@ -2137,20 +2183,44 @@
         homelanderGroup.position.y = 6;
         homelanderGroup.rotation.y = Math.PI; // face -Z (back to camera)
         
-        // === BODY ===
-        // Torso (blue suit)
-        const torso = new THREE.Mesh(
-            new THREE.BoxGeometry(0.6, 0.65, 0.35),
-            new THREE.MeshLambertMaterial({ color: 0x1A237E })
-        );
-        torso.position.y = 0.65;
-        homelanderGroup.add(torso);
+        // === BODY (improved proportions) ===
+        const suitMat = new THREE.MeshLambertMaterial({ color: 0x1A237E });
+        const suitMatDark = new THREE.MeshLambertMaterial({ color: 0x15205A });
         
-        // Shoulders
+        // Neck
+        const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.10, 8), suitMat);
+        neck.position.set(0, 1.08, 0);
+        homelanderGroup.add(neck);
+        
+        // Upper torso (chest, wider)
+        const chest = new THREE.Mesh(
+            new THREE.BoxGeometry(0.65, 0.35, 0.30),
+            suitMat
+        );
+        chest.position.set(0, 0.82, 0);
+        homelanderGroup.add(chest);
+        
+        // Lower torso (waist, narrower)
+        const waist = new THREE.Mesh(
+            new THREE.BoxGeometry(0.50, 0.25, 0.25),
+            suitMatDark
+        );
+        waist.position.set(0, 0.48, 0);
+        homelanderGroup.add(waist);
+        
+        // Shoulders (broad)
         const shoulderMat = new THREE.MeshLambertMaterial({ color: 0x1A237E });
-        const shoulder = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.1, 0.35), shoulderMat);
-        shoulder.position.y = 0.95;
+        const shoulder = new THREE.Mesh(new THREE.BoxGeometry(0.90, 0.10, 0.30), shoulderMat);
+        shoulder.position.y = 1.00;
         homelanderGroup.add(shoulder);
+        
+        // Pecs (chest muscles)
+        const pecMat = new THREE.MeshLambertMaterial({ color: 0x1E2A6E });
+        for (let side = -1; side <= 1; side += 2) {
+            const pec = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.06), pecMat);
+            pec.position.set(side * 0.14, 0.82, 0.17);
+            homelanderGroup.add(pec);
+        }
         
         // === HEAD (improved realism) ===
         const skinMat = new THREE.MeshLambertMaterial({ color: 0xFFDDCC });
@@ -2219,12 +2289,16 @@
         topHair.position.set(0, 1.53, 0.04);
         homelanderGroup.add(topHair);
         
-        // Glowing red eyes
-        const eyeMat = new THREE.MeshBasicMaterial({ color: 0xFF2200 });
+        // Eyes (white sclera + red glowing pupils)
+        const scleraMat = new THREE.MeshLambertMaterial({ color: 0xFFEEEE });
+        const pupilMat = new THREE.MeshBasicMaterial({ color: 0xFF2200 });
         for (let side = -1; side <= 1; side += 2) {
-            const eye = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), eyeMat);
-            eye.position.set(side * 0.08, 1.35, 0.2);
-            homelanderGroup.add(eye);
+            const sclera = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 6), scleraMat);
+            sclera.position.set(side * 0.08, 1.34, 0.22);
+            homelanderGroup.add(sclera);
+            const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), pupilMat);
+            pupil.position.set(side * 0.08, 1.34, 0.24);
+            homelanderGroup.add(pupil);
         }
         
         // === CAPE with US Flag (3D mesh construction) ===
@@ -2318,49 +2392,56 @@
             homelanderGroup.add(wing);
         }
         
-        // === RED GLOVES ===
-        const gloveMat = new THREE.MeshLambertMaterial({ color: 0xCC0000 });
-        const gloveL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.1), gloveMat);
-        gloveL.position.set(-0.3, 0.35, 0);
-        homelanderGroup.add(gloveL);
-        const gloveR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.1), gloveMat);
-        gloveR.position.set(0.3, 0.35, 0);
-        homelanderGroup.add(gloveR);
-        
-        // Arms
+        // === ARMS (thicker, more muscular) ===
         const armMat = new THREE.MeshLambertMaterial({ color: 0x1A237E });
-        const armL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.25, 0.08), armMat);
-        armL.position.set(-0.3, 0.55, 0);
-        homelanderGroup.add(armL);
-        const armR = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.25, 0.08), armMat);
-        armR.position.set(0.3, 0.55, 0);
-        homelanderGroup.add(armR);
+        const gloveMat = new THREE.MeshLambertMaterial({ color: 0xCC0000 });
+        for (let side = -1; side <= 1; side += 2) {
+            // Upper arm
+            const upper = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.20, 0.10), armMat);
+            upper.position.set(side * 0.34, 0.75, 0);
+            homelanderGroup.add(upper);
+            // Forearm
+            const fore = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.18, 0.08), armMat);
+            fore.position.set(side * 0.34, 0.48, 0);
+            homelanderGroup.add(fore);
+            // Glove/fist
+            const glove = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.10, 0.10), gloveMat);
+            glove.position.set(side * 0.34, 0.33, 0);
+            homelanderGroup.add(glove);
+        }
         
-        // === RED BOOTS ===
-        const bootMat = new THREE.MeshLambertMaterial({ color: 0xCC0000 });
-        const bootL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.12, 0.2), bootMat);
-        bootL.position.set(-0.14, 0.06, 0.05);
-        homelanderGroup.add(bootL);
-        const bootR = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.12, 0.2), bootMat);
-        bootR.position.set(0.14, 0.06, 0.05);
-        homelanderGroup.add(bootR);
-        
-        // Legs
+        // === LEGS (thicker) ===
         const legMat = new THREE.MeshLambertMaterial({ color: 0x1A237E });
-        const legL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.25, 0.12), legMat);
-        legL.position.set(-0.14, 0.25, 0);
-        homelanderGroup.add(legL);
-        const legR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.25, 0.12), legMat);
-        legR.position.set(0.14, 0.25, 0);
-        homelanderGroup.add(legR);
+        const bootMat = new THREE.MeshLambertMaterial({ color: 0xCC0000 });
+        for (let side = -1; side <= 1; side += 2) {
+            // Thigh
+            const thigh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.20, 0.14), legMat);
+            thigh.position.set(side * 0.14, 0.32, 0);
+            homelanderGroup.add(thigh);
+            // Calf
+            const calf = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 0.12), legMat);
+            calf.position.set(side * 0.14, 0.14, 0);
+            homelanderGroup.add(calf);
+            // Boot
+            const boot = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.10, 0.22), bootMat);
+            boot.position.set(side * 0.14, 0.05, 0.03);
+            homelanderGroup.add(boot);
+        }
         
-        // Belt
+        // Belt with buckle
         const belt = new THREE.Mesh(
-            new THREE.BoxGeometry(0.5, 0.04, 0.15),
+            new THREE.BoxGeometry(0.48, 0.05, 0.18),
             new THREE.MeshLambertMaterial({ color: 0x222222 })
         );
-        belt.position.set(0, 0.35, 0.15);
+        belt.position.set(0, 0.36, 0.12);
         homelanderGroup.add(belt);
+        // Belt buckle (gold)
+        const buckle = new THREE.Mesh(
+            new THREE.BoxGeometry(0.06, 0.04, 0.02),
+            new THREE.MeshBasicMaterial({ color: 0xFFD700 })
+        );
+        buckle.position.set(0, 0.36, 0.22);
+        homelanderGroup.add(buckle);
         
         scene.add(homelanderGroup);
         // Update exposed reference for debugging
@@ -2453,12 +2534,17 @@
         const speedLevel = Math.floor((state.speed - START_SPEED) / (MAX_SPEED - START_SPEED) * 49) + 1;
         const speedRatio = Math.min(state.speed / MAX_SPEED, 1.0);
         
-        // CYBER MODE: at 48x+ speed, switch to black & white future tech
-        if (speedLevel >= 48) {
+        // CYBER MODE: at 48x+ speed, full black & white future tech scene
+        const inCyber = speedLevel >= 48;
+        if (inCyber !== state.cyberMode) {
+            state.cyberMode = inCyber;
+            applyCyberColors(inCyber);
+        }
+        if (inCyber) {
             scene.background.setHex(0x000000);
             scene.fog.color.setHex(0x000000);
-            scene.fog.near = 30;
-            scene.fog.far = 80;
+            scene.fog.near = 25;
+            scene.fog.far = 70;
         } else if (speedRatio < 0.3) {
             scene.background.setHex(0x87CEEB);
             scene.fog.color.setHex(0x87CEEB);
