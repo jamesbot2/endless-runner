@@ -256,11 +256,8 @@
         }
 
         // Score
-        SG.state.scoreTimer += delta;
-        if (SG.state.scoreTimer > 0.1) {
-            SG.state.score += 0.1 / SG.state.scoreTimer > 0.5 ? 1 : 0.5;
-            SG.state.scoreTimer = 0;
-        }
+        // Score (distance) scales with speed - faster = more distance/sec
+        SG.state.score += SG.state.speed * delta * 10;
 
         SG.state.policeTotalDistance += delta * SG.state.speed * 60;
 
