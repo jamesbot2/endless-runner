@@ -165,13 +165,12 @@ canvas {
 #con-btn:hover { background: rgba(0,0,0,0.6); transform: scale(1.08); }
 #con-btn:active { transform: scale(0.92); background: rgba(0,100,0,0.4); }
 
-#mute-btn {
+#mute-btn, #sfx-btn, #music-btn {
     position: absolute;
-    top: 16px;
-    right: 112px;
+    bottom: 100px;
     width: 40px;
     height: 40px;
-    font-size: 18px;
+    font-size: 16px;
     cursor: pointer;
     z-index: 15;
     pointer-events: auto;
@@ -186,8 +185,11 @@ canvas {
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
 }
-#mute-btn:hover { background: rgba(0,0,0,0.6); transform: scale(1.08); }
-#mute-btn:active { transform: scale(0.92); background: rgba(0,50,100,0.4); }
+#mute-btn:hover, #sfx-btn:hover, #music-btn:hover { background: rgba(0,0,0,0.6); transform: scale(1.08); }
+#mute-btn:active, #sfx-btn:active, #music-btn:active { transform: scale(0.92); }
+#mute-btn { left: 16px; }
+#sfx-btn { left: 64px; }
+#music-btn { left: 112px; }
 
 /* ===== GAME OVER ===== */
 #game-over-screen {
@@ -560,7 +562,7 @@ canvas {
         top: 12px;
         left: 12px;
     }
-    #fpv-btn, #con-btn, #mute-btn {
+    #fpv-btn, #con-btn {
         width: 34px;
         height: 34px;
         font-size: 15px;
@@ -568,7 +570,15 @@ canvas {
     }
     #fpv-btn { right: 12px; }
     #con-btn { right: 54px; }
-    #mute-btn { right: 96px; }
+    #mute-btn, #sfx-btn, #music-btn {
+        width: 30px;
+        height: 30px;
+        font-size: 13px;
+        bottom: 80px;
+    }
+    #mute-btn { left: 10px; }
+    #sfx-btn { left: 48px; }
+    #music-btn { left: 86px; }
     .menu-title { font-size: 38px; }
     .tap-to-start { font-size: 18px; padding: 10px 30px; }
     #game-over-screen h1 { font-size: 36px; }

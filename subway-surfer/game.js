@@ -823,7 +823,7 @@
     }
 
     function playCoinSound() {
-        if (state.muted || !audioCtx) return;
+        if (state.muted || state.sfxMuted || !audioCtx) return;
         try {
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
@@ -831,7 +831,7 @@
             gain.connect(audioCtx.destination);
             osc.frequency.setValueAtTime(880, audioCtx.currentTime);
             osc.frequency.linearRampToValueAtTime(1320, audioCtx.currentTime + 0.1);
-            gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.15 * state.sfxVolume, audioCtx.currentTime);
             gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.15);
             osc.start(audioCtx.currentTime);
             osc.stop(audioCtx.currentTime + 0.15);
@@ -839,7 +839,7 @@
     }
 
     function playCrashSound() {
-        if (state.muted || !audioCtx) return;
+        if (state.muted || state.sfxMuted || !audioCtx) return;
         try {
             const bufferSize = audioCtx.sampleRate * 0.4;
             const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
@@ -850,7 +850,7 @@
             const source = audioCtx.createBufferSource();
             source.buffer = buffer;
             const gain = audioCtx.createGain();
-            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.3 * state.sfxVolume, audioCtx.currentTime);
             gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.4);
             const filter = audioCtx.createBiquadFilter();
             filter.type = 'lowpass';
@@ -864,7 +864,7 @@
     }
 
     function playJumpSound() {
-        if (state.muted || !audioCtx) return;
+        if (state.muted || state.sfxMuted || !audioCtx) return;
         try {
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
@@ -873,7 +873,7 @@
             osc.type = 'sine';
             osc.frequency.setValueAtTime(300, audioCtx.currentTime);
             osc.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + 0.15);
-            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.1 * state.sfxVolume, audioCtx.currentTime);
             gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
             osc.start(audioCtx.currentTime);
             osc.stop(audioCtx.currentTime + 0.2);
@@ -881,7 +881,7 @@
     }
 
     function playRollSound() {
-        if (state.muted || !audioCtx) return;
+        if (state.muted || state.sfxMuted || !audioCtx) return;
         try {
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
@@ -890,7 +890,7 @@
             osc.type = 'triangle';
             osc.frequency.setValueAtTime(400, audioCtx.currentTime);
             osc.frequency.linearRampToValueAtTime(200, audioCtx.currentTime + 0.15);
-            gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.08 * state.sfxVolume, audioCtx.currentTime);
             gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
             osc.start(audioCtx.currentTime);
             osc.stop(audioCtx.currentTime + 0.2);
@@ -925,7 +925,7 @@
     }
     
     function updateBgMusic(delta) {
-        if (!bgMusicState.running || !audioCtx || state.muted) return;
+        if (!bgMusicState.running || !audioCtx || state.muted || state.musicMuted) return;
         if (state.paused || !state.started) return;
         
         // Map speed to tempo: 1x=100bpm, 50x=200bpm
@@ -951,7 +951,7 @@
                     kick.type = 'sine';
                     kick.frequency.setValueAtTime(150, now);
                     kick.frequency.linearRampToValueAtTime(40, now + 0.1);
-                    kickGain.gain.setValueAtTime(0.15, now);
+                    kickGain.gain.setValueAtTime(0.15 * state.musicVolume, now);
                     kickGain.gain.linearRampToValueAtTime(0, now + 0.2);
                     kick.start(now);
                     kick.stop(now + 0.2);
@@ -971,7 +971,7 @@
                     hat.connect(hatGain);
                     hat.type = 'square';
                     hat.frequency.setValueAtTime(5000, now);
-                    hatGain.gain.setValueAtTime(0.06, now);
+                    hatGain.gain.setValueAtTime(0.06 * state.musicVolume, now);
                     hatGain.gain.linearRampToValueAtTime(0, now + 0.04);
                     hat.start(now);
                     hat.stop(now + 0.04);
@@ -992,7 +992,7 @@
                     const notes = [110, 130.8, 110, 146.8]; // A3, C4, A3, D4
                     const note = notes[Math.floor(beat / 4) % 4];
                     bass.frequency.setValueAtTime(note, now);
-                    bassGain.gain.setValueAtTime(0.08, now);
+                    bassGain.gain.setValueAtTime(0.08 * state.musicVolume, now);
                     bassGain.gain.linearRampToValueAtTime(0, now + 0.3);
                     bass.start(now);
                     bass.stop(now + 0.3);
@@ -1289,6 +1289,28 @@
         uiOverlay.appendChild(conBtn);
         conBtn.addEventListener('click', toggleConsole);
         conBtn.addEventListener('touchend', (e) => { e.preventDefault(); toggleConsole(); });
+        
+        // ===== AUDIO BUTTONS (mute, sfx, music) =====
+        function makeAudioBtn(id, text, clickHandler) {
+            var btn = document.createElement('div');
+            btn.id = id;
+            btn.textContent = text;
+            btn.style.display = 'none';
+            uiOverlay.appendChild(btn);
+            btn.addEventListener('click', clickHandler);
+            btn.addEventListener('touchend', function(e) { e.preventDefault(); clickHandler(); });
+            return btn;
+        }
+        makeAudioBtn('mute-btn', '\uD83D\uDD0A', function() { toggleMute(); });
+        makeAudioBtn('sfx-btn', '\uD83D\uDD09', function() {
+            state.sfxMuted = !state.sfxMuted;
+            document.getElementById('sfx-btn').textContent = state.sfxMuted ? '\uD83D\uDD07' : '\uD83D\uDD09';
+        });
+        makeAudioBtn('music-btn', '\uD83C\uDFB5', function() {
+            state.musicMuted = !state.musicMuted;
+            document.getElementById('music-btn').textContent = state.musicMuted ? '\uD83D\uDD07' : '\uD83C\uDFB5';
+            if (state.musicMuted) stopBgMusic(); else if (state.started) startBgMusic();
+        });
         
         // ===== MOBILE CONTROLS (cross layout at center bottom) =====
         const mobileCtrl = document.createElement('div');
@@ -1910,8 +1932,11 @@
         pauseBtnEl.style.display = 'block';
         const cb = document.getElementById('con-btn');
         if (cb) cb.style.display = 'block';
-        const mb = document.getElementById('mute-btn');
-        if (mb) mb.style.display = 'block';
+        var audioBtns = ['mute-btn', 'sfx-btn', 'music-btn'];
+        audioBtns.forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = 'flex';
+        });
         if (!audioCtx) initAudio();
         clock.getDelta();
         const f = document.getElementById('fpv-btn');
@@ -2077,8 +2102,10 @@
         pauseBtnEl.style.display = 'none';
         menuOverlay.style.display = 'flex';
         updateMenuCredits();
-        const muteInMenu = document.getElementById('mute-btn');
-        if (muteInMenu) muteInMenu.style.display = 'none';
+        ['mute-btn','sfx-btn','music-btn'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
 
         spawnInitialTrack();
         spawnBuildings();
@@ -2183,8 +2210,10 @@
         const bestEl = document.getElementById('best-score');
         if (bestEl) bestEl.textContent = 'BEST: ' + state.bestScore + 'm';
         pauseBtnEl.style.display = 'none';
-        const muteGameOver = document.getElementById('mute-btn');
-        if (muteGameOver) muteGameOver.style.display = 'none';
+        ['mute-btn','sfx-btn','music-btn'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
     }
 
     // ========== UPDATE LOOP ==========
