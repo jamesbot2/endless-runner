@@ -548,6 +548,42 @@ canvas {
 #dev-console input::placeholder { color: rgba(0,255,0,0.25); }
 
 /* ===== RESPONSIVE SMALL SCREENS ===== */
+/* Range slider for volume */
+input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100px;
+    height: 6px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ff6600;
+    cursor: pointer;
+    border: 2px solid rgba(255,255,255,0.3);
+}
+input[type=range]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ff6600;
+    cursor: pointer;
+    border: 2px solid rgba(255,255,255,0.3);
+}
+#music-vol-label, #sfx-vol-label {
+    color: #ffaa00;
+    font-size: 13px;
+    min-width: 35px;
+    text-align: center;
+}
+
 @media (max-width: 480px) {
     #score-display {
         font-size: 17px;

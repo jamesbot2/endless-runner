@@ -77,6 +77,10 @@
                 SG.state.credits = data.gameData.credits || 0;
                 SG.state.totalCoins = data.gameData.totalCoins || 0;
                 SG.state.equippedAbility = data.gameData.equippedAbility || 0;
+                SG.state.maxEasy = data.gameData.maxEasy || 0;
+                SG.state.maxMedium = data.gameData.maxMedium || 0;
+                SG.state.maxHard = data.gameData.maxHard || 0;
+                SG.state.runCount = data.gameData.runCount || 0;
                 var owned = data.gameData.ownedAbilities || [0];
                 SG.state.canDoubleJump = owned.indexOf(1) >= 0;
                 SG.state.canJetpack = owned.indexOf(2) >= 0;
