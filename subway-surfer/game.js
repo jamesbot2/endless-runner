@@ -1489,16 +1489,21 @@
     }
 
     function jump() {
-        if (!state.isJumping) {
-            state.isJumping = true;
-            // If was rolling, cancel the roll on jump
-            if (state.isRolling) {
-                state.isRolling = false;
-                state.targetPlayerHeight = PLAYER_Y;
-            }
-            state.jumpVelocity = JUMP_VELOCITY;
-            playJumpSound();
+        if (state.isJumping) return;
+        state.isJumping = true;
+        // If was rolling, cancel the roll immediately and jump
+        if (state.isRolling) {
+            state.isRolling = false;
+            state.targetPlayerHeight = PLAYER_Y;
+            player.scale.y += (1 - player.scale.y) * 0.8; // instant unsquish
         }
+        // If on a roof, jump off it immediately
+        if (state.onRoof) {
+            state.onRoof = false;
+            state.playerHeight = PLAYER_Y;
+        }
+        state.jumpVelocity = JUMP_VELOCITY;
+        playJumpSound();
     }
 
     function roll() {
@@ -2043,7 +2048,8 @@
         }
         
         // Roof mechanics: ride on any obstacle roofs, jump between them
-        if (state.onRoof) {
+        // When jumping, don't force player onto roof (allows jump from rooftops)
+        if (state.onRoof && !state.isJumping) {
             state.playerHeight = 1.8 + PLAYER_Y;
             player.position.y = state.playerHeight;
             // Check if there's a surface beneath (train or roll-under)
