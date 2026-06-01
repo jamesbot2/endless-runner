@@ -151,30 +151,6 @@
         }).catch(function() {});
     };
 
-    SG.startGameFromMenu = (function(orig) {
-        return function() {
-            // Increment run count on game start (not Homelander)
-            SG.state.runCount = (SG.state.runCount || 0) + 1;
-            // Track max legit distance (Homelander runs excluded)
-            SG.state.legitRun = !SG.state.homelander;
-            if (orig) return orig();
-        };
-    })(SG.startGameFromMenu);
-
-    // Override game over to track max legit distance
-    var origGameOver = SG.gameOver;
-    SG.gameOver = function() {
-        if (origGameOver) origGameOver();
-        // Update max legit distance (exclude Homelander)
-        if (SG.state.legitRun !== false) {
-            var score = Math.floor(SG.state.score || 0);
-            SG.state.maxLegitDistance = Math.max(SG.state.maxLegitDistance || 0, score);
-            SG.state.bestScore = Math.max(SG.state.bestScore || 0, SG.state.maxLegitDistance);
-        }
-        // Save after game over
-        SG.accountSave();
-    };
-
     SG.showProfile = function() {
         var overlay = document.getElementById('profile-overlay');
         if (overlay) { overlay.style.display = 'flex'; return; }
@@ -225,17 +201,41 @@
     // Override init to show login first
     var origInit = SG.init;
     SG.init = function() {
-        // Temporarily hide menu - we'll show it after login
+        if (origInit) origInit(); // Run original init FIRST
+
+        // Wrap setupUI to handle login state
         var origSetup = SG.setupUI;
         SG.setupUI = function() {
             if (origSetup) origSetup();
-            // Hide menu initially, show login
             if (!SG.account.loggedIn) {
                 if (SG.menuOverlay) SG.menuOverlay.style.display = 'none';
                 setTimeout(function() { SG.showLogin(true); }, 100);
             }
         };
-        if (origInit) origInit();
+
+        // Wrap startGameFromMenu to track runs
+        var origStart = SG.startGameFromMenu;
+        if (origStart) {
+            SG.startGameFromMenu = function() {
+                SG.state.runCount = (SG.state.runCount || 0) + 1;
+                SG.state.legitRun = !SG.state.homelander;
+                return origStart();
+            };
+        }
+
+        // Wrap gameOver to track max legit distance + auto-save
+        var origEnd = SG.gameOver;
+        if (origEnd) {
+            SG.gameOver = function() {
+                if (origEnd) origEnd();
+                if (SG.state.legitRun !== false) {
+                    var score = Math.floor(SG.state.score || 0);
+                    SG.state.maxLegitDistance = Math.max(SG.state.maxLegitDistance || 0, score);
+                    SG.state.bestScore = Math.max(SG.state.bestScore || 0, SG.state.maxLegitDistance);
+                }
+                SG.accountSave();
+            };
+        }
     };
     SG.init();
 })();
