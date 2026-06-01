@@ -82,8 +82,9 @@
 
         html += '<hr style="border-color:rgba(255,255,255,0.1);margin:15px 0;">';
         html += '<h2 style="color:#fff;font-size:18px;margin-bottom:10px;">⚙ SETTINGS</h2>';
-        html += '<div style="margin:5px 0;">🔊 Master: <span id="vol-master">' + (SG.state.muted ? 'OFF' : 'ON') + '</span>';
-        html += ' <button class="diff-btn" onclick="__neoToggleMuteShop()">TOGGLE</button></div>';
+        html += '<div style="margin:5px 0;display:flex;align-items:center;gap:8px;">🔊 Master: <button class="diff-btn" onclick="__neoToggleMuteShop();showShop()">' + (SG.state.muted ? 'OFF' : 'ON') + '</button></div>';
+        html += '<div style="margin:5px 0;display:flex;align-items:center;gap:8px;">🎵 Music: <input type="range" min="0" max="1" step="0.1" value="' + (SG.state.musicVolume || 0.5) + '" onchange="SG.state.musicVolume=parseFloat(this.value);document.getElementById(\'music-vol-label\').textContent=Math.round(this.value*100)+\'%\';localStorage.setItem(\'subwayMusicVol\',this.value)"> <span id="music-vol-label" style="color:#ffaa00;font-size:13px;min-width:35px;">' + Math.round((SG.state.musicVolume || 0.5) * 100) + '%</span></div>';
+        html += '<div style="margin:5px 0;display:flex;align-items:center;gap:8px;">🔊 SFX: <input type="range" min="0" max="1" step="0.1" value="' + (SG.state.sfxVolume || 0.8) + '" onchange="SG.state.sfxVolume=parseFloat(this.value);document.getElementById(\'sfx-vol-label\').textContent=Math.round(this.value*100)+\'%\';localStorage.setItem(\'subwaySfxVol\',this.value)"> <span id="sfx-vol-label" style="color:#ffaa00;font-size:13px;min-width:35px;">' + Math.round((SG.state.sfxVolume || 0.8) * 100) + '%</span></div>';
         html += '<hr style="border-color:rgba(255,255,255,0.05);margin:8px 0;">';
         html += '<div style="color:#aaa;font-size:13px;margin-top:5px;">Controls: ↑ Jump | ↓ Roll | ← → Move | 👁 FPV | ` Console | M Menu</div>';
         html += '<div class="menu-btn" onclick="__neoCloseShop()">CLOSE</div>';

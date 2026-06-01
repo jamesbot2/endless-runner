@@ -157,14 +157,17 @@
 
     SG.showProfile = function() {
         var overlay = document.getElementById('profile-overlay');
-        if (overlay) { overlay.style.display = 'flex'; return; }
-
-        overlay = document.createElement('div');
-        overlay.id = 'profile-overlay';
-        overlay.className = 'overlay';
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'profile-overlay';
+            overlay.className = 'overlay';
+            document.body.appendChild(overlay);
+        }
         overlay.style.display = 'flex';
 
         var s = SG.state;
+        // Refresh account email from localStorage
+        SG.account.email = SG.account.email || localStorage.getItem('subwayEmail');
         var names = {0:'None',1:'Double Jump',2:'Jetpack',3:'Roof Walk'};
         var ability = names[s.equippedAbility] || 'None';
         var owned = [];
