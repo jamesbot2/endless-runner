@@ -88,48 +88,54 @@
     function createUSFlagTexture() {
         const canvas = document.createElement('canvas');
         canvas.width = 256;
-        canvas.height = 200;
+        canvas.height = 208; // divisible by 13 for even stripes
         const ctx = canvas.getContext('2d');
         
-        // Stripes: 13 alternating red and white
-        const stripeH = canvas.height / 13;
-        for (let i = 0; i < 13; i++) {
-            ctx.fillStyle = (i % 2 === 0) ? '#B22234' : '#FFFFFF';
-            ctx.fillRect(0, i * stripeH, canvas.width, stripeH + 1);
+        const w = canvas.width;
+        const h = canvas.height;
+        const stripeH = h / 13;
+        
+        // Clear to white first
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, w, h);
+        
+        // Stripes: 13 alternating (odd = red, even = white, already white)
+        for (let i = 0; i < 13; i += 2) {
+            ctx.fillStyle = '#B22234';
+            ctx.fillRect(0, i * stripeH, w, stripeH);
         }
         
-        // Canton (blue field)
-        const cantonW = canvas.width * 0.38;
+        // Canton (blue field) - covers top 7 stripes
+        const cantonW = Math.floor(w * 0.40);
         const cantonH = stripeH * 7;
         ctx.fillStyle = '#3C3B6E';
         ctx.fillRect(0, 0, cantonW, cantonH);
         
-        // Stars: 50 white stars in 9 rows (alternating 6 and 5)
+        // Stars: 50 white 5-pointed stars
         ctx.fillStyle = '#FFFFFF';
-        const starRows = 9;
-        const starColsEven = 6;
-        const starColsOdd = 5;
-        const starSpacingX = cantonW / (starColsEven + 1);
-        const starSpacingY = cantonH / (starRows + 1);
-        const starSize = 2.5;
+        const starCols = [6, 5, 6, 5, 6, 5, 6, 5, 6];
+        const starRows = starCols.length;
+        const cellW = cantonW / 7;  // 6 star columns + padding
+        const cellH = cantonH / 10; // 9 star rows + padding
         
         for (let row = 0; row < starRows; row++) {
-            const cols = (row % 2 === 0) ? starColsEven : starColsOdd;
-            const offsetX = (row % 2 === 0) ? 0 : starSpacingX / 2;
+            const cols = starCols[row];
             for (let col = 0; col < cols; col++) {
-                const cx = (col + 1) * starSpacingX + offsetX;
-                const cy = (row + 1) * starSpacingY;
+                const cx = (col + 1) * cellW - cellW / 2;
+                const cy = (row + 1) * cellH - cellH / 2;
+                const r = Math.min(cellW, cellH) * 0.22;
                 // Draw a 5-pointed star
                 ctx.beginPath();
                 for (let i = 0; i < 5; i++) {
-                    const outerAngle = (i * 72 - 90) * Math.PI / 180;
-                    const innerAngle = ((i * 72) + 36 - 90) * Math.PI / 180;
-                    if (i === 0) {
-                        ctx.moveTo(cx + Math.cos(outerAngle) * starSize, cy + Math.sin(outerAngle) * starSize);
-                    } else {
-                        ctx.lineTo(cx + Math.cos(outerAngle) * starSize, cy + Math.sin(outerAngle) * starSize);
-                    }
-                    ctx.lineTo(cx + Math.cos(innerAngle) * starSize * 0.4, cy + Math.sin(innerAngle) * starSize * 0.4);
+                    const outer = (i * 72 - 90) * Math.PI / 180;
+                    const inner = ((i * 72) + 36 - 90) * Math.PI / 180;
+                    const ox = cx + Math.cos(outer) * r;
+                    const oy = cy + Math.sin(outer) * r;
+                    const ix = cx + Math.cos(inner) * r * 0.4;
+                    const iy = cy + Math.sin(inner) * r * 0.4;
+                    if (i === 0) ctx.moveTo(ox, oy);
+                    else ctx.lineTo(ox, oy);
+                    ctx.lineTo(ix, iy);
                 }
                 ctx.closePath();
                 ctx.fill();
@@ -137,6 +143,8 @@
         }
         
         const texture = new THREE.CanvasTexture(canvas);
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
         texture.needsUpdate = true;
         return texture;
     }
@@ -2168,32 +2176,29 @@
         // Generate US flag texture
         const flagTex = createUSFlagTexture();
         
-        // Cape using PlaneGeometry (single face, no side artifacts)
-        // Segmented so we can see the full flag from any angle
+        // Cape using PlaneGeometry with US flag texture (MeshBasicMaterial for reliable rendering)
         const capeGeo = new THREE.PlaneGeometry(1.2, 0.92);
-        const capeMat = new THREE.MeshLambertMaterial({ 
+        const capeMat = new THREE.MeshBasicMaterial({ 
             map: flagTex,
-            side: THREE.DoubleSide,
-            transparent: false
+            side: THREE.DoubleSide
         });
         homelanderCape = new THREE.Mesh(capeGeo, capeMat);
-        // Position: draped from shoulders (y=0.95) to mid-thigh
-        homelanderCape.position.set(0, 0.62, -0.18);
-        homelanderCape.rotation.x = 0.20;
+        // Position: behind the body (body z extends from -0.175 to +0.175)
+        homelanderCape.position.set(0, 0.60, -0.30);
+        homelanderCape.rotation.x = 0.25;
         homelanderGroup.add(homelanderCape);
         
-        // Dark red backing for the cape (to give depth from behind)
-        const backMat = new THREE.MeshLambertMaterial({ 
+        // Dark red backing - behind main cape to avoid z-fighting
+        const backMat = new THREE.MeshBasicMaterial({ 
             color: 0x550000, 
-            side: THREE.DoubleSide,
-            transparent: false
+            side: THREE.DoubleSide
         });
         const backCape = new THREE.Mesh(
-            new THREE.PlaneGeometry(1.22, 0.94),
+            new THREE.PlaneGeometry(1.24, 0.96),
             backMat
         );
-        backCape.position.set(0, 0.62, -0.185);
-        backCape.rotation.x = 0.20;
+        backCape.position.set(0, 0.60, -0.35);
+        backCape.rotation.x = 0.25;
         homelanderGroup.add(backCape);
         
         // Cape clasp/knot at the neck
@@ -2403,17 +2408,16 @@
                 else laserRightBeam = beam;
             }
             
-            // FPV: show lasers but translucent (not blocking view)
+            // FPV: show both laser beams clearly at half opacity (not blocking center view)
             if (state.firstPerson) {
-                beam.material.opacity = 0.15;
-                if (beam.userData.glow) beam.userData.glow.material.opacity = 0.05;
-                // Make beams thinner in FPV
-                beam.scale.x = 0.3;
-                beam.scale.z = 0.3;
+                beam.material.opacity = 0.50;
+                if (beam.userData.glow) beam.userData.glow.material.opacity = 0.20;
             } else {
-                beam.scale.x = 1;
-                beam.scale.z = 1;
+                beam.material.opacity = 0.85;
+                if (beam.userData.glow) beam.userData.glow.material.opacity = 0.25;
             }
+            beam.scale.x = 1;
+            beam.scale.z = 1;
             beam.visible = true;
             if (beam.userData.glow) beam.userData.glow.visible = true;
             
@@ -2468,29 +2472,49 @@
     }
 
     function spawnDestroyParticles(pos) {
-        const colors = [0xFF4400, 0xFFAA00, 0xFF6600, 0xFFFF00];
-        for (let i = 0; i < 8; i++) {
+        // Cap particles to prevent performance issues
+        if (state.particles.length > 300) return;
+        
+        const colors = [0xFF4400, 0xFFAA00, 0xFF6600, 0xFFFF00, 0xFF2200];
+        const count = 6;
+        
+        // Flash sphere at explosion point
+        const flash = new THREE.Mesh(
+            new THREE.SphereGeometry(0.2, 4, 4),
+            new THREE.MeshBasicMaterial({ color: 0xFFAA00, transparent: true, opacity: 1 })
+        );
+        flash.position.copy(pos);
+        flash.userData = {
+            vx: 0, vy: 0, vz: 0,
+            life: 0.4,
+            decay: 0.04,
+            scale: true
+        };
+        scene.add(flash);
+        state.particles.push(flash);
+        
+        for (let i = 0; i < count; i++) {
             const p = new THREE.Mesh(
-                new THREE.BoxGeometry(0.08, 0.08, 0.08),
+                new THREE.BoxGeometry(0.1, 0.1, 0.1),
                 new THREE.MeshBasicMaterial({
-                    color: colors[Math.floor(Math.random() * colors.length)],
+                    color: colors[i % colors.length],
                     transparent: true,
                     opacity: 1
                 })
             );
             p.position.copy(pos);
-            p.position.x += (Math.random() - 0.5) * 1.0;
-            p.position.y += Math.random() * 0.5;
-            p.position.z += (Math.random() - 0.5) * 1.0;
-            const speed = 0.1 + Math.random() * 0.15;
+            p.position.x += (Math.random() - 0.5) * 0.8;
+            p.position.y += Math.random() * 0.3;
+            p.position.z += (Math.random() - 0.5) * 0.8;
+            const speed = 0.12 + Math.random() * 0.2;
             const theta = Math.random() * Math.PI * 2;
-            const phi = Math.random() * Math.PI * 0.8;
+            const phi = Math.random() * Math.PI * 0.7;
             p.userData = {
                 vx: Math.sin(phi) * Math.cos(theta) * speed,
-                vy: Math.sin(phi) * Math.sin(theta) * speed + 0.1,
+                vy: Math.sin(phi) * Math.sin(theta) * speed + 0.15,
                 vz: Math.cos(phi) * speed,
-                life: 1.0,
-                decay: 0.02 + Math.random() * 0.02
+                life: 0.8 + Math.random() * 0.3,
+                decay: 0.025 + Math.random() * 0.02
             };
             scene.add(p);
             state.particles.push(p);
