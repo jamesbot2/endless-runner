@@ -830,9 +830,8 @@
                     for (const lane of lanes) {
                         let obs;
                         const t = Math.random();
-                        if (t < 0.5) obs = createTrain(lane, z, false);
-                        else if (t < 0.8) obs = createBarrier(lane, z);
-                        else if (t < 0.9) obs = createLowFlyingObstacle(lane, z);
+                        if (t < 0.55) obs = createTrain(lane, z, false);
+                        else if (t < 0.80) obs = createLowFlyingObstacle(lane, z);
                         else obs = createRollUnderTrain(lane, z);
                         scene.add(obs);
                         state.obstacles.push(obs);
@@ -851,10 +850,9 @@
                         if (hasRollNearby) type = 0.8;
                     }
                     let obs;
-                    if (type < 0.30) obs = createTrain(lane, z, false);
-                    else if (type < 0.50) obs = createBarrier(lane, z);
-                    else if (type < 0.70) obs = createLowFlyingObstacle(lane, z);
-                    else if (type < 0.78) obs = createFullLaneBarrier(z);
+                    if (type < 0.35) obs = createTrain(lane, z, false);
+                    else if (type < 0.60) obs = createLowFlyingObstacle(lane, z);
+                    else if (type < 0.75) obs = createFullLaneBarrier(z);
                     else obs = createRollUnderTrain(lane, z);
                     scene.add(obs);
                     state.obstacles.push(obs);
@@ -892,9 +890,8 @@
                 for (const lane of [0,1,2].filter(l => l !== openLane)) {
                     let obs;
                     const t = Math.random();
-                    if (t < 0.5) obs = createTrain(lane, z, true);
-                    else if (t < 0.8) obs = createBarrier(lane, z);
-                    else if (t < 0.9) obs = createLowFlyingObstacle(lane, z);
+                    if (t < 0.55) obs = createTrain(lane, z, true);
+                    else if (t < 0.80) obs = createLowFlyingObstacle(lane, z);
                     else obs = createRollUnderTrain(lane, z);
                     scene.add(obs);
                     state.obstacles.push(obs);
@@ -932,10 +929,9 @@
                 }
 
                 let obs;
-                if (type < 0.30) obs = createTrain(lane, z, true);
-                else if (type < 0.50) obs = createBarrier(lane, z);
-                else if (type < 0.70) obs = createLowFlyingObstacle(lane, z);
-                else if (type < 0.78) obs = createFullLaneBarrier(z);
+                if (type < 0.35) obs = createTrain(lane, z, true);
+                else if (type < 0.60) obs = createLowFlyingObstacle(lane, z);
+                else if (type < 0.75) obs = createFullLaneBarrier(z);
                 else obs = createRollUnderTrain(lane, z);
                 scene.add(obs);
                 state.obstacles.push(obs);
