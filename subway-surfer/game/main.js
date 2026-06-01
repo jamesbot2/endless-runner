@@ -632,10 +632,5 @@
         SG.animate();
     };
 
-    // Start
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', SG.init);
-    } else {
-        SG.init();
-    }
+    // Init triggered by account.js after override
 })();

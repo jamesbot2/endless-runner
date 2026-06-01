@@ -237,4 +237,5 @@
         };
         if (origInit) origInit();
     };
+    SG.init();
 })();
