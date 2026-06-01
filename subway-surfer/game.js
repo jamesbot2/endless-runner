@@ -303,18 +303,109 @@
     }
 
     // ========== BUILDINGS ==========
-    function createBuilding(x, z) {
-        const colors = [0x8B7355, 0x6B8E8B, 0x9B8B6B, 0x7B6B5B, 0x5B7B6B, 0x8B7B5B];
-        const height = 3 + Math.random() * 6;
-        const w = 1.5 + Math.random();
-        const d = 1.5 + Math.random();
-        const building = new THREE.Mesh(
-            new THREE.BoxGeometry(w, height, d),
-            new THREE.MeshLambertMaterial({ color: colors[Math.floor(Math.random() * colors.length)] })
-        );
-        building.position.set(x, height / 2, z);
-        scene.add(building);
-        return building;
+    function createScenery(x, z) {
+        var group = new THREE.Group();
+        group.position.set(x, 0, z);
+        var theme = state.theme || 0;
+        
+        if (theme === 0) {
+            // ===== CITY: box buildings =====
+            var colors = [0x8B7355, 0x6B8E8B, 0x9B8B6B, 0x7B6B5B, 0x5B7B6B, 0x8B7B5B];
+            var h = 3 + Math.random() * 6;
+            var w = 1.5 + Math.random();
+            var d = 1.5 + Math.random();
+            var mesh = new THREE.Mesh(
+                new THREE.BoxGeometry(w, h, d),
+                new THREE.MeshLambertMaterial({ color: colors[Math.floor(Math.random() * colors.length)] })
+            );
+            mesh.position.y = h / 2;
+            group.add(mesh);
+        } else if (theme === 1) {
+            // ===== FOREST: trees =====
+            // Trunk
+            var trunkH = 2 + Math.random() * 3;
+            var trunk = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.15, 0.2, trunkH, 6),
+                new THREE.MeshLambertMaterial({ color: 0x5D4037 })
+            );
+            trunk.position.y = trunkH / 2;
+            group.add(trunk);
+            // Foliage (stacked cones)
+            var folColor = [0x2E7D32, 0x388E3C, 0x43A047, 0x1B5E20][Math.floor(Math.random() * 4)];
+            var folMat = new THREE.MeshLambertMaterial({ color: folColor });
+            for (var i = 0; i < 2 + Math.floor(Math.random() * 2); i++) {
+                var cone = new THREE.Mesh(new THREE.ConeGeometry(0.8 - i * 0.15, 0.7, 6), folMat);
+                cone.position.set(0, trunkH + 0.2 + i * 0.5, 0);
+                group.add(cone);
+            }
+            // Random bush
+            if (Math.random() > 0.5) {
+                var bush = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.3 + Math.random() * 0.2, 6, 5),
+                    new THREE.MeshLambertMaterial({ color: 0x66BB6A })
+                );
+                bush.position.set((Math.random() - 0.5) * 0.8, 0.3, (Math.random() - 0.5) * 0.8);
+                group.add(bush);
+            }
+        } else if (theme === 2) {
+            // ===== DESERT: cacti + rocks =====
+            if (Math.random() > 0.4) {
+                // Saguaro cactus
+                var cacMat = new THREE.MeshLambertMaterial({ color: 0x4CAF50 });
+                var main = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.2, 2 + Math.random() * 2, 6), cacMat);
+                main.position.y = 1 + Math.random();
+                group.add(main);
+                // Arms
+                for (var a = 0; a < 2; a++) {
+                    var arm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, 0.8 + Math.random() * 0.5, 6), cacMat);
+                    arm.position.set((a === 0 ? -0.25 : 0.25), 0.6 + Math.random() * 0.8, 0);
+                    arm.rotation.z = a === 0 ? 0.5 : -0.5;
+                    group.add(arm);
+                }
+            } else {
+                // Rock formation
+                var rock = new THREE.Mesh(
+                    new THREE.DodecahedronGeometry(0.4 + Math.random() * 0.6),
+                    new THREE.MeshLambertMaterial({ color: 0xA1887F })
+                );
+                rock.position.y = 0.3 + Math.random() * 0.3;
+                rock.rotation.set(Math.random(), Math.random(), Math.random());
+                rock.scale.set(1, 0.5 + Math.random() * 0.5, 1);
+                group.add(rock);
+            }
+        } else {
+            // ===== OCEAN: icebergs / ice pillars =====
+            var iceMat = new THREE.MeshLambertMaterial({ color: 0xB3E5FC });
+            if (Math.random() > 0.3) {
+                // Ice pillar
+                var pillar = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.3, 0.5, 2 + Math.random() * 4, 7),
+                    iceMat
+                );
+                pillar.position.y = 1 + Math.random() * 2;
+                pillar.scale.x = 0.6 + Math.random() * 0.8;
+                group.add(pillar);
+                // Sparkle
+                var sparkle = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.05, 4, 4),
+                    new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
+                );
+                sparkle.position.set(0, pillar.position.y + 0.3, 0.2);
+                group.add(sparkle);
+            } else {
+                // Iceberg mound
+                var mound = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.6 + Math.random() * 0.5, 6, 5),
+                    iceMat
+                );
+                mound.position.y = 0.3;
+                mound.scale.set(1, 0.4, 1);
+                group.add(mound);
+            }
+        }
+        
+        scene.add(group);
+        return group;
     }
 
     // ========== OBSTACLES ==========
@@ -945,8 +1036,8 @@
             for (let side = -1; side <= 1; side += 2) {
                 if (Math.random() > 0.3) {
                     const x = side * (GROUND_WIDTH / 2 + 2 + Math.random() * 3);
-                    const building = createBuilding(x, z);
-                    state.buildings.push(building);
+                    var scenery = createScenery(x, z);
+                    state.buildings.push(scenery);
                 }
             }
         }
@@ -3091,14 +3182,22 @@
             });
         }
         
-        // Update existing buildings
-        for (const b of state.buildings) {
-            if (b.isMesh && b.material && b.material.color) {
-                const hex = b.material.color.getHex();
-                // Only change if it looks like a default building color
-                const palette = THEME_COLORS[themeIndex].buildings;
-                const idx = Math.abs(hashCode(b.id.toString())) % palette.length;
-                b.material.color.setHex(palette[idx]);
+        // Respawn buildings with new theme shapes (remove old, spawn fresh)
+        for (var i = state.buildings.length - 1; i >= 0; i--) {
+            var b = state.buildings[i];
+            disposeObject(b);
+            scene.remove(b);
+        }
+        state.buildings = [];
+        // Spawn a batch of new themed scenery ahead
+        var spawnAhead = state.started ? SPAWN_AHEAD : 200;
+        for (var z = 0; z > -spawnAhead; z -= 6 + Math.random() * 8) {
+            for (var side = -1; side <= 1; side += 2) {
+                if (Math.random() > 0.3) {
+                    var x = side * (GROUND_WIDTH / 2 + 2 + Math.random() * 3);
+                    var sc = createScenery(x, z);
+                    state.buildings.push(sc);
+                }
             }
         }
         
