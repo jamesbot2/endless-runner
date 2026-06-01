@@ -4,6 +4,13 @@
 (function() {
     'use strict';
 
+    // Check Three.js loaded (handles CDN failures in Telegram etc.)
+    if (typeof THREE === 'undefined') {
+        var errDiv = document.getElementById('three-error');
+        if (errDiv) errDiv.style.display = 'block';
+        return; // Stop execution
+    }
+
     // ========== CONSTANTS ==========
     const LANE_WIDTH = 2.2;
     const LANE_COUNT = 3;
