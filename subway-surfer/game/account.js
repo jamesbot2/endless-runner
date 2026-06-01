@@ -63,6 +63,8 @@
             localStorage.setItem('subwayToken', data.token);
             localStorage.setItem('subwayEmail', data.email);
             msg.textContent = 'Logged in!';
+            var ab = document.getElementById('account-btn-menu');
+            if (ab) ab.textContent = '👤 ' + data.email;
             msg.style.color = '#4CAF50';
             if (data.gameData) {
                 if (data.gameData.highScore > SG.state.bestScore) SG.state.bestScore = data.gameData.highScore;
@@ -94,6 +96,8 @@
         SG.account.loggedIn = false;
         localStorage.removeItem('subwayToken');
         localStorage.removeItem('subwayEmail');
+        var ab = document.getElementById('account-btn-menu');
+        if (ab) ab.textContent = '🔑 SIGN IN';
         SG.showAccountModal();
     };
 

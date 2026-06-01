@@ -276,6 +276,13 @@ async function handleRequest(req, res) {
     }
 
     // ---- 404 ----
+    // Root route
+    if (pathname === "/" && method === "GET") {
+        res.writeHead(200, {"Content-Type":"text/html"});
+        res.end("<h2>Subway Surfer - Account API</h2><p>Endpoints:</p><ul><li>POST /api/register</li><li>POST /api/login</li><li>POST /api/save</li><li>GET /api/load</li><li>GET /api/leaderboard</li></ul><a href=\"http://35.212.200.85:8080/\">Play Game</a>");
+        return;
+    }
+
     sendJSON(res, 404, { error: 'Not found' });
 }
 

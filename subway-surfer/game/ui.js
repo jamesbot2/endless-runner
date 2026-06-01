@@ -156,6 +156,7 @@
                 '<div class="menu-keys">ESC / P = Pause &nbsp;|&nbsp; M = Menu &nbsp;|&nbsp; 👁 FPV</div>' +
                 '<div class="menu-mobile-hint">Swipe to play on mobile</div>' +
                 '<div class="menu-btn" id="shop-btn-menu" style="margin-top:10px;font-size:14px;padding:8px 16px;">🛒 SHOP</div>' +
+                '<div class="menu-btn" id="account-btn-menu" style="margin-top:5px;font-size:13px;padding:6px 14px;">🔑 SIGN IN</div>' +
             '</div>';
         SG.uiOverlay.appendChild(SG.menuOverlay);
 
@@ -374,6 +375,12 @@
         if (shopBtnMenu) {
             shopBtnMenu.addEventListener('click', function(e) { e.stopPropagation(); SG.showShop(); });
             shopBtnMenu.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showShop(); });
+        }
+
+        var accBtnMenu = document.getElementById("account-btn-menu");
+        if (accBtnMenu) {
+            accBtnMenu.addEventListener("click", function(e) { e.stopPropagation(); SG.showAccountModal(); });
+            accBtnMenu.addEventListener("touchend", function(e) { e.stopPropagation(); e.preventDefault(); SG.showAccountModal(); });
         }
 
         var pauseTapBtn = SG.pauseOverlay.querySelector('.tap-to-start');
