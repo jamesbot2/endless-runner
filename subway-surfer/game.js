@@ -2172,31 +2172,72 @@
             homelanderGroup.add(eye);
         }
         
-        // === CAPE with US Flag ===
-        // Generate US flag texture
-        const flagTex = createUSFlagTexture();
+        // === CAPE with US Flag (3D mesh construction for reliability) ===
+        // Build the flag as actual 3D meshes (no canvas texture dependency)
+        const capeGroup = new THREE.Group();
+        capeGroup.position.set(0, 0.60, -0.30);
+        capeGroup.rotation.x = 0.25;
+        homelanderGroup.add(capeGroup);
+        homelanderCape = capeGroup;
         
-        // Cape using PlaneGeometry with US flag texture (MeshBasicMaterial for reliable rendering)
-        const capeGeo = new THREE.PlaneGeometry(1.2, 0.92);
-        const capeMat = new THREE.MeshBasicMaterial({ 
-            map: flagTex,
-            side: THREE.DoubleSide
-        });
-        homelanderCape = new THREE.Mesh(capeGeo, capeMat);
-        // Position: behind the body (body z extends from -0.175 to +0.175)
-        homelanderCape.position.set(0, 0.60, -0.30);
-        homelanderCape.rotation.x = 0.25;
-        homelanderGroup.add(homelanderCape);
+        // Cape dimensions: 1.2 wide x 0.92 tall (centered at 0,0 within group)
+        const CW = 1.2;
+        const CH = 0.92;
+        const stripeH = CH / 13; // height of each stripe
         
-        // Dark red backing - behind main cape to avoid z-fighting
-        const backMat = new THREE.MeshBasicMaterial({ 
-            color: 0x550000, 
-            side: THREE.DoubleSide
-        });
-        const backCape = new THREE.Mesh(
-            new THREE.PlaneGeometry(1.24, 0.96),
-            backMat
-        );
+        // Base: red cape fabric
+        const baseMat = new THREE.MeshBasicMaterial({ color: 0xB22234, side: THREE.DoubleSide });
+        const baseCape = new THREE.Mesh(new THREE.PlaneGeometry(CW, CH), baseMat);
+        capeGroup.add(baseCape);
+        
+        // White stripes (6 stripes, alternating with red)
+        const whiteMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, side: THREE.DoubleSide });
+        const whiteStripePositions = [];
+        for (let i = 1; i < 13; i += 2) { // even stripes (2nd, 4th, 6th, 8th, 10th, 12th)
+            const centerY = CH/2 - (i + 0.5) * stripeH;
+            whiteStripePositions.push(centerY);
+        }
+        // i=1: y = 0.46 - 1.5*0.071 = 0.3535
+        // i=3: y = 0.46 - 3.5*0.071 = 0.2115
+        // i=5: y = 0.46 - 5.5*0.071 = 0.0695
+        // i=7: y = 0.46 - 7.5*0.071 = -0.0725
+        // i=9: y = 0.46 - 9.5*0.071 = -0.2145
+        // i=11: y = 0.46 - 11.5*0.071 = -0.3565
+        for (const yPos of whiteStripePositions) {
+            const s = new THREE.Mesh(new THREE.BoxGeometry(CW - 0.01, stripeH * 0.9, 0.01), whiteMat);
+            s.position.set(0, yPos, 0.01);
+            capeGroup.add(s);
+        }
+        
+        // Blue canton (top-left corner of flag, covers top 7 stripes)
+        const cantonW = CW * 0.40;
+        const cantonH = stripeH * 7;
+        const cantonMat = new THREE.MeshBasicMaterial({ color: 0x3C3B6E, side: THREE.DoubleSide });
+        const canton = new THREE.Mesh(new THREE.BoxGeometry(cantonW, cantonH, 0.01), cantonMat);
+        canton.position.set(-CW/2 + cantonW/2, CH/2 - cantonH/2, 0.01);
+        capeGroup.add(canton);
+        
+        // Stars: small white dots in the canton (9 rows, alternating 6 and 5)
+        const starMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+        const starCols = [6, 5, 6, 5, 6, 5, 6, 5, 6];
+        const cellW = cantonW / 7;
+        const cellH = cantonH / 10;
+        const starR = Math.min(cellW, cellH) * 0.15;
+        const starGeo = new THREE.CircleGeometry(starR, 4);
+        for (let row = 0; row < 9; row++) {
+            const cols = starCols[row];
+            for (let col = 0; col < cols; col++) {
+                const sx = -CW/2 + (col + 1) * cellW - cellW/2;
+                const sy = CH/2 - (row + 1) * cellH + cellH/2;
+                const star = new THREE.Mesh(starGeo, starMat);
+                star.position.set(sx, sy, 0.02);
+                capeGroup.add(star);
+            }
+        }
+        
+        // Dark red backing - positioned behind the flag cape
+        const backMat = new THREE.MeshBasicMaterial({ color: 0x550000, side: THREE.DoubleSide });
+        const backCape = new THREE.Mesh(new THREE.PlaneGeometry(1.24, 0.96), backMat);
         backCape.position.set(0, 0.60, -0.35);
         backCape.rotation.x = 0.25;
         homelanderGroup.add(backCape);
@@ -2344,21 +2385,45 @@
         if (homelanderGroup.position.y < 1) homelanderGroup.position.y = 1;
         if (homelanderGroup.position.y > 20) homelanderGroup.position.y = 20;
         
-        // Cape flutter animation - both front and back capes move together
+        // Cape flutter animation - rotates the cape group and backCape together
         if (homelanderCape) {
             const flutter = Math.sin(state.gameTime * 3);
-            const tilt = 0.20 + flutter * 0.20;
+            const tilt = 0.25 + flutter * 0.20;
             homelanderCape.rotation.x = tilt;
             homelanderCape.rotation.z = Math.sin(state.gameTime * 2.5) * 0.06;
-            // Find the backCape (last child before clasp... use the one at position.z < -0.18)
+            // Find and sync the backCape (at position.z < -0.18 is not our capeGroup)
             for (let i = homelanderGroup.children.length - 1; i >= 0; i--) {
                 const child = homelanderGroup.children[i];
-                if (child !== homelanderCape && child.position.z < -0.18 && child.geometry && child.geometry.type === 'PlaneGeometry') {
+                if (child === homelanderCape) continue;
+                if (Math.abs(child.position.z - (-0.35)) < 0.01) {
                     child.rotation.x = tilt;
                     child.rotation.z = homelanderCape.rotation.z;
                     break;
                 }
             }
+        }
+        
+        // Background color changes with speed
+        const speedRatio = Math.min(state.speed / MAX_SPEED, 1.0);
+        if (speedRatio < 0.3) {
+            scene.background.setHex(0x87CEEB); // sky blue
+            scene.fog.color.setHex(0x87CEEB);
+        } else if (speedRatio < 0.6) {
+            // Transition to orange sunset
+            const t = (speedRatio - 0.3) / 0.3;
+            const r = Math.round(0x87 * (1-t) + 0xFF * t);
+            const g = Math.round(0xCE * (1-t) + 0x99 * t);
+            const b = Math.round(0xEB * (1-t) + 0x33 * t);
+            scene.background.setRGB(r/255, g/255, b/255);
+            scene.fog.color.copy(scene.background);
+        } else {
+            // Transition to dark red
+            const t = Math.min((speedRatio - 0.6) / 0.4, 1.0);
+            const r = Math.round(0xFF * (1-t) + 0x55 * t);
+            const g = Math.round(0x99 * (1-t) + 0x11 * t);
+            const b = Math.round(0x33 * (1-t) + 0x11 * t);
+            scene.background.setRGB(r/255, g/255, b/255);
+            scene.fog.color.copy(scene.background);
         }
         
         // Continuous laser beams from the eyes - always-on, pointing forward-downward
