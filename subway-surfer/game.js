@@ -492,35 +492,54 @@
         const laneX = LANE_POSITIONS[lane];
         
         // A hovering drone - low flying hazard that you must roll under or jump over
+        // Bright neon color so it's always visible
+        const bodyMat = new THREE.MeshLambertMaterial({ color: 0xEE4400 });
         const body = new THREE.Mesh(
             new THREE.BoxGeometry(1.0, 0.2, 0.8),
-            new THREE.MeshLambertMaterial({ color: 0x444444 })
+            bodyMat
         );
         body.position.set(0, 0.9, 0);
         group.add(body);
         
-        // Rotor arms
-        const armMat = new THREE.MeshLambertMaterial({ color: 0x666666 });
+        // Rotor arms (bright metallic)
+        const armMat = new THREE.MeshLambertMaterial({ color: 0xCC6600 });
         for (let i = -1; i <= 1; i += 2) {
             for (let j = -1; j <= 1; j += 2) {
                 const arm = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.04, 0.04), armMat);
                 arm.position.set(i * 0.3, 1.0, j * 0.3);
                 group.add(arm);
-                // Rotor disc
+                // Rotor disc (white, more visible)
                 const rotor = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.15, 0.15, 0.02, 6),
-                    new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.6 })
+                    new THREE.CylinderGeometry(0.18, 0.18, 0.02, 6),
+                    new THREE.MeshBasicMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.5 })
                 );
                 rotor.position.set(i * 0.3, 1.05, j * 0.3);
                 group.add(rotor);
             }
         }
         
-        // Red blinking light
+        // Yellow warning strip on body
+        const warnBand = new THREE.Mesh(
+            new THREE.BoxGeometry(0.02, 0.04, 0.6),
+            new THREE.MeshBasicMaterial({ color: 0xFFFF00 })
+        );
+        warnBand.position.set(0.5, 0.9, 0);
+        group.add(warnBand);
+        const warnBand2 = warnBand.clone();
+        warnBand2.position.set(-0.5, 0.9, 0);
+        group.add(warnBand2);
+        
+        // Blinking red light
         const blinkMat = new THREE.MeshBasicMaterial({ color: 0xFF0000 });
-        const blink = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), blinkMat);
+        const blink = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), blinkMat);
         blink.position.set(0, 1.0, 0.4);
         group.add(blink);
+        
+        // Inner glow (small bright cylinder)
+        const glowMat = new THREE.MeshBasicMaterial({ color: 0xFF6600, transparent: true, opacity: 0.4 });
+        const glow = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.1, 0.15, 6), glowMat);
+        glow.position.set(0, 0.8, 0);
+        group.add(glow);
         
         group.position.set(laneX, 0, zPos);
         group.userData = { type: 'low_flying', lane: lane, width: 1.0, height: 0.8, depth: 0.8, yOffset: 0.8 };
@@ -2079,7 +2098,9 @@
         if (isNaN(camTarget.z)) camTarget.z = 0;
 
         if (state.firstPerson) {
-            const eyeY = camTarget.y + 1.3;
+            // Drop camera significantly when rolling/sliding so it actually feels like ducking
+            const rollDrop = state.isRolling ? -0.9 : 0;
+            const eyeY = camTarget.y + 1.3 + rollDrop;
             const eyeZ = camTarget.z + 0.5;
             camera.position.set(camTarget.x, eyeY, eyeZ);
             camera.lookAt(camTarget.x, camTarget.y + 0.3, camTarget.z - 30);
