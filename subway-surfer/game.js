@@ -1123,11 +1123,13 @@
             // Start game from menu
             // Homelander direct movement (bypasses the update loop for instant response)
             if (state.homelander && homelanderGroup) {
-                const hlSpeed = 0.3;
-                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') homelanderGroup.position.x -= hlSpeed;
-                if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') homelanderGroup.position.x += hlSpeed;
-                if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') homelanderGroup.position.y = Math.min(20, homelanderGroup.position.y + hlSpeed);
-                if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') homelanderGroup.position.y = Math.max(1, homelanderGroup.position.y - hlSpeed);
+                // Each keypress moves by 0.6 (held keys repeat, held=continuous smooth motion)
+                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') homelanderGroup.position.x -= 0.6;
+                if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') homelanderGroup.position.x += 0.6;
+                if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') homelanderGroup.position.y = Math.min(20, homelanderGroup.position.y + 0.6);
+                if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') homelanderGroup.position.y = Math.max(1, homelanderGroup.position.y - 0.6);
+                // Prevent lane switching in HL mode
+                e.preventDefault();
             }
             // Close console with Escape
             if (e.key === 'Escape' && document.getElementById('dev-console')?.style?.display === 'flex') {
@@ -2037,6 +2039,8 @@
 
     function fireLaser() {
         if (!homelanderGroup) return;
+        // Don't render lasers in first-person view (they'd block the camera)
+        if (state.firstPerson) return;
         const origin = homelanderGroup.position.clone();
         origin.y += 1.2; // eye level
         
