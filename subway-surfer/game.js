@@ -3,6 +3,15 @@
 
 (function() {
     'use strict';
+    
+    // Wait for THREE to be available (async CDN loading)
+    function waitForThree() {
+        if (typeof THREE !== 'undefined') {
+            init();
+        } else {
+            setTimeout(waitForThree, 200);
+        }
+    }
 
     // ========== CONSTANTS ==========
     const LANE_WIDTH = 2.2;
@@ -1948,9 +1957,9 @@
 
     // Start when DOM ready
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', waitForThree);
     } else {
-        init();
+        waitForThree();
     }
 
 })();
