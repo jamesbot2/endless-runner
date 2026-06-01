@@ -491,55 +491,50 @@
         const group = new THREE.Group();
         const laneX = LANE_POSITIONS[lane];
         
-        // A hovering drone - low flying hazard that you must roll under or jump over
-        // Bright neon color so it's always visible
-        const bodyMat = new THREE.MeshLambertMaterial({ color: 0xEE4400 });
+        // A hovering drone - obstacle that you must roll under or jump over
+        // Large bright neon body so it's ALWAYS visible
+        const bodyMat = new THREE.MeshLambertMaterial({ color: 0xFF3300 });
         const body = new THREE.Mesh(
-            new THREE.BoxGeometry(1.0, 0.2, 0.8),
+            new THREE.BoxGeometry(1.2, 0.25, 1.0),
             bodyMat
         );
         body.position.set(0, 0.9, 0);
         group.add(body);
         
-        // Rotor arms (bright metallic)
-        const armMat = new THREE.MeshLambertMaterial({ color: 0xCC6600 });
+        // Rotor arms (bright)
+        const armMat = new THREE.MeshLambertMaterial({ color: 0xDD8800 });
         for (let i = -1; i <= 1; i += 2) {
-            for (let j = -1; j <= 1; j += 2) {
-                const arm = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.04, 0.04), armMat);
-                arm.position.set(i * 0.3, 1.0, j * 0.3);
-                group.add(arm);
-                // Rotor disc (white, more visible)
-                const rotor = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.18, 0.18, 0.02, 6),
-                    new THREE.MeshBasicMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.5 })
-                );
-                rotor.position.set(i * 0.3, 1.05, j * 0.3);
-                group.add(rotor);
-            }
+            const arm = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 0.04), armMat);
+            arm.position.set(i * 0.3, 1.05, 0);
+            group.add(arm);
+            // Rotor disc (white, highly visible)
+            const rotor = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.22, 0.22, 0.02, 6),
+                new THREE.MeshBasicMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.6 })
+            );
+            rotor.position.set(i * 0.3, 1.08, 0);
+            group.add(rotor);
         }
         
-        // Yellow warning strip on body
-        const warnBand = new THREE.Mesh(
-            new THREE.BoxGeometry(0.02, 0.04, 0.6),
-            new THREE.MeshBasicMaterial({ color: 0xFFFF00 })
-        );
-        warnBand.position.set(0.5, 0.9, 0);
-        group.add(warnBand);
-        const warnBand2 = warnBand.clone();
-        warnBand2.position.set(-0.5, 0.9, 0);
-        group.add(warnBand2);
+        // Flashing beacon on top
+        const beaconMat = new THREE.MeshBasicMaterial({ color: 0xFF0000 });
+        const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), beaconMat);
+        beacon.position.set(0, 1.1, 0);
+        group.add(beacon);
         
-        // Blinking red light
-        const blinkMat = new THREE.MeshBasicMaterial({ color: 0xFF0000 });
-        const blink = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), blinkMat);
-        blink.position.set(0, 1.0, 0.4);
-        group.add(blink);
-        
-        // Inner glow (small bright cylinder)
-        const glowMat = new THREE.MeshBasicMaterial({ color: 0xFF6600, transparent: true, opacity: 0.4 });
-        const glow = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.1, 0.15, 6), glowMat);
-        glow.position.set(0, 0.8, 0);
+        // Bright glow underneath (constant, helps visibility at night/black bg)
+        const glowMat = new THREE.MeshBasicMaterial({ color: 0xFF8800, transparent: true, opacity: 0.5 });
+        const glow = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.2, 0.1, 8), glowMat);
+        glow.position.set(0, 0.75, 0);
         group.add(glow);
+        
+        // HUD-style border lines (white glow strips)
+        const hudMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.4 });
+        for (let side = -1; side <= 1; side += 2) {
+            const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.04, 0.8), hudMat);
+            stripe.position.set(side * 0.6, 0.9, 0);
+            group.add(stripe);
+        }
         
         group.position.set(laneX, 0, zPos);
         group.userData = { type: 'low_flying', lane: lane, width: 1.0, height: 0.8, depth: 0.8, yOffset: 0.8 };
@@ -2157,33 +2152,72 @@
         shoulder.position.y = 0.95;
         homelanderGroup.add(shoulder);
         
-        // === HEAD ===
+        // === HEAD (improved realism) ===
+        const skinMat = new THREE.MeshLambertMaterial({ color: 0xFFDDCC });
+        // Main head shape (elongated oval)
         const head = new THREE.Mesh(
-            new THREE.SphereGeometry(0.25, 10, 10),
-            new THREE.MeshLambertMaterial({ color: 0xFFDDCC })
+            new THREE.SphereGeometry(0.25, 12, 10),
+            skinMat
         );
-        head.position.y = 1.3;
-        head.scale.set(1, 1.1, 0.9);
+        head.position.y = 1.32;
+        head.scale.set(1, 1.15, 0.85);
         homelanderGroup.add(head);
         
-        // Jaw line
+        // Strong jaw/chin
         const jaw = new THREE.Mesh(
-            new THREE.BoxGeometry(0.22, 0.08, 0.18),
-            new THREE.MeshLambertMaterial({ color: 0xFFDDCC })
+            new THREE.BoxGeometry(0.24, 0.10, 0.16),
+            skinMat
         );
-        jaw.position.set(0, 1.15, 0.22);
+        jaw.position.set(0, 1.14, 0.20);
         homelanderGroup.add(jaw);
         
-        // Blonde hair (swooping back)
+        // Chin point
+        const chin = new THREE.Mesh(
+            new THREE.SphereGeometry(0.06, 6, 6),
+            skinMat
+        );
+        chin.position.set(0, 1.07, 0.24);
+        homelanderGroup.add(chin);
+        
+        // Nose bridge
+        const noseMat = new THREE.MeshLambertMaterial({ color: 0xEECCB8 });
+        const nose = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.06, 0.06), noseMat);
+        nose.position.set(0, 1.26, 0.24);
+        homelanderGroup.add(nose);
+        const noseTip = new THREE.Mesh(new THREE.SphereGeometry(0.025, 4, 4), noseMat);
+        noseTip.position.set(0, 1.24, 0.27);
+        homelanderGroup.add(noseTip);
+        
+        // Eyebrows (slight ridges)
+        const browMat = new THREE.MeshLambertMaterial({ color: 0xCCAA55 });
+        for (let side = -1; side <= 1; side += 2) {
+            const brow = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.02, 0.04), browMat);
+            brow.position.set(side * 0.08, 1.38, 0.22);
+            brow.rotation.z = side * 0.15;
+            homelanderGroup.add(brow);
+        }
+        
+        // Blonde hair - larger, swept back
         const hairMat = new THREE.MeshLambertMaterial({ color: 0xFFCC00 });
-        const hair = new THREE.Mesh(new THREE.SphereGeometry(0.27, 8, 6), hairMat);
-        hair.position.set(0, 1.48, 0.05);
-        hair.scale.set(1, 0.4, 0.7);
+        const hair = new THREE.Mesh(new THREE.SphereGeometry(0.30, 10, 8), hairMat);
+        hair.position.set(0, 1.50, 0.02);
+        hair.scale.set(1.05, 0.35, 0.75);
         homelanderGroup.add(hair);
-        // Hair swoop
-        const swoop = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, 0.12), hairMat);
-        swoop.position.set(0, 1.5, -0.1);
+        // Hair sides
+        for (let side = -1; side <= 1; side += 2) {
+            const sideHair = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.10, 0.12), hairMat);
+            sideHair.position.set(side * 0.20, 1.42, 0.08);
+            homelanderGroup.add(sideHair);
+        }
+        // Hair swoop/forelock (swept back)
+        const swoop = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.06, 0.20), hairMat);
+        swoop.position.set(0, 1.52, -0.08);
+        swoop.rotation.x = -0.3;
         homelanderGroup.add(swoop);
+        // Extra hair on top
+        const topHair = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.04, 0.16), hairMat);
+        topHair.position.set(0, 1.53, 0.04);
+        homelanderGroup.add(topHair);
         
         // Glowing red eyes
         const eyeMat = new THREE.MeshBasicMaterial({ color: 0xFF2200 });
@@ -2193,58 +2227,49 @@
             homelanderGroup.add(eye);
         }
         
-        // === CAPE with US Flag (3D mesh construction for reliability) ===
-        // Build the flag as actual 3D meshes (no canvas texture dependency)
+        // === CAPE with US Flag (3D mesh construction) ===
         const capeGroup = new THREE.Group();
-        capeGroup.position.set(0, 0.60, -0.30);
+        capeGroup.position.set(0, 0.60, -0.28);
         capeGroup.rotation.x = 0.25;
         homelanderGroup.add(capeGroup);
         homelanderCape = capeGroup;
         
-        // Cape dimensions: 1.2 wide x 0.92 tall (centered at 0,0 within group)
-        const CW = 1.2;
-        const CH = 0.92;
-        const stripeH = CH / 13; // height of each stripe
+        // Cape dimensions: narrower (0.9 wide x 0.85 tall)
+        const CW = 0.9;
+        const CH = 0.85;
+        const stripeH = CH / 13;
         
+        // BOTH sides visible always
+        const ds = THREE.DoubleSide;
         // Base: red cape fabric
-        const baseMat = new THREE.MeshBasicMaterial({ color: 0xB22234, side: THREE.DoubleSide });
+        const baseMat = new THREE.MeshBasicMaterial({ color: 0xB22234, side: ds });
         const baseCape = new THREE.Mesh(new THREE.PlaneGeometry(CW, CH), baseMat);
         capeGroup.add(baseCape);
         
-        // White stripes (6 stripes, alternating with red)
-        const whiteMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, side: THREE.DoubleSide });
-        const whiteStripePositions = [];
-        for (let i = 1; i < 13; i += 2) { // even stripes (2nd, 4th, 6th, 8th, 10th, 12th)
-            const centerY = CH/2 - (i + 0.5) * stripeH;
-            whiteStripePositions.push(centerY);
-        }
-        // i=1: y = 0.46 - 1.5*0.071 = 0.3535
-        // i=3: y = 0.46 - 3.5*0.071 = 0.2115
-        // i=5: y = 0.46 - 5.5*0.071 = 0.0695
-        // i=7: y = 0.46 - 7.5*0.071 = -0.0725
-        // i=9: y = 0.46 - 9.5*0.071 = -0.2145
-        // i=11: y = 0.46 - 11.5*0.071 = -0.3565
-        for (const yPos of whiteStripePositions) {
-            const s = new THREE.Mesh(new THREE.BoxGeometry(CW - 0.01, stripeH * 0.9, 0.01), whiteMat);
+        // White stripes (6 stripes)
+        const whiteMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, side: ds });
+        for (let i = 1; i < 13; i += 2) {
+            const yPos = CH/2 - (i + 0.5) * stripeH;
+            const s = new THREE.Mesh(new THREE.BoxGeometry(CW - 0.02, stripeH * 0.9, 0.015), whiteMat);
             s.position.set(0, yPos, 0.01);
             capeGroup.add(s);
         }
         
-        // Blue canton (top-left corner of flag, covers top 7 stripes)
+        // Blue canton (top-left corner, covers top 7 stripes)
         const cantonW = CW * 0.40;
         const cantonH = stripeH * 7;
-        const cantonMat = new THREE.MeshBasicMaterial({ color: 0x3C3B6E, side: THREE.DoubleSide });
-        const canton = new THREE.Mesh(new THREE.BoxGeometry(cantonW, cantonH, 0.01), cantonMat);
+        const cantonMat = new THREE.MeshBasicMaterial({ color: 0x3C3B6E, side: ds });
+        const canton = new THREE.Mesh(new THREE.BoxGeometry(cantonW, cantonH, 0.015), cantonMat);
         canton.position.set(-CW/2 + cantonW/2, CH/2 - cantonH/2, 0.01);
         capeGroup.add(canton);
         
-        // Stars: small white dots in the canton (9 rows, alternating 6 and 5)
-        const starMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+        // Stars: small white cubes (visible from ALL angles, unlike CircleGeometry)
+        const starMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, side: ds });
         const starCols = [6, 5, 6, 5, 6, 5, 6, 5, 6];
         const cellW = cantonW / 7;
         const cellH = cantonH / 10;
-        const starR = Math.min(cellW, cellH) * 0.15;
-        const starGeo = new THREE.CircleGeometry(starR, 4);
+        const starS = Math.min(cellW, cellH) * 0.12;
+        const starGeo = new THREE.BoxGeometry(starS, starS, 0.02);
         for (let row = 0; row < 9; row++) {
             const cols = starCols[row];
             for (let col = 0; col < cols; col++) {
@@ -2425,12 +2450,21 @@
         }
         
         // Background color changes with speed
+        const speedLevel = Math.floor((state.speed - START_SPEED) / (MAX_SPEED - START_SPEED) * 49) + 1;
         const speedRatio = Math.min(state.speed / MAX_SPEED, 1.0);
-        if (speedRatio < 0.3) {
-            scene.background.setHex(0x87CEEB); // sky blue
+        
+        // CYBER MODE: at 48x+ speed, switch to black & white future tech
+        if (speedLevel >= 48) {
+            scene.background.setHex(0x000000);
+            scene.fog.color.setHex(0x000000);
+            scene.fog.near = 30;
+            scene.fog.far = 80;
+        } else if (speedRatio < 0.3) {
+            scene.background.setHex(0x87CEEB);
             scene.fog.color.setHex(0x87CEEB);
+            scene.fog.near = 60;
+            scene.fog.far = 120;
         } else if (speedRatio < 0.6) {
-            // Transition to orange sunset
             const t = (speedRatio - 0.3) / 0.3;
             const r = Math.round(0x87 * (1-t) + 0xFF * t);
             const g = Math.round(0xCE * (1-t) + 0x99 * t);
@@ -2438,7 +2472,6 @@
             scene.background.setRGB(r/255, g/255, b/255);
             scene.fog.color.copy(scene.background);
         } else {
-            // Transition to dark red
             const t = Math.min((speedRatio - 0.6) / 0.4, 1.0);
             const r = Math.round(0xFF * (1-t) + 0x55 * t);
             const g = Math.round(0x99 * (1-t) + 0x11 * t);
