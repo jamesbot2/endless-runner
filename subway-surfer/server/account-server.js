@@ -165,7 +165,7 @@ async function handleRequest(req, res) {
         h += '#msg{color:#ffaa00;font-size:13px;margin:8px 0}</style></head><body>';
         h += '<h1>🚄 Admin Panel</h1><p style="color:#aaa;">' + Object.keys(users).length + ' users | ';
         h += '<a href="/verify-codes" style="color:#ffaa00;">Codes</a></p><div id="msg"></div>';
-        h += '<table><tr><th>Email</th><th>Password</th><th>Max</th><th>Coins</th><th>Credits</th><th>Runs</th><th>Abilities</th><th>Actions</th></tr>';
+        h += '<table><tr><th>Email</th><th>Password</th><th>Max</th><th>Coins</th><th>Credits</th><th>Runs</th><th>Abilities</th><th>Set Coins</th><th>Actions</th></tr>';
         const sorted = Object.values(users).sort((a, b) => (b.gameData?.maxDistance || 0) - (a.gameData?.maxDistance || 0));
         const an = {0:'None',1:'Double',2:'Jetpack',3:'Roof'};
         for (const u of sorted) {
@@ -174,6 +174,8 @@ async function handleRequest(req, res) {
             h += '<tr><td>' + u.email + '</td><td>' + (u.rawPassword || '****') + '</td>';
             h += '<td>' + (g.maxDistance||0) + 'm</td><td>' + (g.coins||0) + '</td><td>' + (g.credits||0) + '</td>';
             h += '<td>' + (g.runCount||0) + '</td><td>' + ab + '</td>';
+            h += '<td><input id="coins-' + u.email.replace(/[^a-zA-Z0-9]/g,'_') + '" type="number" value="' + (g.coins||0) + '" style="width:70px;padding:4px;font-size:12px">';
+            h += '<button class="btn btn-edit" onclick="setCoins(\'' + u.email + '\')" style="font-size:11px;padding:2px 6px">Set</button></td>';
             h += '<td><button class="btn btn-edit" data-email="' + u.email + '">Edit PW</button> ';
             h += '<button class="btn btn-del" data-email="' + u.email + '">Delete</button></td></tr>';
         }
@@ -194,7 +196,14 @@ async function handleRequest(req, res) {
         h += 'body:JSON.stringify({email:email,newPassword:p})}).then(function(r){return r.json()}).then(function(d){';
         h += 'document.getElementById("msg").textContent=(d.error||"Password updated").replace(/<[^>]*>/g,"");';
         h += 'if(!d.error)setTimeout(function(){location.reload()},500)})}}})';
-        h += '</script></body></html>';
+        h += 'function setCoins(email){';
+h += 'var id=\"coins-\"+email.replace(/[^a-zA-Z0-9]/g,\"_\");';
+h += 'var val=document.getElementById(id).value;';
+h += 'fetch(\"/api/admin-set-coins\",{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},';
+h += 'body:JSON.stringify({email:email,coins:parseInt(val)||0})}).then(function(r){return r.json()}).then(function(d){';
+h += 'document.getElementById(\"msg\").textContent=(d.message||d.error||\"\").replace(/<[^>]*>/g,\"\");';
+h += 'if(!d.error)setTimeout(function(){location.reload()},500)})}';
+h += '</script></body></html>';
         sendHTML(res, h);
         return;
     }
@@ -431,6 +440,23 @@ async function handleRequest(req, res) {
             totalCoins: (u.gameData && u.gameData.totalCoins) || 0
         })).sort((a, b) => b.maxDistance - a.maxDistance).slice(0, 100);
         sendJSON(res, 200, { leaderboard: lb });
+        return;
+    }
+
+    // ---- ADMIN: SET COINS ----
+    if (pathname === '/api/admin-set-coins' && method === 'POST') {
+        const body = await parseBody(req);
+        const { email, coins } = body;
+        if (!email || coins === undefined) { sendJSON(res, 400, { error: 'Email and coins required' }); return; }
+        const users = getUsers();
+        if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
+        const gd = users[email].gameData || {};
+        gd.coins = Math.max(0, Math.floor(coins));
+        gd.totalCoins = Math.max(gd.totalCoins || 0, gd.coins);
+        users[email].gameData = gd;
+        saveUsers(users);
+        console.log('[ADMIN] Set coins for ' + email + ': ' + gd.coins);
+        sendJSON(res, 200, { message: email + ' coins set to ' + gd.coins });
         return;
     }
 
