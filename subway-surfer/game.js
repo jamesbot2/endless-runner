@@ -813,10 +813,17 @@
     // ========== AUDIO ==========
     let audioCtx = null;
 
+    function resumeAudioCtx() {
+        if (!audioCtx) return;
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(function(){});
+        }
+    }
+
     function initAudio() {
-        if (state.muted) return;
         try {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            resumeAudioCtx();
         } catch(e) {
             audioCtx = null;
         }
@@ -824,6 +831,7 @@
 
     function playCoinSound() {
         if (state.muted || state.sfxMuted || !audioCtx) return;
+        resumeAudioCtx();
         try {
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
@@ -831,7 +839,7 @@
             gain.connect(audioCtx.destination);
             osc.frequency.setValueAtTime(880, audioCtx.currentTime);
             osc.frequency.linearRampToValueAtTime(1320, audioCtx.currentTime + 0.1);
-            gain.gain.setValueAtTime(0.15 * state.sfxVolume, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.3 * state.sfxVolume, audioCtx.currentTime);
             gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.15);
             osc.start(audioCtx.currentTime);
             osc.stop(audioCtx.currentTime + 0.15);
@@ -840,6 +848,7 @@
 
     function playCrashSound() {
         if (state.muted || state.sfxMuted || !audioCtx) return;
+        resumeAudioCtx();
         try {
             const bufferSize = audioCtx.sampleRate * 0.4;
             const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
@@ -865,23 +874,25 @@
 
     function playJumpSound() {
         if (state.muted || state.sfxMuted || !audioCtx) return;
+        resumeAudioCtx();
         try {
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.connect(gain);
             gain.connect(audioCtx.destination);
             osc.type = 'sine';
-            osc.frequency.setValueAtTime(300, audioCtx.currentTime);
-            osc.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + 0.15);
-            gain.gain.setValueAtTime(0.1 * state.sfxVolume, audioCtx.currentTime);
-            gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+            osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(900, audioCtx.currentTime + 0.15);
+            gain.gain.setValueAtTime(0.2 * state.sfxVolume, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.25);
             osc.start(audioCtx.currentTime);
-            osc.stop(audioCtx.currentTime + 0.2);
+            osc.stop(audioCtx.currentTime + 0.25);
         } catch(e) {}
     }
 
     function playRollSound() {
         if (state.muted || state.sfxMuted || !audioCtx) return;
+        resumeAudioCtx();
         try {
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
@@ -890,7 +901,7 @@
             osc.type = 'triangle';
             osc.frequency.setValueAtTime(400, audioCtx.currentTime);
             osc.frequency.linearRampToValueAtTime(200, audioCtx.currentTime + 0.15);
-            gain.gain.setValueAtTime(0.08 * state.sfxVolume, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.2 * state.sfxVolume, audioCtx.currentTime);
             gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
             osc.start(audioCtx.currentTime);
             osc.stop(audioCtx.currentTime + 0.2);
@@ -910,6 +921,7 @@
     
     function startBgMusic() {
         if (state.muted || !audioCtx || bgMusicState.running) return;
+        resumeAudioCtx();
         bgMusicState.running = true;
         bgMusicState.lastBeat = audioCtx.currentTime;
         bgMusicState.beatCount = 0;
@@ -951,7 +963,7 @@
                     kick.type = 'sine';
                     kick.frequency.setValueAtTime(150, now);
                     kick.frequency.linearRampToValueAtTime(40, now + 0.1);
-                    kickGain.gain.setValueAtTime(0.15 * state.musicVolume, now);
+                    kickGain.gain.setValueAtTime(0.35 * state.musicVolume, now);
                     kickGain.gain.linearRampToValueAtTime(0, now + 0.2);
                     kick.start(now);
                     kick.stop(now + 0.2);
@@ -971,7 +983,7 @@
                     hat.connect(hatGain);
                     hat.type = 'square';
                     hat.frequency.setValueAtTime(5000, now);
-                    hatGain.gain.setValueAtTime(0.06 * state.musicVolume, now);
+                    hatGain.gain.setValueAtTime(0.12 * state.musicVolume, now);
                     hatGain.gain.linearRampToValueAtTime(0, now + 0.04);
                     hat.start(now);
                     hat.stop(now + 0.04);
@@ -992,7 +1004,7 @@
                     const notes = [110, 130.8, 110, 146.8]; // A3, C4, A3, D4
                     const note = notes[Math.floor(beat / 4) % 4];
                     bass.frequency.setValueAtTime(note, now);
-                    bassGain.gain.setValueAtTime(0.08 * state.musicVolume, now);
+                    bassGain.gain.setValueAtTime(0.15 * state.musicVolume, now);
                     bassGain.gain.linearRampToValueAtTime(0, now + 0.3);
                     bass.start(now);
                     bass.stop(now + 0.3);
@@ -1938,9 +1950,11 @@
             if (el) el.style.display = 'flex';
         });
         if (!audioCtx) initAudio();
+        resumeAudioCtx();
         clock.getDelta();
         const f = document.getElementById('fpv-btn');
         if (f) f.style.display = 'block';
+        startBgMusic();
     }
     
     function toggleConsole() {
