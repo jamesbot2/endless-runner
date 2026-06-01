@@ -48,6 +48,7 @@ input:focus{border-color:#ff6600}
   <div id="form-login">
     <input id="login-email" type="email" placeholder="Email" autocomplete="email">
     <input id="login-pass" type="password" placeholder="Password" autocomplete="current-password">
+    <label style="display:flex;align-items:center;gap:6px;margin:6px 0 10px 4px;color:#888;font-size:13px;cursor:pointer"><input id="remember-me" type="checkbox" checked> Remember me</label>
     <div class="msg" id="login-msg"></div>
     <button class="btn btn-primary" onclick="doLogin()">LOGIN</button>
   </div>
@@ -78,6 +79,13 @@ input:focus{border-color:#ff6600}
 var API = 'http://' + location.hostname + ':3000';
 
 // Check if already logged in
+// Auto-fill remembered email
+var remembered = localStorage.getItem('subwayRemember');
+if (remembered) {
+  document.getElementById('login-email').value = remembered;
+  document.getElementById('login-pass').focus();
+}
+
 var existingToken = localStorage.getItem('subwayToken');
 if (existingToken) {
   // Verify token is still valid by trying to load
@@ -121,6 +129,11 @@ function doLogin() {
     if (data.error) { setMsg('login-msg', data.error, 'error'); return; }
     localStorage.setItem('subwayToken', data.token);
     localStorage.setItem('subwayEmail', data.email);
+    if (document.getElementById('remember-me').checked) {
+      localStorage.setItem('subwayRemember', data.email);
+    } else {
+      localStorage.removeItem('subwayRemember');
+    }
     setMsg('login-msg', '✓ Logged in!', 'ok');
     setTimeout(function() { window.location.href = 'game.html'; }, 500);
   }).catch(function() { setMsg('login-msg', 'Server error', 'error'); });

