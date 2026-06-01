@@ -1539,7 +1539,6 @@
             return;
         }
         if (!state.started || state.paused) {
-            updateCamera();
             return;
         }
 
