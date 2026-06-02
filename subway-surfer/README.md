@@ -153,43 +153,59 @@ subway-surfer/
 
 ## 🚨 已知问题 / Bug
 
-### 1. 音量滑块数值不持久
-**现象**：拖动音量滑块后关闭再打开 Shop，数值恢复为默认值。  
-**原因**：`game/ui.js` 中 `showShop()` 重建 Shop HTML 时读取 `SG.state.musicVolume`，但该字段在 `game/state.js` 中未定义。虽然 `oninput` 事件设置了 `SG.state.musicVolume`，但 Shop 重新打开时 `SG` 对象引用可能不一致或值未正确保留。  
-**源代码**：`game/ui.js` 第 86-87 行（音量滑块 HTML 生成），`game/state.js`（缺少 musicVolume/sfxVolume 初始化）  
-**状态**：已尝试修复（改用 localStorage 直读+`nextElementSibling`），等待验证。
+### 1. SHOP 界面按键无响应
+**现象**：主菜单 SHOP 按钮点击后，商店界面和设置界面无法交互或点击无反应。
+**原因**：`game.js` 中 `showShop()` 函数（第 1565 行）的 HTML 构建使用了 `onclick="__neoCloseShop()"` 和 `onclick="__neoToggleMuteShop()"` 等内联事件处理。这些函数在 `showShop()` 内被赋值到 `window` 对象上，但 `innerHTML` 解析时的作用域可能导致某些浏览器中无法正确调用。
+**相关代码**：
+- `game.js:1565-1662` — `showShop()` 函数
+- `game.js:1621` — Settings 音量按钮 `onclick="__neoToggleMuteShop()"`
+- `game.js:1626` — CLOSE 按钮 `onclick="__neoCloseShop()"`
+- `game.js:1653-1657` — `window.__neoCloseShop` 和 `window.__neoToggleMuteShop` 赋值
+**状态**：❌ 未修复
 
-### 2. Profile 页面只显示 Credits 和 Coins
-**现象**：Profile 页面中 Email、技能、跑步次数、每难度最远距离均不显示。  
-**原因**：`game/account.js` 中的 `loadAccountData()` 在游戏初始化时通过 fetch 从服务器加载数据。但 Profile 页面可能在 fetch 完成前就已创建，且创建后不刷新内容。另外 `SG.account.email` 在游戏页面加载时从 `localStorage` 读取，若登录跳转时未正确保存则为空。  
-**源代码**：`game/account.js` 第 74-84 行（`doLogin` 数据加载）、第 154-195 行（`showProfile`）、第 198-215 行（`loadAccountData`）  
-**状态**：已尝试修复（Profile 打开时先调 `loadAccountData` 再渲染），等待验证。
+### 2. Profile 页面 CLOSE 按钮不工作
+**现象**：Profile 页面中的 CLOSE 按钮点击后无法关闭页面，点击背景空白处也无法关闭。
+**原因**：`game.js` 第 3753 行的 CLOSE 按钮 HTML 使用了 `onclick="document.getElementById('profile-overlay').style.display='none'"` 内联事件，但第 3759 行尝试通过 `document.getElementById('pf-close')` 添加事件监听器，而按钮 HTML 中没有 `id="pf-close"` 属性，导致事件监听器从未附加。
+**相关代码**：
+- `game.js:3713-3762` — `showProfile()` 函数
+- `game.js:3753` — CLOSE 按钮 HTML（缺少 `id="pf-close"`）
+- `game.js:3759-3760` — 事件监听器（找不到元素）
+**状态**：❌ 未修复
 
-### 3. 游戏首次加载黑屏
-**现象**：打开 `game.html` 后页面全黑，无法渲染 Three.js 场景。  
-**原因**：`game/ui.js` 中引用了已删除的 DOM 元素 `accBtnMenu`，该变量为 `undefined`，导致 JavaScript 错误中断初始化。  
-**源代码**：`game/ui.js` 第 393 行（已修复删除）  
+### 3. Profile 数据加载不完整
+**现象**：Profile 页面只显示 Credits 和 Coins，Email、技能、跑步次数、每难度最远距离均不显示。
+**原因**：`showProfile()`（第 3713 行）调用 `loadAccountData()`（异步 fetch）后直接构建 HTML，但 `SG.state.maxEasy`、`SG.state.maxMedium` 等字段在 fetch 返回前为 `undefined`。
+**相关代码**：
+- `game.js:3713-3762` — `showProfile()` 函数
+- `game.js:3650-3656` — `loadAccountData()` 函数
+**状态**：❌ 未修复
+
+### 4. 音量滑块数值不持久
+**现象**：拖动音量滑块后关闭再打开 Shop，数值恢复为默认值。
+**原因**：`showShop()` 重建 Shop HTML 时读取 `SG.state.musicVolume`，但该字段只在函数内被临时设置（`game.js:1570-1571`），Shop 重新打开时可能因状态未正确持久化而回到默认值。
+**相关代码**：
+- `game.js:1568-1572` — 音量值从 `localStorage` 读取并设置到 `SG.state`
+- `game.js:1623-1624` — 音量滑块 HTML（`oninput` 保存到 `localStorage`）
+**状态**：❌ 未修复
+
+### 5. `game.js` 静态文件未正确配置
+**现象**：模块化合并为单文件后，`/game.js` 请求返回 404 或错误 Content-Type。
+**原因**：`server/account-server.js` 的静态文件处理器只匹配 `/game/` 开头的路径，未包含 `/game.js`。
+**相关代码**：
+- `server/account-server.js:139` — 静态文件路径匹配条件
 **状态**：✅ 已修复
 
-### 4. 初始化顺序问题
-**现象**：模块化拆分后 `account.js` 在 `main.js` 之前加载，导致 `var origInit = SG.init` 捕获 `undefined`。  
-**源代码**：`game.html` 脚本加载顺序（已修复：`account.js` 在 `main.js` 之后）  
+### 6. 游戏首次加载黑屏（已修复）
+**现象**：打开 `game.html` 后页面全黑。
+**原因**：`ui.js` 中 `showShop()` 函数多了一个 `}` 闭合符，导致函数提前关闭，后续代码（`var owned = [false, SG.state.canDoubleJump, ...]`）在脚本加载时立即执行，此时 `SG.state` 尚未初始化。
+**相关代码**：
+- `game.js:1580` — 多余的 `}` 已移除
 **状态**：✅ 已修复
 
-### 5. 背景颜色代码放错文件
-**现象**：模块化重构时背景颜色更新代码被放入 `homelander.js` 的 `updateHomelander()` 中，只在 Homelander 模式下执行。  
-**源代码**：`game/homelander.js` → `game/main.js`（已移回主更新循环）  
-**状态**：✅ 已修复
-
-### 6. 签名页按钮无响应
-**现象**：登录/注册按钮点击无反应。  
-**原因**：JavaScript 变量提升导致 `switchTab` 覆盖冲突。  
-**源代码**：`signin.html`（已完全重写）  
-**状态**：✅ 已修复
-
----
-
-## 🛠 本地开发
+### 7. 模块加载顺序问题（已修复）
+**现象**：`SG.setupUI is not a function`、`SG.updateMenuCredits is not a function` 等错误。
+**原因**：18 个独立模块通过 IIFE 加载，`account.js` 在 `main.js` 之前加载导致 `SG.init` 未定义。解决方案：合并为单文件 `game.js`。
+**状态**：✅ 已修复## 🛠 本地开发
 
 ```bash
 # 克隆
