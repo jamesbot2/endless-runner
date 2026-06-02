@@ -180,7 +180,6 @@
     };
 
     SG.showProfile = function() {
-        // Load fresh data from server first
         SG.loadAccountData();
 
         var overlay = document.getElementById('profile-overlay');
@@ -188,6 +187,7 @@
             overlay = document.createElement('div');
             overlay.id = 'profile-overlay';
             overlay.className = 'overlay';
+            overlay.onclick = function(e) { if (e.target === overlay) overlay.style.display = 'none'; };
             document.body.appendChild(overlay);
         }
         overlay.style.display = 'flex';
