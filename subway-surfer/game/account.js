@@ -224,6 +224,8 @@
 
         overlay.innerHTML = html;
         document.body.appendChild(overlay);
+        var pc = document.getElementById('pf-close');
+        if (pc) pc.addEventListener('click', function() { overlay.style.display = 'none'; });
     };
 
     // Auto-save every 30s
