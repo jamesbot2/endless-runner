@@ -34,16 +34,17 @@
 
     SG.jump = function() {
         if (SG.state.isJumping) {
-            if (SG.state.canJetpack && SG.state.jetpackCooldown <= 0 && SG.state.jetpackFuel <= 0) {
+            // Only use the EQUIPPED skill
+            if (SG.state.equippedAbility === 2 && SG.state.canJetpack && SG.state.jetpackCooldown <= 0 && SG.state.jetpackFuel <= 0) {
                 SG.state.jetpackFuel = SG.JETPACK_FUEL_MAX;
                 SG.state.jumpVelocity = 0;
                 SG.playJumpSound();
                 return;
             }
-            if (SG.state.canJetpack && SG.state.jetpackFuel > 0) {
+            if (SG.state.equippedAbility === 2 && SG.state.canJetpack && SG.state.jetpackFuel > 0) {
                 return;
             }
-            if (SG.state.canDoubleJump && !SG.state.hasDoubleJumped) {
+            if (SG.state.equippedAbility === 1 && SG.state.canDoubleJump && !SG.state.hasDoubleJumped) {
                 SG.state.hasDoubleJumped = true;
                 SG.state.jumpVelocity = SG.DOUBLE_JUMP_VELOCITY;
                 SG.state.playerHeight = Math.max(SG.state.playerHeight, 0.5);

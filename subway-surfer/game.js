@@ -69,6 +69,8 @@
         cyberMode: false,
         laserTimer: 0,
         muted: false,
+        musicVolume: parseFloat(localStorage.getItem('subwayMusicVol') || '0.5'),
+        sfxVolume: parseFloat(localStorage.getItem('subwaySfxVol') || '0.8'),
         lastPlayedCoin: 0,
         credits: parseInt(localStorage.getItem('subwayCredits') || '0'),
         totalCoins: parseInt(localStorage.getItem('subwayTotalCoins') || '0'),
@@ -1446,7 +1448,7 @@
             var dy = Math.abs(playerHitbox.y - obsBox.y);
             var zThreshold = (playerHitbox.d + obsBox.d) / 2 + 0.1;
 
-            if (state.canRoofWalk && !state.onRoof) {
+            if (state.equippedAbility === 3 && state.canRoofWalk && !state.onRoof) {
                 var obsTop = obsBox.y + obsH / 2;
                 var playerBottom = playerHitbox.y - playerHitbox.h / 2;
                 if (playerBottom >= obsTop - 0.1) {
@@ -1564,6 +1566,7 @@
         html += '<h1 class="menu-title" style="font-size:28px;margin-bottom:5px;">SHOP</h1>';
         html += '<div style="color:#FFD700;font-size:20px;margin-bottom:15px;">💰 ' + SG.state.credits + ' credits</div>';
 
+        var owned = [false, SG.state.canDoubleJump, SG.state.canJetpack, SG.state.canRoofWalk];
         for (var i = 0; i < 4; i++) {
             var isEquipped = SG.state.equippedAbility === i;
             var isOwned = i === 0 || owned[i];
@@ -1594,11 +1597,6 @@
             html += '</div>';
         }
 
-        html += '<hr style="border-color:rgba(255,255,255,0.1);margin:15px 0;">';
-        html += '<h2 style="color:#fff;font-size:18px;margin-bottom:10px;">⚙ SETTINGS</h2>';
-        html += '<div style="margin:5px 0;display:flex;align-items:center;gap:8px;">🔊 Master: <button class="diff-btn" onclick="__neoToggleMuteShop();showShop()">' + (SG.state.muted ? 'OFF' : 'ON') + '</button></div>';
-        html += '<div style="margin:5px 0;display:flex;align-items:center;gap:8px;">🎵 Music: <input type="range" min="0" max="1" step="0.1" value="' + (SG.state.musicVolume || 0.5) + '" oninput="this.nextSibling.textContent=Math.round(this.value*100)+'%';SG.state.musicVolume=parseFloat(this.value);localStorage.setItem(\'subwayMusicVol\',this.value)"><span class="vol-pct">' + Math.round((SG.state.musicVolume || 0.5) * 100) + '%</span></div>';
-        html += '<div style="margin:5px 0;display:flex;align-items:center;gap:8px;">🔊 SFX: <input type="range" min="0" max="1" step="0.1" value="' + (SG.state.sfxVolume || 0.8) + '" oninput="this.nextSibling.textContent=Math.round(this.value*100)+'%';SG.state.sfxVolume=parseFloat(this.value);localStorage.setItem(\'subwaySfxVol\',this.value)"><span class="vol-pct">' + Math.round((SG.state.sfxVolume || 0.8) * 100) + '%</span></div>';
         html += '<hr style="border-color:rgba(255,255,255,0.05);margin:8px 0;">';
         html += '<div style="color:#aaa;font-size:13px;margin-top:5px;">Controls: ↑ Jump | ↓ Roll | ← → Move | 👁 FPV | ` Console | M Menu</div>';
         html += '<div class="menu-btn" onclick="__neoCloseShop()">CLOSE</div>';
@@ -1610,9 +1608,6 @@
 
         window.__neoEquip = function(idx) {
             SG.state.equippedAbility = idx;
-            SG.state.canDoubleJump = (idx === 1);
-            SG.state.canJetpack = (idx === 2);
-            SG.state.canRoofWalk = (idx === 3);
             SG.saveShopData();
             SG.showShop();
         };
@@ -1632,16 +1627,77 @@
             SG.shopOverlay.style.display = 'none';
             SG.updateMenuCredits();
         };
-        window.__neoToggleMuteShop = function() {
-            SG.toggleMute();
-            SG.showShop();
-        };
 
     };  // end showShop
 
     SG.updateMenuCredits = function() {
         var el = document.getElementById('menu-credits');
         if (el) el.textContent = '💰 TOTAL: ' + SG.state.credits;
+    };
+
+    // ===== SETTINGS OVERLAY =====
+    SG.showSettings = function() {
+        var overlay = document.getElementById('settings-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'settings-overlay';
+            overlay.className = 'overlay';
+            overlay.onclick = function(e) { if (e.target === overlay) overlay.style.display = 'none'; };
+            document.body.appendChild(overlay);
+        }
+        var music = parseFloat(localStorage.getItem('subwayMusicVol') || '0.5');
+        var sfx = parseFloat(localStorage.getItem('subwaySfxVol') || '0.8');
+        SG.state.musicVolume = music;
+        SG.state.sfxVolume = sfx;
+
+        var html = '<div class="menu-content" style="max-width:360px;">';
+        html += '<h1 class="menu-title" style="font-size:24px;">⚙ SETTINGS</h1>';
+        html += '<div style="margin:12px 0;text-align:center;">';
+        html += '<span style="font-size:16px;">🔊 Master: </span>';
+        html += '<button class="diff-btn" id="__mute-btn">' + (SG.state.muted ? 'OFF' : 'ON') + '</button>';
+        html += '</div>';
+        html += '<div style="margin:10px 0;">';
+        html += '<div style="font-size:14px;margin-bottom:4px;">🎵 Music</div>';
+        html += '<div style="display:flex;align-items:center;gap:8px;"><input type="range" min="0" max="1" step="0.1" value="' + music + '" class="__vol-slider" data-key="subwayMusicVol"><span class="vol-pct">' + Math.round(music * 100) + '%</span></div>';
+        html += '</div>';
+        html += '<div style="margin:10px 0;">';
+        html += '<div style="font-size:14px;margin-bottom:4px;">🔊 SFX</div>';
+        html += '<div style="display:flex;align-items:center;gap:8px;"><input type="range" min="0" max="1" step="0.1" value="' + sfx + '" class="__vol-slider" data-key="subwaySfxVol"><span class="vol-pct">' + Math.round(sfx * 100) + '%</span></div>';
+        html += '</div>';
+        html += '<div style="color:#aaa;font-size:13px;margin:12px 0;">↑ Jump | ↓ Roll | ← → Move | 👁 FPV</div>';
+        html += '<div class="menu-btn" id="__settings-close">CLOSE</div>';
+        html += '</div>';
+
+        overlay.innerHTML = html;
+        overlay.style.display = 'flex';
+
+        // Wire up mute button
+        var muteBtn = document.getElementById('__mute-btn');
+        if (muteBtn) {
+            muteBtn.onclick = function() {
+                SG.toggleMute();
+                var overlay2 = document.getElementById('settings-overlay');
+                if (overlay2) SG.showSettings();
+            };
+        }
+        // Wire up volume sliders
+        var sliders = overlay.querySelectorAll('.__vol-slider');
+        for (var si = 0; si < sliders.length; si++) {
+            sliders[si].oninput = function() {
+                var key = this.getAttribute('data-key');
+                var val = parseFloat(this.value);
+                localStorage.setItem(key, String(val));
+                if (key === 'subwayMusicVol') SG.state.musicVolume = val;
+                else if (key === 'subwaySfxVol') SG.state.sfxVolume = val;
+                var pct = this.parentNode.querySelector('.vol-pct');
+                if (pct) pct.textContent = Math.round(val * 100) + '%';
+            };
+        }
+        // Wire up close button
+        var closeBtn = document.getElementById('__settings-close');
+        if (closeBtn) {
+            closeBtn.onclick = function() { overlay.style.display = 'none'; };
+        }
     };
 
     // ===== UI SETUP =====
@@ -1675,6 +1731,7 @@
             '<div style="display:flex;gap:8px;justify-content:center;margin-top:6px;">' +
             '<div class="menu-btn" id="profile-btn" style="font-size:12px;padding:6px 12px;">👤 PROFILE</div>' +
             '<div class="menu-btn" id="leaderboard-btn" style="font-size:12px;padding:6px 12px;">🏆 LEADERBOARD</div>' +
+            '<div class="menu-btn" id="settings-btn-menu" style="font-size:12px;padding:6px 12px;">⚙ SETTINGS</div>' +
             '<div class="menu-btn" id="signout-btn" style="font-size:12px;padding:6px 12px;border-color:#ff4444;color:#ff6666;">🚪 SIGN OUT</div>' +
             '</div>' +
             '</div>';
@@ -1906,6 +1963,11 @@
             leaderboardBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showLeaderboard(); });
             leaderboardBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showLeaderboard(); });
         }
+        var settingsBtn = document.getElementById('settings-btn-menu');
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showSettings(); });
+            settingsBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showSettings(); });
+        }
         var signoutBtn = document.getElementById('signout-btn');
         if (signoutBtn) {
             signoutBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.accountLogout(); });
@@ -2098,16 +2160,17 @@
 
     SG.jump = function() {
         if (SG.state.isJumping) {
-            if (SG.state.canJetpack && SG.state.jetpackCooldown <= 0 && SG.state.jetpackFuel <= 0) {
+            // Only use the EQUIPPED skill
+            if (SG.state.equippedAbility === 2 && SG.state.canJetpack && SG.state.jetpackCooldown <= 0 && SG.state.jetpackFuel <= 0) {
                 SG.state.jetpackFuel = SG.JETPACK_FUEL_MAX;
                 SG.state.jumpVelocity = 0;
                 SG.playJumpSound();
                 return;
             }
-            if (SG.state.canJetpack && SG.state.jetpackFuel > 0) {
+            if (SG.state.equippedAbility === 2 && SG.state.canJetpack && SG.state.jetpackFuel > 0) {
                 return;
             }
-            if (SG.state.canDoubleJump && !SG.state.hasDoubleJumped) {
+            if (SG.state.equippedAbility === 1 && SG.state.canDoubleJump && !SG.state.hasDoubleJumped) {
                 SG.state.hasDoubleJumped = true;
                 SG.state.jumpVelocity = SG.DOUBLE_JUMP_VELOCITY;
                 SG.state.playerHeight = Math.max(SG.state.playerHeight, 0.5);
@@ -3265,7 +3328,7 @@
         }
 
         // Jetpack
-        if (SG.state.isJumping && SG.state.canJetpack && SG.state.jetpackFuel > 0 && SG.state.jetpackCooldown <= 0) {
+        if (SG.state.isJumping && SG.state.equippedAbility === 2 && SG.state.canJetpack && SG.state.jetpackFuel > 0 && SG.state.jetpackCooldown <= 0) {
             SG.state.jumpVelocity = 0;
             SG.state.playerHeight += SG.JETPACK_LIFT * delta * 60;
             SG.state.jetpackFuel -= delta;
@@ -3548,11 +3611,12 @@
             var html = '<div class="menu-content" style="max-width:360px;">';
             html += '<h1 class="menu-title" style="font-size:28px;">SUBWAY SURFER</h1>';
             html += '<div style="color:#888;font-size:13px;margin:-15px 0 15px;">Sign in to play</div>';
+            html += '<input id="login-name" placeholder="Username" style="width:90%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;display:none;">';
             html += '<input id="login-email" placeholder="Email (qq/163/gmail)" style="width:90%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;">';
             html += '<br><input id="login-pass" type="password" placeholder="Password" style="width:90%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;">';
             html += '<br>';
             html += '<button class="diff-btn" onclick="SG.doLogin()" style="margin:5px;padding:10px 30px;font-size:16px;">LOGIN</button>';
-            html += '<button class="diff-btn" onclick="SG.doRegister()" style="margin:5px;padding:10px 20px;">REGISTER</button>';
+            html += '<button class="diff-btn" onclick="__neoShowReg()" style="margin:5px;padding:10px 20px;">REGISTER</button>';
             html += '<div id="login-msg" style="color:#ffaa00;font-size:12px;margin:8px 0;"></div>';
             html += '<div style="color:#555;font-size:11px;margin-top:10px;">Play anywhere • Cloud saves • Leaderboard</div>';
             html += '</div>';
@@ -3564,6 +3628,17 @@
             document.getElementById('login-pass').addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') SG.doLogin();
             });
+
+            // Show username field only when registering
+            window.__neoShowReg = function() {
+                var nameEl = document.getElementById('login-name');
+                if (nameEl) nameEl.style.display = 'block';
+                var btn = document.querySelector('[onclick="__neoShowReg()"]');
+                if (btn) {
+                    btn.textContent = '✓ REGISTER';
+                    btn.onclick = function() { SG.doRegister(); };
+                }
+            };
         }
         overlay.style.display = 'flex';
         if (firstTime) {
@@ -3615,9 +3690,13 @@
                 SG.state.canRoofWalk = owned.indexOf(3) >= 0;
             }
 
+            // Store username
+            SG.account.username = data.username || data.email.split('@')[0];
+            localStorage.setItem('subwayUsername', SG.account.username);
+
             // Update button text
             var btn = document.getElementById('account-btn-menu');
-            if (btn) btn.textContent = '👤 ' + data.email;
+            if (btn) btn.textContent = '👤 ' + SG.account.username;
 
             // Show main menu
             if (SG.menuOverlay) SG.menuOverlay.style.display = 'flex';
@@ -3625,18 +3704,28 @@
     };
 
     SG.doRegister = function() {
+        var name = document.getElementById('login-name').value.trim();
         var email = document.getElementById('login-email').value.trim();
         var pass = document.getElementById('login-pass').value;
         var msg = document.getElementById('login-msg');
 
+        if (!name) { msg.textContent = 'X Username required (2-16 chars)'; return; }
         fetch(API + '/api/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email, password: pass })
+            body: JSON.stringify({ email: email, password: pass, username: name })
         }).then(function(r) { return r.json(); }).then(function(data) {
             if (data.error) { msg.textContent = 'X ' + data.error; return; }
-            msg.textContent = 'Registered! Now log in.';
+            msg.textContent = 'Registered! Check email for code. Now log in.';
             msg.style.color = '#4CAF50';
+            // Reset button back to login mode
+            var btn = document.querySelector('button[onclick*="SG.doRegister"]');
+            if (btn) {
+                btn.textContent = 'REGISTER';
+                btn.onclick = function() { __neoShowReg(); };
+            }
+            var nameEl = document.getElementById('login-name');
+            if (nameEl) nameEl.style.display = 'none';
         }).catch(function() { msg.textContent = 'X Server error'; });
     };
 
@@ -3688,12 +3777,12 @@
         // Volume is already saved in localStorage by oninput handler
     };
 
-    SG.loadAccountData = function() {
-        if (!SG.account.loggedIn || !SG.account.token) return;
+    SG.loadAccountData = function(callback) {
+        if (!SG.account.loggedIn || !SG.account.token) { if (callback) callback(); return; }
         fetch('http://' + window.location.hostname + ':3000/api/load', {
             headers: { 'Authorization': 'Bearer ' + SG.account.token }
         }).then(function(r) { return r.json(); }).then(function(data) {
-            if (!data.gameData) return;
+            if (!data.gameData) { if (callback) callback(); return; }
             var g = data.gameData;
             SG.state.bestScore = Math.max(SG.state.bestScore || 0, g.maxDistance || 0);
             SG.state.credits = g.credits || 0;
@@ -3710,12 +3799,11 @@
             SG.state.canDoubleJump = owned.indexOf(1) >= 0;
             SG.state.canJetpack = owned.indexOf(2) >= 0;
             SG.state.canRoofWalk = owned.indexOf(3) >= 0;
-        }).catch(function(){});
+            if (callback) callback();
+        }).catch(function(){ if (callback) callback(); });
     };
 
     SG.showProfile = function() {
-        SG.loadAccountData();
-
         var overlay = document.getElementById('profile-overlay');
         if (!overlay) {
             overlay = document.createElement('div');
@@ -3725,9 +3813,25 @@
             document.body.appendChild(overlay);
         }
         overlay.style.display = 'flex';
+        overlay.innerHTML = '<div class="menu-content"><div style="color:#888;padding:20px;">Loading...</div></div>';
 
+        // Load fresh data from server first, then render
+        SG.loadAccountData(function() {
+            try {
+                SG._renderProfile(overlay);
+            } catch(e) {
+                // Fallback: render anyway even if _renderProfile fails
+                overlay.innerHTML = '<div class="menu-content"><h1 class="menu-title">👤 PROFILE</h1>' +
+                    '<div style="color:#888;padding:20px;">' + SG.account.email + '</div>' +
+                    '<div class="menu-btn" onclick="this.closest(\'.overlay\').style.display=\'none\'">CLOSE</div></div>';
+            }
+        });
+    };
+
+    SG._renderProfile = function(overlay) {
         var s = SG.state;
         SG.account.email = localStorage.getItem('subwayEmail');
+        SG.account.username = localStorage.getItem('subwayUsername') || (SG.account.email || '').split('@')[0] || 'Player';
         var names = {0:'None',1:'Double Jump',2:'Jetpack',3:'Roof Walk'};
         var ability = names[s.equippedAbility] || 'None';
         var owned = [];
@@ -3738,7 +3842,7 @@
         var html = '<div class="menu-content" style="max-width:380px;text-align:left;">';
         html += '<h1 class="menu-title" style="font-size:24px;text-align:center;margin-bottom:10px;">👤 PROFILE</h1>';
         html += '<div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:15px;margin-bottom:10px;">';
-        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Email:</b> ' + (SG.account.email || '-') + '</div>';
+        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Name:</b> ' + (SG.account.username || '-') + '</div>';
         html += '<div style="margin:4px 0;"><b style="color:#aaa;">Credits:</b> <span style="color:#FFD700;">' + (s.credits || 0) + '</span></div>';
         html += '<div style="margin:4px 0;"><b style="color:#aaa;">Coins:</b> <span style="color:#FFD700;">' + (s.coins || 0) + '</span></div>';
         html += '<div style="margin:4px 0;"><b style="color:#aaa;">Equipped:</b> ' + ability + '</div>';
@@ -3758,9 +3862,6 @@
         html += '</div>';
 
         overlay.innerHTML = html;
-        document.body.appendChild(overlay);
-        var pc = document.getElementById('pf-close');
-        if (pc) pc.addEventListener('click', function() { overlay.style.display = 'none'; });
     };
 
     // ===== LEADERBOARD =====
@@ -3804,7 +3905,7 @@
                     var row = (i % 2 === 0) ? 'rgba(255,255,255,0.03)' : 'transparent';
                     html += '<tr style="background:' + row + ';">' +
                         '<td style="padding:3px 4px;color:#888;">' + (i+1) + '</td>' +
-                        '<td style="padding:3px 4px;">' + e.email + '</td>' +
+                        '<td style="padding:3px 4px;">' + (e.name || 'Player') + '</td>' +
                         '<td style="padding:3px 4px;color:#4CAF50;">' + (e.maxEasy||0) + 'm <span style="color:#666;font-size:10px;">[' + (abNames[e.maxEasyAbility]||'-') + ']</span></td>' +
                         '<td style="padding:3px 4px;color:#FFC107;">' + (e.maxMedium||0) + 'm <span style="color:#666;font-size:10px;">[' + (abNames[e.maxMediumAbility]||'-') + ']</span></td>' +
                         '<td style="padding:3px 4px;color:#F44336;">' + (e.maxHard||0) + 'm <span style="color:#666;font-size:10px;">[' + (abNames[e.maxHardAbility]||'-') + ']</span></td>' +

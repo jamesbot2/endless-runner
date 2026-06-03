@@ -157,56 +157,31 @@ subway-surfer/
 
 ---
 
-## 🚨 已知问题 / Bug
+## 🚨 已知问题 / Bug (2026-06-03)
 
-### 🆕 游戏左上角 HUD 按钮重叠
-**现象**：速度倍数指示器（SPD: 1x）和音量按钮（🔊）在左上角位置重叠。
-**原因**：`#speed-indicator` 和 `#mute-btn` 的 CSS 定位都被设为 `left: 66px`，`top` 仅差 2px。
-**修复**：将 `#mute-btn` 的 `left` 移到速度指示器右侧（桌面: 136px，平板: 120px，手机: 106px）。
-**状态**：✅ 已修复（2026-06-02）
+### 1. Profile 数据加载不完整
+**现象**：Profile 页面打开时，部分数据（best distances）显示为 0 或不完整。
+**原因**：`loadAccountData()` 为异步 fetch，Profile HTML 在 fetch 返回前就已构建，导致状态未同步。
+**当前修复**：`showProfile()` 现改为先显示 Loading，等待 `loadAccountData()` 回调完成后再通过 `_renderProfile()` 渲染。
+**状态**：⚠️ 待验证
 
-### 1. SHOP 界面按键无响应
-**现象**：主菜单 SHOP 按钮点击后，商店界面和设置界面无法交互或点击无反应。
-**原因**：使用了内联 `onclick` 属性（通过 `innerHTML` 设置），在某些浏览器的作用域解析中不可靠。
-**修复**：改用 `data-shop-action` 属性 + 事件委托模式，所有按钮通过单一 `addEventListener` 处理。
-**状态**：✅ 已修复（2026-06-02）
+### 2. Leaderboard 玩家名称显示
+**现象**：排行榜显示邮箱而非用户名。
+**原因**：部分旧账号注册时未保存 username，服务端已补填为邮箱前缀。
+**修复**：服务端 `/api/leaderboard` 返回 `name` 字段（`u.username \|\| 邮箱前缀`），客户端显示 `e.name`。
+**状态**：⚠️ 待验证
 
-### 2. Profile 页面 CLOSE 按钮不工作
-**现象**：Profile 页面中的 CLOSE 按钮点击后无法关闭页面，点击背景空白处也无法关闭。
-**原因**：CLOSE 按钮 HTML 缺少 `id="pf-close"` 属性，导致 `getElementById('pf-close')` 找不到元素，事件监听器从未附加。内联 onclick 也存在作用域问题。
-**修复**：添加 `id="pf-close"` 属性，改用 `addEventListener` 绑定关闭事件。
-**状态**：✅ 已修复（2026-06-02）
+### 3. 技能商店装备后技能效果叠加
+**现象**：装备一个技能后，其他已购买技能仍生效。
+**原因**：游戏逻辑检查 `canDoubleJump`/`canJetpack`/`canRoofWalk`（拥有标志）而非 `equippedAbility`（装备标志）。
+**修复**：`controls.js`/`collision.js`/`main.js` 中所有技能触发点都加了 `equippedAbility === N` 检查。
+**状态**：⚠️ 待验证
 
-### 3. Profile 数据加载不完整
-**现象**：Profile 页面打开时，Email、技能、跑步次数、每难度最远距离等数据不完整或显示默认值。
-**原因**：`showProfile()` 调用 `loadAccountData()`（异步 fetch）后立即构建 HTML，fetch 返回前 `SG.state` 的 maxEasy/maxMedium 等字段为旧值。
-**修复**：将 `loadAccountData()` 改为返回 Promise，`showProfile()` 等待数据加载完成后通过 `_renderProfile()` 渲染。
-**状态**：✅ 已修复（2026-06-02）
-
-### 4. 音量滑块数值不持久
-**现象**：拖动音量滑块后关闭再打开 Shop，数值恢复为默认值。
-**原因**：与 Bug #1 相关 — Shop 内联 onclick 不可靠导致滑块 oninput 事件无法正确保存到 localStorage。
-**修复**：Bug #1 修复后，滑块 oninput handler 可以正常工作，值通过 localStorage 持久化。
-**状态**：✅ 已修复（2026-06-02）
-
-### 5. `game.js` 静态文件未正确配置
-**现象**：模块化合并为单文件后，`/game.js` 请求返回 404 或错误 Content-Type。
-**原因**：`server/account-server.js` 的静态文件处理器只匹配 `/game/` 开头的路径，未包含 `/game.js`。
-**相关代码**：
-- `server/account-server.js:139` — 静态文件路径匹配条件
-**状态**：✅ 已修复
-
-### 6. 游戏首次加载黑屏（已修复）
-**现象**：打开 `game.html` 后页面全黑。
-**原因**：`ui.js` 中 `showShop()` 函数多了一个 `}` 闭合符，导致函数提前关闭，后续代码（`var owned = [false, SG.state.canDoubleJump, ...]`）在脚本加载时立即执行，此时 `SG.state` 尚未初始化。
-**相关代码**：
-- `game.js:1580` — 多余的 `}` 已移除
-**状态**：✅ 已修复
-
-### 7. 模块加载顺序问题（已修复）
-**现象**：`SG.setupUI is not a function`、`SG.updateMenuCredits is not a function` 等错误。
-**原因**：18 个独立模块通过 IIFE 加载，`account.js` 在 `main.js` 之前加载导致 `SG.init` 未定义。解决方案：合并为单文件 `game.js`。
-**状态**：✅ 已修复
+### 4. 设置页面音量滑块位置
+**现象**：Settings 页面中音量滑块与百分比文字错位。
+**原因**：内联 HTML 中 `<br>` 导致换行，`this.nextSibling` 获取到文本节点而非 SPAN 元素。
+**修复**：改用 `querySelector` + `data-key` 属性绑定事件，滑块和百分比在同一行。
+**状态**：⚠️ 待验证
 
 ## 🛡️ 安全性
 

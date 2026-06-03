@@ -397,7 +397,7 @@
         }
 
         // Jetpack
-        if (SG.state.isJumping && SG.state.canJetpack && SG.state.jetpackFuel > 0 && SG.state.jetpackCooldown <= 0) {
+        if (SG.state.isJumping && SG.state.equippedAbility === 2 && SG.state.canJetpack && SG.state.jetpackFuel > 0 && SG.state.jetpackCooldown <= 0) {
             SG.state.jumpVelocity = 0;
             SG.state.playerHeight += SG.JETPACK_LIFT * delta * 60;
             SG.state.jetpackFuel -= delta;

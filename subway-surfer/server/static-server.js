@@ -12,14 +12,21 @@ const MIME = {
 };
 
 http.createServer((req, res) => {
-    let urlPath = req.url.split('?')[0];
-    if (urlPath === '/') {
-        // Redirect to signin page on account server
-        res.writeHead(302, { 'Location': 'http://35.212.200.85:3000/' });
-        res.end();
+    let urlPath = decodeURIComponent(req.url.split('?')[0]);
+    // Block path traversal: raw .., URL-encoded, or tilde
+    if (urlPath.indexOf('..') !== -1 || urlPath.indexOf('~') !== -1) {
+        res.writeHead(403); res.end('403 Forbidden');
         return;
     }
     const filePath = path.join(ROOT, urlPath);
+    if (urlPath === '/') {
+        // Redirect to signin page on account server (use host header for flexibility)
+        var host = req.headers['host'] || 'localhost';
+        var redirectPort = 3000;
+        res.writeHead(302, { 'Location': 'http://' + host.split(':')[0] + ':' + redirectPort + '/' });
+        res.end();
+        return;
+    }
     fs.readFile(filePath, (err, data) => {
         if (err) { res.writeHead(404); res.end('404'); return; }
         const ext = path.extname(filePath);

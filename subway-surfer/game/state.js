@@ -43,6 +43,8 @@
         cyberMode: false,
         laserTimer: 0,
         muted: false,
+        musicVolume: parseFloat(localStorage.getItem('subwayMusicVol') || '0.5'),
+        sfxVolume: parseFloat(localStorage.getItem('subwaySfxVol') || '0.8'),
         lastPlayedCoin: 0,
         credits: parseInt(localStorage.getItem('subwayCredits') || '0'),
         totalCoins: parseInt(localStorage.getItem('subwayTotalCoins') || '0'),

@@ -23,11 +23,12 @@
             var html = '<div class="menu-content" style="max-width:360px;">';
             html += '<h1 class="menu-title" style="font-size:28px;">SUBWAY SURFER</h1>';
             html += '<div style="color:#888;font-size:13px;margin:-15px 0 15px;">Sign in to play</div>';
+            html += '<input id="login-name" placeholder="Username" style="width:90%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;display:none;">';
             html += '<input id="login-email" placeholder="Email (qq/163/gmail)" style="width:90%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;">';
             html += '<br><input id="login-pass" type="password" placeholder="Password" style="width:90%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;">';
             html += '<br>';
             html += '<button class="diff-btn" onclick="SG.doLogin()" style="margin:5px;padding:10px 30px;font-size:16px;">LOGIN</button>';
-            html += '<button class="diff-btn" onclick="SG.doRegister()" style="margin:5px;padding:10px 20px;">REGISTER</button>';
+            html += '<button class="diff-btn" onclick="__neoShowReg()" style="margin:5px;padding:10px 20px;">REGISTER</button>';
             html += '<div id="login-msg" style="color:#ffaa00;font-size:12px;margin:8px 0;"></div>';
             html += '<div style="color:#555;font-size:11px;margin-top:10px;">Play anywhere • Cloud saves • Leaderboard</div>';
             html += '</div>';
@@ -39,6 +40,17 @@
             document.getElementById('login-pass').addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') SG.doLogin();
             });
+
+            // Show username field only when registering
+            window.__neoShowReg = function() {
+                var nameEl = document.getElementById('login-name');
+                if (nameEl) nameEl.style.display = 'block';
+                var btn = document.querySelector('[onclick="__neoShowReg()"]');
+                if (btn) {
+                    btn.textContent = '✓ REGISTER';
+                    btn.onclick = function() { SG.doRegister(); };
+                }
+            };
         }
         overlay.style.display = 'flex';
         if (firstTime) {
@@ -90,9 +102,13 @@
                 SG.state.canRoofWalk = owned.indexOf(3) >= 0;
             }
 
+            // Store username
+            SG.account.username = data.username || data.email.split('@')[0];
+            localStorage.setItem('subwayUsername', SG.account.username);
+
             // Update button text
             var btn = document.getElementById('account-btn-menu');
-            if (btn) btn.textContent = '👤 ' + data.email;
+            if (btn) btn.textContent = '👤 ' + SG.account.username;
 
             // Show main menu
             if (SG.menuOverlay) SG.menuOverlay.style.display = 'flex';
@@ -100,18 +116,28 @@
     };
 
     SG.doRegister = function() {
+        var name = document.getElementById('login-name').value.trim();
         var email = document.getElementById('login-email').value.trim();
         var pass = document.getElementById('login-pass').value;
         var msg = document.getElementById('login-msg');
 
+        if (!name) { msg.textContent = 'X Username required (2-16 chars)'; return; }
         fetch(API + '/api/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email, password: pass })
+            body: JSON.stringify({ email: email, password: pass, username: name })
         }).then(function(r) { return r.json(); }).then(function(data) {
             if (data.error) { msg.textContent = 'X ' + data.error; return; }
-            msg.textContent = 'Registered! Now log in.';
+            msg.textContent = 'Registered! Check email for code. Now log in.';
             msg.style.color = '#4CAF50';
+            // Reset button back to login mode
+            var btn = document.querySelector('button[onclick*="SG.doRegister"]');
+            if (btn) {
+                btn.textContent = 'REGISTER';
+                btn.onclick = function() { __neoShowReg(); };
+            }
+            var nameEl = document.getElementById('login-name');
+            if (nameEl) nameEl.style.display = 'none';
         }).catch(function() { msg.textContent = 'X Server error'; });
     };
 
@@ -163,12 +189,12 @@
         // Volume is already saved in localStorage by oninput handler
     };
 
-    SG.loadAccountData = function() {
-        if (!SG.account.loggedIn || !SG.account.token) return;
+    SG.loadAccountData = function(callback) {
+        if (!SG.account.loggedIn || !SG.account.token) { if (callback) callback(); return; }
         fetch('http://' + window.location.hostname + ':3000/api/load', {
             headers: { 'Authorization': 'Bearer ' + SG.account.token }
         }).then(function(r) { return r.json(); }).then(function(data) {
-            if (!data.gameData) return;
+            if (!data.gameData) { if (callback) callback(); return; }
             var g = data.gameData;
             SG.state.bestScore = Math.max(SG.state.bestScore || 0, g.maxDistance || 0);
             SG.state.credits = g.credits || 0;
@@ -185,12 +211,11 @@
             SG.state.canDoubleJump = owned.indexOf(1) >= 0;
             SG.state.canJetpack = owned.indexOf(2) >= 0;
             SG.state.canRoofWalk = owned.indexOf(3) >= 0;
-        }).catch(function(){});
+            if (callback) callback();
+        }).catch(function(){ if (callback) callback(); });
     };
 
     SG.showProfile = function() {
-        SG.loadAccountData();
-
         var overlay = document.getElementById('profile-overlay');
         if (!overlay) {
             overlay = document.createElement('div');
@@ -200,9 +225,25 @@
             document.body.appendChild(overlay);
         }
         overlay.style.display = 'flex';
+        overlay.innerHTML = '<div class="menu-content"><div style="color:#888;padding:20px;">Loading...</div></div>';
 
+        // Load fresh data from server first, then render
+        SG.loadAccountData(function() {
+            try {
+                SG._renderProfile(overlay);
+            } catch(e) {
+                // Fallback: render anyway even if _renderProfile fails
+                overlay.innerHTML = '<div class="menu-content"><h1 class="menu-title">👤 PROFILE</h1>' +
+                    '<div style="color:#888;padding:20px;">' + SG.account.email + '</div>' +
+                    '<div class="menu-btn" onclick="this.closest(\'.overlay\').style.display=\'none\'">CLOSE</div></div>';
+            }
+        });
+    };
+
+    SG._renderProfile = function(overlay) {
         var s = SG.state;
         SG.account.email = localStorage.getItem('subwayEmail');
+        SG.account.username = localStorage.getItem('subwayUsername') || (SG.account.email || '').split('@')[0] || 'Player';
         var names = {0:'None',1:'Double Jump',2:'Jetpack',3:'Roof Walk'};
         var ability = names[s.equippedAbility] || 'None';
         var owned = [];
@@ -213,7 +254,7 @@
         var html = '<div class="menu-content" style="max-width:380px;text-align:left;">';
         html += '<h1 class="menu-title" style="font-size:24px;text-align:center;margin-bottom:10px;">👤 PROFILE</h1>';
         html += '<div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:15px;margin-bottom:10px;">';
-        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Email:</b> ' + (SG.account.email || '-') + '</div>';
+        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Name:</b> ' + (SG.account.username || '-') + '</div>';
         html += '<div style="margin:4px 0;"><b style="color:#aaa;">Credits:</b> <span style="color:#FFD700;">' + (s.credits || 0) + '</span></div>';
         html += '<div style="margin:4px 0;"><b style="color:#aaa;">Coins:</b> <span style="color:#FFD700;">' + (s.coins || 0) + '</span></div>';
         html += '<div style="margin:4px 0;"><b style="color:#aaa;">Equipped:</b> ' + ability + '</div>';
@@ -233,9 +274,6 @@
         html += '</div>';
 
         overlay.innerHTML = html;
-        document.body.appendChild(overlay);
-        var pc = document.getElementById('pf-close');
-        if (pc) pc.addEventListener('click', function() { overlay.style.display = 'none'; });
     };
 
     // ===== LEADERBOARD =====
@@ -279,7 +317,7 @@
                     var row = (i % 2 === 0) ? 'rgba(255,255,255,0.03)' : 'transparent';
                     html += '<tr style="background:' + row + ';">' +
                         '<td style="padding:3px 4px;color:#888;">' + (i+1) + '</td>' +
-                        '<td style="padding:3px 4px;">' + e.email + '</td>' +
+                        '<td style="padding:3px 4px;">' + (e.name || 'Player') + '</td>' +
                         '<td style="padding:3px 4px;color:#4CAF50;">' + (e.maxEasy||0) + 'm <span style="color:#666;font-size:10px;">[' + (abNames[e.maxEasyAbility]||'-') + ']</span></td>' +
                         '<td style="padding:3px 4px;color:#FFC107;">' + (e.maxMedium||0) + 'm <span style="color:#666;font-size:10px;">[' + (abNames[e.maxMediumAbility]||'-') + ']</span></td>' +
                         '<td style="padding:3px 4px;color:#F44336;">' + (e.maxHard||0) + 'm <span style="color:#666;font-size:10px;">[' + (abNames[e.maxHardAbility]||'-') + ']</span></td>' +

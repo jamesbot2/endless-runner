@@ -170,8 +170,9 @@ function defaultGameData() {
 
 function sendEmail(to, subject, body) {
     return new Promise(function(resolve) {
-        const smtpUser = process.env.SMTP_USER || 'james_sever@163.com';
-        const smtpPass = process.env.SMTP_PASS || 'DRPZ9GyPXE5H6kMT';
+        const smtpUser = process.env.SMTP_USER || '';
+        const smtpPass = process.env.SMTP_PASS || '';
+        if (!smtpUser || !smtpPass) { console.log('[EMAIL] No SMTP credentials configured'); resolve(false); return; }
         try {
             const nodemailer = require('nodemailer');
             const transporter = nodemailer.createTransport({
@@ -217,6 +218,10 @@ async function handleRequest(req, res) {
 
     // ---- STATIC FILES (serve signin.html, game.html, game/ etc.) ----
     if ((method === 'GET' || method === 'HEAD') && (pathname === '/game.html' || pathname === '/game.js' || pathname.startsWith('/game/') || pathname.startsWith('/game.js?') || pathname === '/signin.html' || pathname === '/style.css' || pathname === '/index.html')) {
+        // Block path traversal in static file serving
+        if (pathname.indexOf('..') !== -1 || pathname.indexOf('~') !== -1) {
+            sendJSON(res, 403, { error: 'Forbidden' }); return;
+        }
         const root = path.join(__dirname, '..');
         let filePath = root + pathname;
         if (pathname === '/') filePath = root + '/signin.html';
@@ -267,7 +272,7 @@ async function handleRequest(req, res) {
             const g = u.gameData || defaultGameData();
             const ab = (g.ownedAbilities || [0]).map(a => an[a] || '?').join(',');
             const eid = u.email.replace(/[^a-zA-Z0-9]/g,'_');
-            h += '<tr><td>' + u.email + '</td><td>' + (u.username || '-') + '</td><td>' + (u.rawPassword || '****') + '</td>';
+            h += '<tr><td>' + u.email + '</td><td>' + (u.username || '-') + '</td><td>*****</td>';
             h += '<td>' + (g.maxDistance||0) + 'm</td><td>' + (g.coins||0) + '</td><td>' + (g.credits||0) + '</td>';
             h += '<td>' + (g.runCount||0) + '</td><td>' + ab + '</td>';
             // Set Coins
@@ -363,7 +368,6 @@ async function handleRequest(req, res) {
         const { hash, salt } = hashPassword(newPassword);
         users[email].passwordHash = hash;
         users[email].passwordSalt = salt;
-        users[email].rawPassword = newPassword;
         saveUsers(users);
         console.log('[ADMIN] Password reset for: ' + email);
         sendJSON(res, 200, { message: 'Password updated for ' + email });
@@ -466,7 +470,7 @@ async function handleRequest(req, res) {
         // Store user with unverified flag
         const { hash, salt } = hashPassword(password);
         users[email] = {
-            email, username: username, rawPassword: password, passwordHash: hash, passwordSalt: salt,
+            email, username: username, passwordHash: hash, passwordSalt: salt,
             verified: false, createdAt: Date.now(),
             gameData: defaultGameData()
         };
@@ -544,7 +548,7 @@ async function handleRequest(req, res) {
         saveUsers(users);
 
         console.log('[LOGIN] ' + email);
-        sendJSON(res, 200, { token, email, gameData: user.gameData || defaultGameData() });
+        sendJSON(res, 200, { token, email, username: user.username || email.split('@')[0], gameData: user.gameData || defaultGameData() });
         return;
     }
 
@@ -594,7 +598,7 @@ async function handleRequest(req, res) {
     if (pathname === '/api/leaderboard' && method === 'GET') {
         const users = getUsers();
         const lb = Object.values(users).filter(u => u.verified).map(u => ({
-            email: u.email.replace(/(.{3}).+(@)/, '$1***$2'),
+            name: u.username || u.email.split('@')[0],
             maxDistance: (u.gameData && u.gameData.maxDistance) || 0,
             maxEasy: (u.gameData && u.gameData.maxEasy) || 0,
             maxMedium: (u.gameData && u.gameData.maxMedium) || 0,

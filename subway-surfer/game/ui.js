@@ -58,6 +58,7 @@
         html += '<h1 class="menu-title" style="font-size:28px;margin-bottom:5px;">SHOP</h1>';
         html += '<div style="color:#FFD700;font-size:20px;margin-bottom:15px;">💰 ' + SG.state.credits + ' credits</div>';
 
+        var owned = [false, SG.state.canDoubleJump, SG.state.canJetpack, SG.state.canRoofWalk];
         for (var i = 0; i < 4; i++) {
             var isEquipped = SG.state.equippedAbility === i;
             var isOwned = i === 0 || owned[i];
@@ -88,11 +89,6 @@
             html += '</div>';
         }
 
-        html += '<hr style="border-color:rgba(255,255,255,0.1);margin:15px 0;">';
-        html += '<h2 style="color:#fff;font-size:18px;margin-bottom:10px;">⚙ SETTINGS</h2>';
-        html += '<div style="margin:5px 0;display:flex;align-items:center;gap:8px;">🔊 Master: <button class="diff-btn" onclick="__neoToggleMuteShop();showShop()">' + (SG.state.muted ? 'OFF' : 'ON') + '</button></div>';
-        html += '<div style="margin:5px 0;display:flex;align-items:center;gap:8px;">🎵 Music: <input type="range" min="0" max="1" step="0.1" value="' + (SG.state.musicVolume || 0.5) + '" oninput="this.nextSibling.textContent=Math.round(this.value*100)+'%';SG.state.musicVolume=parseFloat(this.value);localStorage.setItem(\'subwayMusicVol\',this.value)"><span class="vol-pct">' + Math.round((SG.state.musicVolume || 0.5) * 100) + '%</span></div>';
-        html += '<div style="margin:5px 0;display:flex;align-items:center;gap:8px;">🔊 SFX: <input type="range" min="0" max="1" step="0.1" value="' + (SG.state.sfxVolume || 0.8) + '" oninput="this.nextSibling.textContent=Math.round(this.value*100)+'%';SG.state.sfxVolume=parseFloat(this.value);localStorage.setItem(\'subwaySfxVol\',this.value)"><span class="vol-pct">' + Math.round((SG.state.sfxVolume || 0.8) * 100) + '%</span></div>';
         html += '<hr style="border-color:rgba(255,255,255,0.05);margin:8px 0;">';
         html += '<div style="color:#aaa;font-size:13px;margin-top:5px;">Controls: ↑ Jump | ↓ Roll | ← → Move | 👁 FPV | ` Console | M Menu</div>';
         html += '<div class="menu-btn" onclick="__neoCloseShop()">CLOSE</div>';
@@ -104,9 +100,6 @@
 
         window.__neoEquip = function(idx) {
             SG.state.equippedAbility = idx;
-            SG.state.canDoubleJump = (idx === 1);
-            SG.state.canJetpack = (idx === 2);
-            SG.state.canRoofWalk = (idx === 3);
             SG.saveShopData();
             SG.showShop();
         };
@@ -126,16 +119,77 @@
             SG.shopOverlay.style.display = 'none';
             SG.updateMenuCredits();
         };
-        window.__neoToggleMuteShop = function() {
-            SG.toggleMute();
-            SG.showShop();
-        };
 
     };  // end showShop
 
     SG.updateMenuCredits = function() {
         var el = document.getElementById('menu-credits');
         if (el) el.textContent = '💰 TOTAL: ' + SG.state.credits;
+    };
+
+    // ===== SETTINGS OVERLAY =====
+    SG.showSettings = function() {
+        var overlay = document.getElementById('settings-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'settings-overlay';
+            overlay.className = 'overlay';
+            overlay.onclick = function(e) { if (e.target === overlay) overlay.style.display = 'none'; };
+            document.body.appendChild(overlay);
+        }
+        var music = parseFloat(localStorage.getItem('subwayMusicVol') || '0.5');
+        var sfx = parseFloat(localStorage.getItem('subwaySfxVol') || '0.8');
+        SG.state.musicVolume = music;
+        SG.state.sfxVolume = sfx;
+
+        var html = '<div class="menu-content" style="max-width:360px;">';
+        html += '<h1 class="menu-title" style="font-size:24px;">⚙ SETTINGS</h1>';
+        html += '<div style="margin:12px 0;text-align:center;">';
+        html += '<span style="font-size:16px;">🔊 Master: </span>';
+        html += '<button class="diff-btn" id="__mute-btn">' + (SG.state.muted ? 'OFF' : 'ON') + '</button>';
+        html += '</div>';
+        html += '<div style="margin:10px 0;">';
+        html += '<div style="font-size:14px;margin-bottom:4px;">🎵 Music</div>';
+        html += '<div style="display:flex;align-items:center;gap:8px;"><input type="range" min="0" max="1" step="0.1" value="' + music + '" class="__vol-slider" data-key="subwayMusicVol"><span class="vol-pct">' + Math.round(music * 100) + '%</span></div>';
+        html += '</div>';
+        html += '<div style="margin:10px 0;">';
+        html += '<div style="font-size:14px;margin-bottom:4px;">🔊 SFX</div>';
+        html += '<div style="display:flex;align-items:center;gap:8px;"><input type="range" min="0" max="1" step="0.1" value="' + sfx + '" class="__vol-slider" data-key="subwaySfxVol"><span class="vol-pct">' + Math.round(sfx * 100) + '%</span></div>';
+        html += '</div>';
+        html += '<div style="color:#aaa;font-size:13px;margin:12px 0;">↑ Jump | ↓ Roll | ← → Move | 👁 FPV</div>';
+        html += '<div class="menu-btn" id="__settings-close">CLOSE</div>';
+        html += '</div>';
+
+        overlay.innerHTML = html;
+        overlay.style.display = 'flex';
+
+        // Wire up mute button
+        var muteBtn = document.getElementById('__mute-btn');
+        if (muteBtn) {
+            muteBtn.onclick = function() {
+                SG.toggleMute();
+                var overlay2 = document.getElementById('settings-overlay');
+                if (overlay2) SG.showSettings();
+            };
+        }
+        // Wire up volume sliders
+        var sliders = overlay.querySelectorAll('.__vol-slider');
+        for (var si = 0; si < sliders.length; si++) {
+            sliders[si].oninput = function() {
+                var key = this.getAttribute('data-key');
+                var val = parseFloat(this.value);
+                localStorage.setItem(key, String(val));
+                if (key === 'subwayMusicVol') SG.state.musicVolume = val;
+                else if (key === 'subwaySfxVol') SG.state.sfxVolume = val;
+                var pct = this.parentNode.querySelector('.vol-pct');
+                if (pct) pct.textContent = Math.round(val * 100) + '%';
+            };
+        }
+        // Wire up close button
+        var closeBtn = document.getElementById('__settings-close');
+        if (closeBtn) {
+            closeBtn.onclick = function() { overlay.style.display = 'none'; };
+        }
     };
 
     // ===== UI SETUP =====
@@ -169,6 +223,7 @@
             '<div style="display:flex;gap:8px;justify-content:center;margin-top:6px;">' +
             '<div class="menu-btn" id="profile-btn" style="font-size:12px;padding:6px 12px;">👤 PROFILE</div>' +
             '<div class="menu-btn" id="leaderboard-btn" style="font-size:12px;padding:6px 12px;">🏆 LEADERBOARD</div>' +
+            '<div class="menu-btn" id="settings-btn-menu" style="font-size:12px;padding:6px 12px;">⚙ SETTINGS</div>' +
             '<div class="menu-btn" id="signout-btn" style="font-size:12px;padding:6px 12px;border-color:#ff4444;color:#ff6666;">🚪 SIGN OUT</div>' +
             '</div>' +
             '</div>';
@@ -399,6 +454,11 @@
         if (leaderboardBtn) {
             leaderboardBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showLeaderboard(); });
             leaderboardBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showLeaderboard(); });
+        }
+        var settingsBtn = document.getElementById('settings-btn-menu');
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showSettings(); });
+            settingsBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showSettings(); });
         }
         var signoutBtn = document.getElementById('signout-btn');
         if (signoutBtn) {

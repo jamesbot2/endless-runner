@@ -74,7 +74,7 @@
             var dy = Math.abs(playerHitbox.y - obsBox.y);
             var zThreshold = (playerHitbox.d + obsBox.d) / 2 + 0.1;
 
-            if (state.canRoofWalk && !state.onRoof) {
+            if (state.equippedAbility === 3 && state.canRoofWalk && !state.onRoof) {
                 var obsTop = obsBox.y + obsH / 2;
                 var playerBottom = playerHitbox.y - playerHitbox.h / 2;
                 if (playerBottom >= obsTop - 0.1) {
