@@ -159,40 +159,35 @@ subway-surfer/
 
 ## 🚨 已知问题 / Bug
 
+### 🆕 游戏左上角 HUD 按钮重叠
+**现象**：速度倍数指示器（SPD: 1x）和音量按钮（🔊）在左上角位置重叠。
+**原因**：`#speed-indicator` 和 `#mute-btn` 的 CSS 定位都被设为 `left: 66px`，`top` 仅差 2px。
+**修复**：将 `#mute-btn` 的 `left` 移到速度指示器右侧（桌面: 136px，平板: 120px，手机: 106px）。
+**状态**：✅ 已修复（2026-06-02）
+
 ### 1. SHOP 界面按键无响应
 **现象**：主菜单 SHOP 按钮点击后，商店界面和设置界面无法交互或点击无反应。
-**原因**：`game.js` 中 `showShop()` 函数（第 1565 行）的 HTML 构建使用了 `onclick="__neoCloseShop()"` 和 `onclick="__neoToggleMuteShop()"` 等内联事件处理。这些函数在 `showShop()` 内被赋值到 `window` 对象上，但 `innerHTML` 解析时的作用域可能导致某些浏览器中无法正确调用。
-**相关代码**：
-- `game.js:1565-1662` — `showShop()` 函数
-- `game.js:1621` — Settings 音量按钮 `onclick="__neoToggleMuteShop()"`
-- `game.js:1626` — CLOSE 按钮 `onclick="__neoCloseShop()"`
-- `game.js:1653-1657` — `window.__neoCloseShop` 和 `window.__neoToggleMuteShop` 赋值
-**状态**：❌ 未修复
+**原因**：使用了内联 `onclick` 属性（通过 `innerHTML` 设置），在某些浏览器的作用域解析中不可靠。
+**修复**：改用 `data-shop-action` 属性 + 事件委托模式，所有按钮通过单一 `addEventListener` 处理。
+**状态**：✅ 已修复（2026-06-02）
 
 ### 2. Profile 页面 CLOSE 按钮不工作
 **现象**：Profile 页面中的 CLOSE 按钮点击后无法关闭页面，点击背景空白处也无法关闭。
-**原因**：`game.js` 第 3753 行的 CLOSE 按钮 HTML 使用了 `onclick="document.getElementById('profile-overlay').style.display='none'"` 内联事件，但第 3759 行尝试通过 `document.getElementById('pf-close')` 添加事件监听器，而按钮 HTML 中没有 `id="pf-close"` 属性，导致事件监听器从未附加。
-**相关代码**：
-- `game.js:3713-3762` — `showProfile()` 函数
-- `game.js:3753` — CLOSE 按钮 HTML（缺少 `id="pf-close"`）
-- `game.js:3759-3760` — 事件监听器（找不到元素）
-**状态**：❌ 未修复
+**原因**：CLOSE 按钮 HTML 缺少 `id="pf-close"` 属性，导致 `getElementById('pf-close')` 找不到元素，事件监听器从未附加。内联 onclick 也存在作用域问题。
+**修复**：添加 `id="pf-close"` 属性，改用 `addEventListener` 绑定关闭事件。
+**状态**：✅ 已修复（2026-06-02）
 
 ### 3. Profile 数据加载不完整
-**现象**：Profile 页面只显示 Credits 和 Coins，Email、技能、跑步次数、每难度最远距离均不显示。
-**原因**：`showProfile()`（第 3713 行）调用 `loadAccountData()`（异步 fetch）后直接构建 HTML，但 `SG.state.maxEasy`、`SG.state.maxMedium` 等字段在 fetch 返回前为 `undefined`。
-**相关代码**：
-- `game.js:3713-3762` — `showProfile()` 函数
-- `game.js:3650-3656` — `loadAccountData()` 函数
-**状态**：❌ 未修复
+**现象**：Profile 页面打开时，Email、技能、跑步次数、每难度最远距离等数据不完整或显示默认值。
+**原因**：`showProfile()` 调用 `loadAccountData()`（异步 fetch）后立即构建 HTML，fetch 返回前 `SG.state` 的 maxEasy/maxMedium 等字段为旧值。
+**修复**：将 `loadAccountData()` 改为返回 Promise，`showProfile()` 等待数据加载完成后通过 `_renderProfile()` 渲染。
+**状态**：✅ 已修复（2026-06-02）
 
 ### 4. 音量滑块数值不持久
 **现象**：拖动音量滑块后关闭再打开 Shop，数值恢复为默认值。
-**原因**：`showShop()` 重建 Shop HTML 时读取 `SG.state.musicVolume`，但该字段只在函数内被临时设置（`game.js:1570-1571`），Shop 重新打开时可能因状态未正确持久化而回到默认值。
-**相关代码**：
-- `game.js:1568-1572` — 音量值从 `localStorage` 读取并设置到 `SG.state`
-- `game.js:1623-1624` — 音量滑块 HTML（`oninput` 保存到 `localStorage`）
-**状态**：❌ 未修复
+**原因**：与 Bug #1 相关 — Shop 内联 onclick 不可靠导致滑块 oninput 事件无法正确保存到 localStorage。
+**修复**：Bug #1 修复后，滑块 oninput handler 可以正常工作，值通过 localStorage 持久化。
+**状态**：✅ 已修复（2026-06-02）
 
 ### 5. `game.js` 静态文件未正确配置
 **现象**：模块化合并为单文件后，`/game.js` 请求返回 404 或错误 Content-Type。

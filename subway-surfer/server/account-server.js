@@ -69,7 +69,11 @@ function getAuthUser(headers) {
 function serveStatic(res, filePath, contentType) {
     try {
         const data = fs.readFileSync(filePath);
-        res.writeHead(200, { 'Content-Type': contentType });
+        res.writeHead(200, {
+            'Content-Type': contentType,
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma': 'no-cache'
+        });
         res.end(data);
     } catch(e) {
         res.writeHead(404);
@@ -156,55 +160,95 @@ async function handleRequest(req, res) {
     // ---- ADMIN PANEL ----
     if (pathname === '/admin' && method === 'GET') {
         const users = getUsers();
-        let h = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Admin</title>';
-        h += '<style>body{font-family:Arial;background:#1a1a2e;color:#fff;padding:20px}';
-        h += 'td,th{padding:6px 10px;text-align:left;border-bottom:1px solid #333;font-size:13px}';
-        h += 'th{background:#16213e;color:#ffd700}tr:hover{background:#0f3460}h1{color:#ff6600}';
-        h += '.btn{padding:4px 10px;border-radius:4px;border:none;cursor:pointer;font-size:12px;margin:1px;color:#fff}';
+        let h = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Admin</title>';
+        h += '<style>';
+        h += 'body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;padding:12px;margin:0}';
+        h += 'h1{color:#ff6600;font-size:22px;margin:0 0 8px}';
+        h += '#msg{color:#ffaa00;font-size:13px;margin:8px 0}';
+        h += '.wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -12px;padding:0 12px}';
+        h += 'table{width:100%;border-collapse:collapse;min-width:900px}';
+        h += 'td,th{padding:5px 6px;text-align:left;border-bottom:1px solid #333;font-size:11px;white-space:nowrap}';
+        h += 'th{background:#16213e;color:#ffd700;position:sticky;top:0;z-index:1;font-size:11px}';
+        h += 'tr:hover{background:#0f3460}';
+        h += '.btn{padding:4px 8px;border-radius:4px;border:none;cursor:pointer;font-size:11px;margin:1px;color:#fff;white-space:nowrap}';
         h += '.btn-edit{background:#ff8800}.btn-del{background:#cc3333}.btn:active{opacity:0.7}';
-        h += '#msg{color:#ffaa00;font-size:13px;margin:8px 0}</style></head><body>';
-        h += '<h1>🚄 Admin Panel</h1><p style="color:#aaa;">' + Object.keys(users).length + ' users | ';
+        h += 'input[type=number]{width:52px;padding:4px;font-size:11px;border:1px solid #444;border-radius:4px;background:#0d1b2a;color:#fff}';
+        h += '@media(max-width:480px){body{padding:8px}h1{font-size:18px}td,th{padding:4px 5px;font-size:10px}th{font-size:10px}.btn{padding:3px 6px;font-size:10px}input[type=number]{width:44px;padding:3px;font-size:10px}}';
+        h += '</style></head><body>';
+        h += '<h1>🚄 Admin Panel</h1><p style="color:#aaa;font-size:13px;margin:4px 0 10px">' + Object.keys(users).length + ' users | ';
         h += '<a href="/verify-codes" style="color:#ffaa00;">Codes</a></p><div id="msg"></div>';
-        h += '<table><tr><th>Email</th><th>Username</th><th>Password</th><th>Max</th><th>Coins</th><th>Credits</th><th>Runs</th><th>Abilities</th><th>Set Coins</th><th>Actions</th></tr>';
+        h += '<div class="wrap"><table>';
+        h += '<tr><th>Email</th><th>User</th><th>PW</th><th>Max</th><th>Coins</th><th>Cred</th><th>Runs</th><th>Abilities</th><th>Set Coins</th><th>Set Cred</th><th>Actions</th></tr>';
         const sorted = Object.values(users).sort((a, b) => (b.gameData?.maxDistance || 0) - (a.gameData?.maxDistance || 0));
         const an = {0:'None',1:'Double',2:'Jetpack',3:'Roof'};
         for (const u of sorted) {
             const g = u.gameData || defaultGameData();
             const ab = (g.ownedAbilities || [0]).map(a => an[a] || '?').join(',');
+            const eid = u.email.replace(/[^a-zA-Z0-9]/g,'_');
             h += '<tr><td>' + u.email + '</td><td>' + (u.username || '-') + '</td><td>' + (u.rawPassword || '****') + '</td>';
             h += '<td>' + (g.maxDistance||0) + 'm</td><td>' + (g.coins||0) + '</td><td>' + (g.credits||0) + '</td>';
             h += '<td>' + (g.runCount||0) + '</td><td>' + ab + '</td>';
-            h += '<td><input id="coins-' + u.email.replace(/[^a-zA-Z0-9]/g,'_') + '" type="number" value="' + (g.coins||0) + '" style="width:70px;padding:4px;font-size:12px">';
-            h += '<button class="btn btn-edit" onclick="setCoins(\'' + u.email + '\')" style="font-size:11px;padding:2px 6px">Set</button></td>';
-            h += '<td><button class="btn btn-edit" data-email="' + u.email + '">Edit PW</button> ';
+            // Set Coins
+            h += '<td><input id="cns-' + eid + '" type="number" value="' + (g.coins||0) + '" style="width:60px;padding:4px;font-size:12px;margin-right:4px">';
+            h += '<button class="btn btn-edit set-coin-btn" data-email="' + u.email + '" style="font-size:11px;padding:2px 6px">Set</button></td>';
+            // Set Credits
+            h += '<td><input id="crd-' + eid + '" type="number" value="' + (g.credits||0) + '" style="width:60px;padding:4px;font-size:12px;margin-right:4px">';
+            h += '<button class="btn btn-edit set-cred-btn" data-email="' + u.email + '" style="font-size:11px;padding:2px 6px">Set</button></td>';
+            // Actions
+            h += '<td><button class="btn btn-edit pw-btn" data-email="' + u.email + '">Set PW</button> ';
             h += '<button class="btn" style="background:#4CAF50;" data-email="' + u.email + '" data-action="verify">Verify</button> ';
             h += '<button class="btn btn-del" data-email="' + u.email + '" data-action="delete">Delete</button></td></tr>';
         }
-        h += '</table><script>';
-        h += 'document.addEventListener("click",function(e){';
-        h += 'var btn=e.target.closest("[data-email]");if(!btn)return;';
-        h += 'var email=btn.getAttribute("data-email");';
-        h += 'if(btn.getAttribute("data-action")==="verify"){fetch("/api/admin-verify-user",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email})}).then(function(r){return r.json()}).then(function(d){document.getElementById("msg").textContent=(d.message||d.error||"").replace(/<[^>]*>/g,"");if(!d.error)setTimeout(function(){location.reload()},500)})}if(btn.getAttribute("data-action")==="delete"){';
-        h += 'if(!confirm("Delete "+email+"?"))return;';
-        h += 'fetch("/api/admin-delete-user",{method:"POST",headers:{"Content-Type":"application/json"},';
-        h += 'body:JSON.stringify({email:email})}).then(function(r){return r.json()}).then(function(d){';
-        h += 'document.getElementById("msg").textContent=(d.message||d.error||"").replace(/<[^>]*>/g,"");';
-        h += 'if(!d.error)setTimeout(function(){location.reload()},500)})}';
-        h += 'if(btn.classList.contains("btn-edit")){';
-        h += 'var p=prompt("New password for "+email);';
-        h += 'if(p&&p.length>=4){';
-        h += 'fetch("/api/admin-reset-password",{method:"POST",headers:{"Content-Type":"application/json"},';
-        h += 'body:JSON.stringify({email:email,newPassword:p})}).then(function(r){return r.json()}).then(function(d){';
-        h += 'document.getElementById("msg").textContent=(d.error||"Password updated").replace(/<[^>]*>/g,"");';
-        h += 'if(!d.error)setTimeout(function(){location.reload()},500)})}}})';
-        h += 'function setCoins(email){';
-h += 'var id=\"coins-\"+email.replace(/[^a-zA-Z0-9]/g,\"_\");';
-h += 'var val=document.getElementById(id).value;';
-h += 'fetch(\"/api/admin-set-coins\",{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},';
-h += 'body:JSON.stringify({email:email,coins:parseInt(val)||0})}).then(function(r){return r.json()}).then(function(d){';
-h += 'document.getElementById(\"msg\").textContent=(d.message||d.error||\"\").replace(/<[^>]*>/g,\"\");';
-h += 'if(!d.error)setTimeout(function(){location.reload()},500)})}';
-h += '</script></body></html>';
+        h += '</table></div><script>';
+        h += '(function(){';
+        h += 'var msg=document.getElementById("msg");';
+        h += 'function msgOk(t){msg.textContent=t;setTimeout(function(){location.reload()},500)};';
+        h += 'function apiPost(url,body){return fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){return r.json()})};';
+        // Set Coins
+        h += 'document.querySelectorAll(".set-coin-btn").forEach(function(b){';
+        h += 'b.addEventListener("click",function(){';
+        h += 'var em=this.getAttribute("data-email");';
+        h += 'var eid=em.replace(/[^a-zA-Z0-9]/g,"_");';
+        h += 'var val=parseInt(document.getElementById("cns-"+eid).value)||0;';
+        h += 'apiPost("/api/admin-set-coins",{email:em,coins:val}).then(function(d){';
+        h += 'document.getElementById("cns-"+eid).value=val;';
+        h += 'msg.textContent=(d.message||d.error||"Updated coins").replace(/<[^>]*>/g,"");';
+        h += 'if(!d.error)msgOk("Coins set to "+val)})})});';
+        // Set Credits
+        h += 'document.querySelectorAll(".set-cred-btn").forEach(function(b){';
+        h += 'b.addEventListener("click",function(){';
+        h += 'var em=this.getAttribute("data-email");';
+        h += 'var eid=em.replace(/[^a-zA-Z0-9]/g,"_");';
+        h += 'var val=parseInt(document.getElementById("crd-"+eid).value)||0;';
+        h += 'apiPost("/api/admin-set-credits",{email:em,credits:val}).then(function(d){';
+        h += 'document.getElementById("crd-"+eid).value=val;';
+        h += 'msg.textContent=(d.message||d.error||"Updated credits").replace(/<[^>]*>/g,"");';
+        h += 'if(!d.error)msgOk("Credits set to "+val)})})});';
+        // Set Password
+        h += 'document.querySelectorAll(".pw-btn").forEach(function(b){';
+        h += 'b.addEventListener("click",function(){';
+        h += 'var em=this.getAttribute("data-email");';
+        h += 'var p=prompt("New password for "+em);';
+        h += 'if(!p||p.length<4)return;';
+        h += 'apiPost("/api/admin-reset-password",{email:em,newPassword:p}).then(function(d){';
+        h += 'msg.textContent=(d.error||"Password updated").replace(/<[^>]*>/g,"");';
+        h += 'if(!d.error)msgOk("PW updated for "+em)})})});';
+        // Verify
+        h += 'document.querySelectorAll("[data-action=verify]").forEach(function(b){';
+        h += 'b.addEventListener("click",function(){';
+        h += 'var em=this.getAttribute("data-email");';
+        h += 'apiPost("/api/admin-verify-user",{email:em}).then(function(d){';
+        h += 'msg.textContent=(d.message||d.error||"").replace(/<[^>]*>/g,"");';
+        h += 'if(!d.error)msgOk("Verified "+em)})})});';
+        // Delete
+        h += 'document.querySelectorAll("[data-action=delete]").forEach(function(b){';
+        h += 'b.addEventListener("click",function(){';
+        h += 'var em=this.getAttribute("data-email");';
+        h += 'if(!confirm("Delete "+em+"?"))return;';
+        h += 'apiPost("/api/admin-delete-user",{email:em}).then(function(d){';
+        h += 'msg.textContent=(d.message||d.error||"").replace(/<[^>]*>/g,"");';
+        h += 'if(!d.error)msgOk("Deleted "+em)})})});';
+        h += '})();</script></body></html>';
         sendHTML(res, h);
         return;
     }
@@ -464,6 +508,22 @@ h += '</script></body></html>';
         saveUsers(users);
         console.log('[ADMIN] Set coins for ' + email + ': ' + gd.coins);
         sendJSON(res, 200, { message: email + ' coins set to ' + gd.coins });
+        return;
+    }
+
+    // ---- ADMIN: SET CREDITS ----
+    if (pathname === '/api/admin-set-credits' && method === 'POST') {
+        const body = await parseBody(req);
+        const { email, credits } = body;
+        if (!email || credits === undefined) { sendJSON(res, 400, { error: 'Email and credits required' }); return; }
+        const users = getUsers();
+        if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
+        const gd = users[email].gameData || {};
+        gd.credits = Math.max(0, Math.floor(credits));
+        users[email].gameData = gd;
+        saveUsers(users);
+        console.log('[ADMIN] Set credits for ' + email + ': ' + gd.credits);
+        sendJSON(res, 200, { message: email + ' credits set to ' + gd.credits });
         return;
     }
 
