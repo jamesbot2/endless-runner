@@ -165,7 +165,7 @@ function getServerIP() {
 }
 
 function defaultGameData() {
-    return { coins: 0, credits: 0, equippedAbility: 0, ownedAbilities: [0], maxDistance: 0, maxEasy: 0, maxMedium: 0, maxHard: 0, runCount: 0, highScore: 0, totalCoins: 0 };
+    return { coins: 0, credits: 0, equippedAbility: 0, ownedAbilities: [0], maxDistance: 0, maxEasy: 0, maxMedium: 0, maxHard: 0, maxEasyAbility: 0, maxMediumAbility: 0, maxHardAbility: 0, runCount: 0, highScore: 0, totalCoins: 0 };
 }
 
 function sendEmail(to, subject, body) {
@@ -568,6 +568,9 @@ async function handleRequest(req, res) {
             maxEasy: Math.max(gd.maxEasy ?? 0, existing.maxEasy ?? 0),
             maxMedium: Math.max(gd.maxMedium ?? 0, existing.maxMedium ?? 0),
             maxHard: Math.max(gd.maxHard ?? 0, existing.maxHard ?? 0),
+            maxEasyAbility: gd.maxEasyAbility ?? existing.maxEasyAbility ?? 0,
+            maxMediumAbility: gd.maxMediumAbility ?? existing.maxMediumAbility ?? 0,
+            maxHardAbility: gd.maxHardAbility ?? existing.maxHardAbility ?? 0,
             runCount: gd.runCount ?? existing.runCount,
             highScore: Math.max(gd.highScore ?? 0, existing.highScore ?? 0),
             totalCoins: gd.totalCoins ?? existing.totalCoins
@@ -593,7 +596,12 @@ async function handleRequest(req, res) {
         const lb = Object.values(users).filter(u => u.verified).map(u => ({
             email: u.email.replace(/(.{3}).+(@)/, '$1***$2'),
             maxDistance: (u.gameData && u.gameData.maxDistance) || 0,
-            totalCoins: (u.gameData && u.gameData.totalCoins) || 0
+            maxEasy: (u.gameData && u.gameData.maxEasy) || 0,
+            maxMedium: (u.gameData && u.gameData.maxMedium) || 0,
+            maxHard: (u.gameData && u.gameData.maxHard) || 0,
+            maxEasyAbility: (u.gameData && u.gameData.maxEasyAbility) || 0,
+            maxMediumAbility: (u.gameData && u.gameData.maxMediumAbility) || 0,
+            maxHardAbility: (u.gameData && u.gameData.maxHardAbility) || 0
         })).sort((a, b) => b.maxDistance - a.maxDistance).slice(0, 100);
         sendJSON(res, 200, { leaderboard: lb });
         return;

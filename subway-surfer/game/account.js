@@ -80,6 +80,9 @@
                 SG.state.maxEasy = data.gameData.maxEasy || 0;
                 SG.state.maxMedium = data.gameData.maxMedium || 0;
                 SG.state.maxHard = data.gameData.maxHard || 0;
+                SG.state.maxEasyAbility = data.gameData.maxEasyAbility || 0;
+                SG.state.maxMediumAbility = data.gameData.maxMediumAbility || 0;
+                SG.state.maxHardAbility = data.gameData.maxHardAbility || 0;
                 SG.state.runCount = data.gameData.runCount || 0;
                 var owned = data.gameData.ownedAbilities || [0];
                 SG.state.canDoubleJump = owned.indexOf(1) >= 0;
@@ -145,6 +148,9 @@
                     maxEasy: SG.state.maxEasy || 0,
                     maxMedium: SG.state.maxMedium || 0,
                     maxHard: SG.state.maxHard || 0,
+                    maxEasyAbility: SG.state.maxEasyAbility || 0,
+                    maxMediumAbility: SG.state.maxMediumAbility || 0,
+                    maxHardAbility: SG.state.maxHardAbility || 0,
                     runCount: (SG.state.runCount || 0),
                     highScore: SG.state.bestScore || 0,
                     totalCoins: SG.state.totalCoins || SG.state.coins || 0
@@ -171,6 +177,9 @@
             SG.state.maxEasy = g.maxEasy || 0;
             SG.state.maxMedium = g.maxMedium || 0;
             SG.state.maxHard = g.maxHard || 0;
+            SG.state.maxEasyAbility = g.maxEasyAbility || 0;
+            SG.state.maxMediumAbility = g.maxMediumAbility || 0;
+            SG.state.maxHardAbility = g.maxHardAbility || 0;
             SG.state.runCount = g.runCount || 0;
             var owned = g.ownedAbilities || [0];
             SG.state.canDoubleJump = owned.indexOf(1) >= 0;
@@ -213,10 +222,11 @@
         html += '</div>';
 
         html += '<div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:15px;">';
+        var abNames = {0:'None',1:'Double Jump',2:'Jetpack',3:'Roof Walk'};
         html += '<div style="font-weight:bold;margin-bottom:8px;">🏆 Best Distances</div>';
-        html += '<div style="margin:3px 0;"><span style="color:#4CAF50;">■</span> Easy: <b>' + (s.maxEasy || 0) + 'm</b></div>';
-        html += '<div style="margin:3px 0;"><span style="color:#FFC107;">■</span> Medium: <b>' + (s.maxMedium || 0) + 'm</b></div>';
-        html += '<div style="margin:3px 0;"><span style="color:#F44336;">■</span> Hard: <b>' + (s.maxHard || 0) + 'm</b></div>';
+        html += '<div style="margin:3px 0;"><span style="color:#4CAF50;">■</span> Easy: <b>' + (s.maxEasy || 0) + 'm</b> <span style="color:#888;font-size:11px;">[' + (abNames[s.maxEasyAbility] || 'None') + ']</span></div>';
+        html += '<div style="margin:3px 0;"><span style="color:#FFC107;">■</span> Medium: <b>' + (s.maxMedium || 0) + 'm</b> <span style="color:#888;font-size:11px;">[' + (abNames[s.maxMediumAbility] || 'None') + ']</span></div>';
+        html += '<div style="margin:3px 0;"><span style="color:#F44336;">■</span> Hard: <b>' + (s.maxHard || 0) + 'm</b> <span style="color:#888;font-size:11px;">[' + (abNames[s.maxHardAbility] || 'None') + ']</span></div>';
         html += '</div>';
 
         html += '<div class="menu-btn" onclick="document.getElementById(\'profile-overlay\').style.display=\'none\'" style="margin-top:12px;text-align:center;">CLOSE</div>';
@@ -226,6 +236,64 @@
         document.body.appendChild(overlay);
         var pc = document.getElementById('pf-close');
         if (pc) pc.addEventListener('click', function() { overlay.style.display = 'none'; });
+    };
+
+    // ===== LEADERBOARD =====
+    SG.showLeaderboard = function() {
+        var overlay = document.getElementById('lb-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'lb-overlay';
+            overlay.className = 'overlay';
+            overlay.onclick = function(e) { if (e.target === overlay) overlay.style.display = 'none'; };
+            document.body.appendChild(overlay);
+        }
+        overlay.style.display = 'flex';
+        overlay.innerHTML = '<div class="menu-content" style="max-width:420px;max-height:80vh;overflow-y:auto;">' +
+            '<h1 class="menu-title" style="font-size:24px;margin-bottom:10px;">🏆 LEADERBOARD</h1>' +
+            '<div style="color:#aaa;font-size:13px;margin-bottom:10px;">Loading...</div>' +
+            '</div>';
+
+        var url = 'http://' + (window.location.hostname || '35.212.200.85') + ':3000/api/leaderboard';
+        fetch(url)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var entries = data.leaderboard || [];
+            var abNames = {0:'None',1:'Double',2:'Jetpack',3:'Roof'};
+            var html = '<div class="menu-content" style="max-width:420px;max-height:80vh;overflow-y:auto;">';
+            html += '<h1 class="menu-title" style="font-size:24px;margin-bottom:5px;">🏆 LEADERBOARD</h1>';
+            html += '<div style="font-size:11px;color:#666;margin-bottom:10px;">Per-difficulty best distances</div>';
+            if (entries.length === 0) {
+                html += '<div style="color:#888;padding:20px;">No entries yet. Play a game first!</div>';
+            } else {
+                html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+                html += '<tr style="color:#888;border-bottom:1px solid #333;">' +
+                    '<th style="padding:4px;text-align:left;">#</th>' +
+                    '<th style="padding:4px;text-align:left;">Player</th>' +
+                    '<th style="padding:4px;color:#4CAF50;">Easy</th>' +
+                    '<th style="padding:4px;color:#FFC107;">Med</th>' +
+                    '<th style="padding:4px;color:#F44336;">Hard</th>' +
+                    '</tr>';
+                for (var i = 0; i < entries.length; i++) {
+                    var e = entries[i];
+                    var row = (i % 2 === 0) ? 'rgba(255,255,255,0.03)' : 'transparent';
+                    html += '<tr style="background:' + row + ';">' +
+                        '<td style="padding:3px 4px;color:#888;">' + (i+1) + '</td>' +
+                        '<td style="padding:3px 4px;">' + e.email + '</td>' +
+                        '<td style="padding:3px 4px;color:#4CAF50;">' + (e.maxEasy||0) + 'm <span style="color:#666;font-size:10px;">[' + (abNames[e.maxEasyAbility]||'-') + ']</span></td>' +
+                        '<td style="padding:3px 4px;color:#FFC107;">' + (e.maxMedium||0) + 'm <span style="color:#666;font-size:10px;">[' + (abNames[e.maxMediumAbility]||'-') + ']</span></td>' +
+                        '<td style="padding:3px 4px;color:#F44336;">' + (e.maxHard||0) + 'm <span style="color:#666;font-size:10px;">[' + (abNames[e.maxHardAbility]||'-') + ']</span></td>' +
+                        '</tr>';
+                }
+                html += '</table>';
+            }
+            html += '<div class="menu-btn" onclick="document.getElementById(\'lb-overlay\').style.display=\'none\'" style="margin-top:12px;">CLOSE</div>';
+            html += '</div>';
+            overlay.innerHTML = html;
+        })
+        .catch(function() {
+            overlay.innerHTML = '<div class="menu-content"><h1 class="menu-title">🏆 LEADERBOARD</h1><div style="color:#ff4444;padding:20px;">Failed to load. Server offline?</div><div class="menu-btn" onclick="document.getElementById(\'lb-overlay\').style.display=\'none\'">CLOSE</div></div>';
+        });
     };
 
     // Auto-save every 30s

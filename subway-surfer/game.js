@@ -1,6 +1,3 @@
-// ===== SUBWAY SURFER v2.1 - Neo Edition =====
-// Last updated: 2026-06-02 (profile fix + shop/settings separation + volume persistence)
-// ===== game/constants.js =====
 // ===== SUBWAY SURFER - Constants =====
 (function() {
     'use strict';
@@ -25,11 +22,8 @@
     SG.JETPACK_FUEL_MAX = 30;
     SG.JETPACK_COOLDOWN_MAX = 15;
     SG.JETPACK_LIFT = 0.04;
-    SG.JETPACK_MAX_HEIGHT = 5.0;
     SG.ROOF_TOP_Y = 1.8;
 })();
-
-// ===== game/state.js =====
 // ===== SUBWAY SURFER - Game State =====
 (function() {
     'use strict';
@@ -98,13 +92,13 @@
         maxEasy: 0,
         maxMedium: 0,
         maxHard: 0,
+        maxEasyAbility: 0,
+        maxMediumAbility: 0,
+        maxHardAbility: 0,
         legitRun: true,
-        maxLegitDistance: 0,
         runCount: 0
     };
 })();
-
-// ===== game/audio.js =====
 // ===== SUBWAY SURFER - Audio System =====
 (function() {
     'use strict';
@@ -358,8 +352,6 @@
         }
     };
 })();
-
-// ===== game/textures.js =====
 // ===== SUBWAY SURFER - Textures =====
 (function() {
     'use strict';
@@ -424,8 +416,6 @@
         return texture;
     };
 })();
-
-// ===== game/scene.js =====
 // ===== SUBWAY SURFER - Scene Setup =====
 (function() {
     'use strict';
@@ -485,8 +475,6 @@
         }
     };
 })();
-
-// ===== game/player.js =====
 // ===== SUBWAY SURFER - Player =====
 (function() {
     'use strict';
@@ -540,8 +528,6 @@
         return SG.player;
     };
 })();
-
-// ===== game/track.js =====
 // ===== SUBWAY SURFER - Track System =====
 (function() {
     'use strict';
@@ -582,8 +568,6 @@
         }
     };
 })();
-
-// ===== game/buildings.js =====
 // ===== SUBWAY SURFER - Buildings & Scenery =====
 (function() {
     'use strict';
@@ -789,16 +773,14 @@
     SG.checkThemeChange = function() {
         var score = Math.floor(SG.state.score);
         var newTheme = 0;
-        if (score >= 1200) newTheme = 3;
-        else if (score >= 500) newTheme = 2;
-        else if (score >= 150) newTheme = 1;
+        if (score >= 3000) newTheme = 3;
+        else if (score >= 1500) newTheme = 2;
+        else if (score >= 500) newTheme = 1;
         if (newTheme !== SG.state.theme) {
             SG.switchTheme(newTheme);
         }
     };
 })();
-
-// ===== game/obstacles.js =====
 // ===== SUBWAY SURFER - Obstacles =====
 (function() {
     'use strict';
@@ -1230,8 +1212,6 @@
         }
     };
 })();
-
-// ===== game/coins.js =====
 // ===== SUBWAY SURFER - Coins =====
 (function() {
     'use strict';
@@ -1307,8 +1287,6 @@
         return coins;
     };
 })();
-
-// ===== game/particles.js =====
 // ===== SUBWAY SURFER - Particles =====
 (function() {
     'use strict';
@@ -1392,8 +1370,6 @@
         }
     };
 })();
-
-// ===== game/collision.js =====
 // ===== SUBWAY SURFER - Collision Detection =====
 (function() {
     'use strict';
@@ -1470,7 +1446,7 @@
             var dy = Math.abs(playerHitbox.y - obsBox.y);
             var zThreshold = (playerHitbox.d + obsBox.d) / 2 + 0.1;
 
-            if (state.canRoofWalk && state.equippedAbility === 3 && !state.onRoof) {
+            if (state.canRoofWalk && !state.onRoof) {
                 var obsTop = obsBox.y + obsH / 2;
                 var playerBottom = playerHitbox.y - playerHitbox.h / 2;
                 if (playerBottom >= obsTop - 0.1) {
@@ -1528,8 +1504,6 @@
         }
     };
 })();
-
-// ===== game/ui.js =====
 // ===== SUBWAY SURFER - UI System =====
 (function() {
     'use strict';
@@ -1538,7 +1512,6 @@
 
     // ===== SHOP =====
     SG.shopOverlay = null;
-    SG.settingsOverlay = null;
 
     SG.loadShopData = function() {
         try {
@@ -1568,14 +1541,21 @@
     };
 
     SG.showShop = function() {
+        // Always read volume from localStorage for persistence
+        var v = {
+            music: parseFloat(localStorage.getItem('subwayMusicVol') || '0.5'),
+            sfx: parseFloat(localStorage.getItem('subwaySfxVol') || '0.8')
+        };
+        SG.state.musicVolume = v.music;
+        SG.state.sfxVolume = v.sfx;
+
         if (!SG.shopOverlay) {
             SG.shopOverlay = document.createElement('div');
             SG.shopOverlay.id = 'shop-overlay';
             SG.shopOverlay.className = 'overlay';
-            document.body.appendChild(SG.shopOverlay);
+            SG.shopOverlay.onclick = function(e) { if (e.target === SG.shopOverlay) SG.shopOverlay.style.display = 'none'; };
         }
-
-        var owned = [true, SG.state.canDoubleJump, SG.state.canJetpack, SG.state.canRoofWalk];
+        // showShop continues below...
         var prices = [0, 10000, 50000, 100000];
         var names = ['None', 'Double Jump', 'Jetpack', 'Roof Walk'];
         var descs = ['No ability equipped', 'Double jump in mid-air', 'Fly for 30s every 15s cooldown', 'Walk on top of obstacles'];
@@ -1588,186 +1568,80 @@
             var isEquipped = SG.state.equippedAbility === i;
             var isOwned = i === 0 || owned[i];
             var btnClass = isEquipped ? 'diff-btn active' : 'diff-btn';
+            var btnDisabled = !isOwned && SG.state.credits < prices[i] ? 'disabled' : '';
             html += '<div style="margin:8px 0;padding:10px;background:rgba(0,0,0,0.3);border-radius:8px;">';
             html += '<div style="font-size:16px;font-weight:bold;color:white;">' + names[i] + '</div>';
             html += '<div style="font-size:12px;color:#aaa;margin:3px 0;">' + descs[i] + '</div>';
             if (i === 0) {
                 if (SG.state.equippedAbility === 0) {
-                    html += '<button class="diff-btn active" disabled style="opacity:0.6;">EQUIPPED</button>';
+                    html += '<button class="' + btnClass + '" disabled style="opacity:0.6;">EQUIPPED</button>';
                 } else {
-                    html += '<button class="diff-btn" data-shop-action="equip" data-shop-idx="0">EQUIP NONE</button>';
+                    html += '<button class="diff-btn" onclick="__neoEquip(0)">EQUIP NONE</button>';
                 }
             } else if (isOwned) {
                 if (isEquipped) {
                     html += '<button class="diff-btn active" disabled style="opacity:0.6;">EQUIPPED</button>';
                 } else {
-                    html += '<button class="diff-btn" data-shop-action="equip" data-shop-idx="' + i + '">EQUIP</button>';
+                    html += '<button class="diff-btn" onclick="__neoEquip(' + i + ')">EQUIP</button>';
                 }
             } else {
                 if (SG.state.credits >= prices[i]) {
-                    html += '<button class="diff-btn" data-shop-action="buy" data-shop-idx="' + i + '">BUY ' + prices[i] + 'cr</button>';
+                    html += '<button class="diff-btn" onclick="__neoBuy(' + i + ')">BUY ' + prices[i] + 'cr</button>';
                 } else {
-                    html += '<button class="diff-btn" disabled style="opacity:0.4;">' + prices[i] + 'cr</button>';
+                    html += '<button class="' + btnClass + '" disabled style="opacity:0.4;">' + prices[i] + 'cr</button>';
                 }
             }
             html += '</div>';
         }
 
         html += '<hr style="border-color:rgba(255,255,255,0.1);margin:15px 0;">';
+        html += '<h2 style="color:#fff;font-size:18px;margin-bottom:10px;">⚙ SETTINGS</h2>';
+        html += '<div style="margin:5px 0;display:flex;align-items:center;gap:8px;">🔊 Master: <button class="diff-btn" onclick="__neoToggleMuteShop();showShop()">' + (SG.state.muted ? 'OFF' : 'ON') + '</button></div>';
+        html += '<div style="margin:5px 0;display:flex;align-items:center;gap:8px;">🎵 Music: <input type="range" min="0" max="1" step="0.1" value="' + (SG.state.musicVolume || 0.5) + '" oninput="this.nextSibling.textContent=Math.round(this.value*100)+'%';SG.state.musicVolume=parseFloat(this.value);localStorage.setItem(\'subwayMusicVol\',this.value)"><span class="vol-pct">' + Math.round((SG.state.musicVolume || 0.5) * 100) + '%</span></div>';
+        html += '<div style="margin:5px 0;display:flex;align-items:center;gap:8px;">🔊 SFX: <input type="range" min="0" max="1" step="0.1" value="' + (SG.state.sfxVolume || 0.8) + '" oninput="this.nextSibling.textContent=Math.round(this.value*100)+'%';SG.state.sfxVolume=parseFloat(this.value);localStorage.setItem(\'subwaySfxVol\',this.value)"><span class="vol-pct">' + Math.round((SG.state.sfxVolume || 0.8) * 100) + '%</span></div>';
+        html += '<hr style="border-color:rgba(255,255,255,0.05);margin:8px 0;">';
         html += '<div style="color:#aaa;font-size:13px;margin-top:5px;">Controls: ↑ Jump | ↓ Roll | ← → Move | 👁 FPV | ` Console | M Menu</div>';
-        html += '<div class="menu-btn" data-shop-action="close">CLOSE</div>';
+        html += '<div class="menu-btn" onclick="__neoCloseShop()">CLOSE</div>';
         html += '</div>';
 
         SG.shopOverlay.innerHTML = html;
-
-        // Re-bind handlers (innerHTML replacement clears old listeners)
-        SG._bindShopEvents();
-
         document.body.appendChild(SG.shopOverlay);
         SG.shopOverlay.style.display = 'flex';
 
-    };  // end showShop
-
-    SG._bindShopEvents = function() {
-        var ov = SG.shopOverlay;
-        if (!ov) return;
-
-        function shopAction(e) {
-            e.stopPropagation();
-            var btn = e.target.closest('[data-shop-action]');
-            if (!btn) return;
-            var action = btn.getAttribute('data-shop-action');
-            var idx = parseInt(btn.getAttribute('data-shop-idx'), 10);
-            if (action === 'equip') {
+        window.__neoEquip = function(idx) {
+            SG.state.equippedAbility = idx;
+            SG.state.canDoubleJump = (idx === 1);
+            SG.state.canJetpack = (idx === 2);
+            SG.state.canRoofWalk = (idx === 3);
+            SG.saveShopData();
+            SG.showShop();
+        };
+        window.__neoBuy = function(idx) {
+            var prices2 = [0, 10000, 50000, 100000];
+            if (SG.state.credits >= prices2[idx]) {
+                SG.state.credits -= prices2[idx];
+                if (idx === 1) SG.state.canDoubleJump = true;
+                else if (idx === 2) SG.state.canJetpack = true;
+                else if (idx === 3) SG.state.canRoofWalk = true;
                 SG.state.equippedAbility = idx;
                 SG.saveShopData();
                 SG.showShop();
-            } else if (action === 'buy') {
-                var p = [0, 10000, 50000, 100000];
-                if (SG.state.credits >= p[idx]) {
-                    SG.state.credits -= p[idx];
-                    if (idx === 1) SG.state.canDoubleJump = true;
-                    else if (idx === 2) SG.state.canJetpack = true;
-                    else if (idx === 3) SG.state.canRoofWalk = true;
-                    SG.state.equippedAbility = idx;
-                    SG.saveShopData();
-                    SG.showShop();
-                }
-            } else if (action === 'close') {
-                ov.style.display = 'none';
-                SG.updateMenuCredits();
             }
-        }
+        };
+        window.__neoCloseShop = function() {
+            SG.shopOverlay.style.display = 'none';
+            SG.updateMenuCredits();
+        };
+        window.__neoToggleMuteShop = function() {
+            SG.toggleMute();
+            SG.showShop();
+        };
 
-        function bgClose(e) {
-            if (e.target === ov) { ov.style.display = 'none'; SG.updateMenuCredits(); }
-        }
-
-        ov.addEventListener('click', shopAction);
-        ov.addEventListener('touchend', shopAction);
-        ov.addEventListener('click', bgClose);
-        ov.addEventListener('touchend', bgClose);
-    };
+    };  // end showShop
 
     SG.updateMenuCredits = function() {
         var el = document.getElementById('menu-credits');
         if (el) el.textContent = '💰 TOTAL: ' + SG.state.credits;
-    };
-
-    SG.showSettings = function() {
-        // Read saved volume from localStorage
-        var musicVol = parseFloat(localStorage.getItem('subwayMusicVol') || '0.5');
-        var sfxVol = parseFloat(localStorage.getItem('subwaySfxVol') || '0.8');
-        SG.state.musicVolume = musicVol;
-        SG.state.sfxVolume = sfxVol;
-
-        if (!SG.settingsOverlay) {
-            SG.settingsOverlay = document.createElement('div');
-            SG.settingsOverlay.id = 'settings-overlay';
-            SG.settingsOverlay.className = 'overlay';
-            document.body.appendChild(SG.settingsOverlay);
-        }
-
-        var html = '<div class="menu-content" style="max-width:340px;">';
-        html += '<h1 class="menu-title" style="font-size:28px;margin-bottom:15px;">⚙ SETTINGS</h1>';
-        // Master Mute
-        html += '<div style="margin:10px 0;display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,0.3);padding:12px;border-radius:10px;">';
-        html += '<span style="font-size:16px;">🔊 Master</span>';
-        html += '<button class="diff-btn" id="settings-mute-btn" style="min-width:60px;">' + (SG.state.muted ? 'OFF' : 'ON') + '</button>';
-        html += '</div>';
-        // Music slider
-        html += '<div style="margin:10px 0;background:rgba(0,0,0,0.3);padding:12px;border-radius:10px;">';
-        html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">';
-        html += '<span>🎵 Music</span>';
-        html += '<span class="vol-pct" id="settings-music-val" style="color:#FFD700;">' + Math.round(musicVol * 100) + '%</span>';
-        html += '</div>';
-        html += '<input type="range" min="0" max="1" step="0.1" value="' + musicVol + '" id="settings-music-slider" style="width:100%;">';
-        html += '</div>';
-        // SFX slider
-        html += '<div style="margin:10px 0;background:rgba(0,0,0,0.3);padding:12px;border-radius:10px;">';
-        html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">';
-        html += '<span>🔊 SFX</span>';
-        html += '<span class="vol-pct" id="settings-sfx-val" style="color:#FFD700;">' + Math.round(sfxVol * 100) + '%</span>';
-        html += '</div>';
-        html += '<input type="range" min="0" max="1" step="0.1" value="' + sfxVol + '" id="settings-sfx-slider" style="width:100%;">';
-        html += '</div>';
-        html += '<div class="menu-btn" id="settings-close" style="margin-top:15px;">CLOSE</div>';
-        html += '</div>';
-
-        SG.settingsOverlay.innerHTML = html;
-        document.body.appendChild(SG.settingsOverlay);
-        SG.settingsOverlay.style.display = 'flex';
-
-        SG._bindSettingsEvents();
-    };
-
-    SG._bindSettingsEvents = function() {
-        var ov = SG.settingsOverlay;
-        if (!ov) return;
-
-        var muteBtn = document.getElementById('settings-mute-btn');
-        if (muteBtn) {
-            muteBtn.addEventListener('click', function() { SG.toggleMute(); SG.showSettings(); });
-            muteBtn.addEventListener('touchend', function(e) { e.preventDefault(); SG.toggleMute(); SG.showSettings(); });
-        }
-
-        var musicSlider = document.getElementById('settings-music-slider');
-        var musicVal = document.getElementById('settings-music-val');
-        if (musicSlider && musicVal) {
-            function onMusicInput() {
-                var val = parseFloat(musicSlider.value);
-                musicVal.textContent = Math.round(val * 100) + '%';
-                SG.state.musicVolume = val;
-                localStorage.setItem('subwayMusicVol', String(val));
-            }
-            musicSlider.addEventListener('input', onMusicInput);
-            musicSlider.addEventListener('touchend', function() { onMusicInput(); });
-        }
-
-        var sfxSlider = document.getElementById('settings-sfx-slider');
-        var sfxVal = document.getElementById('settings-sfx-val');
-        if (sfxSlider && sfxVal) {
-            function onSfxInput() {
-                var val = parseFloat(sfxSlider.value);
-                sfxVal.textContent = Math.round(val * 100) + '%';
-                SG.state.sfxVolume = val;
-                localStorage.setItem('subwaySfxVol', String(val));
-            }
-            sfxSlider.addEventListener('input', onSfxInput);
-            sfxSlider.addEventListener('touchend', function() { onSfxInput(); });
-        }
-
-        var closeBtn = document.getElementById('settings-close');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', function(e) { e.stopPropagation(); ov.style.display = 'none'; });
-            closeBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); ov.style.display = 'none'; });
-        }
-
-        function bgClose(e) {
-            if (e.target === ov) ov.style.display = 'none';
-        }
-        ov.addEventListener('click', bgClose);
-        ov.addEventListener('touchend', bgClose);
     };
 
     // ===== UI SETUP =====
@@ -1799,10 +1673,8 @@
                 '<div class="menu-mobile-hint">Swipe to play on mobile</div>' +
                 '<div class="menu-btn" id="shop-btn-menu" style="margin-top:10px;font-size:14px;padding:8px 16px;">🛒 SHOP</div>' +
             '<div style="display:flex;gap:8px;justify-content:center;margin-top:6px;">' +
-            '<div class="menu-btn" id="settings-btn-menu" style="font-size:14px;padding:8px 16px;">⚙ SETTINGS</div>' +
-            '</div>' +
-            '<div style="display:flex;gap:8px;justify-content:center;margin-top:6px;">' +
             '<div class="menu-btn" id="profile-btn" style="font-size:12px;padding:6px 12px;">👤 PROFILE</div>' +
+            '<div class="menu-btn" id="leaderboard-btn" style="font-size:12px;padding:6px 12px;">🏆 LEADERBOARD</div>' +
             '<div class="menu-btn" id="signout-btn" style="font-size:12px;padding:6px 12px;border-color:#ff4444;color:#ff6666;">🚪 SIGN OUT</div>' +
             '</div>' +
             '</div>';
@@ -1859,7 +1731,7 @@
             btn.id = 'mute-btn';
             btn.textContent = '\uD83D\uDD0A';
             btn.style.display = 'none';
-            btn.style.cssText = 'position:absolute;top:16px;left:136px;width:40px;height:40px;font-size:18px;cursor:pointer;z-index:15;pointer-events:auto;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);border-radius:10px;border:1px solid rgba(255,255,255,0.08);transition:all 0.2s;color:rgba(255,255,255,0.7);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);text-align:center;line-height:40px;';
+            btn.style.cssText = 'position:absolute;top:16px;left:66px;width:40px;height:40px;font-size:18px;cursor:pointer;z-index:15;pointer-events:auto;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);border-radius:10px;border:1px solid rgba(255,255,255,0.08);transition:all 0.2s;color:rgba(255,255,255,0.7);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);text-align:center;line-height:40px;';
             SG.uiOverlay.appendChild(btn);
             btn.addEventListener('click', function() { SG.toggleMute(); });
             btn.addEventListener('touchend', function(e) { e.preventDefault(); SG.toggleMute(); });
@@ -1926,20 +1798,6 @@
         speedDiv.id = 'speed-indicator';
         speedDiv.textContent = 'SPD: 1x';
         SG.uiOverlay.appendChild(speedDiv);
-
-        // ===== EQUIPPED SKILL INDICATOR =====
-        var skillDiv = document.createElement('div');
-        skillDiv.id = 'skill-indicator';
-        skillDiv.textContent = '';
-        SG.uiOverlay.appendChild(skillDiv);
-        SG.skillEl = skillDiv;
-
-        // ===== JETPACK TIMER =====
-        var jetDiv = document.createElement('div');
-        jetDiv.id = 'jetpack-timer';
-        jetDiv.textContent = '';
-        SG.uiOverlay.appendChild(jetDiv);
-        SG.jetpackTimerEl = jetDiv;
 
         // ===== GAME OVER SCREEN =====
         var gameOverDiv = document.createElement('div');
@@ -2019,8 +1877,6 @@
 
         SG.menuOverlay.addEventListener('click', function(e) { if (e.target.closest('.tap-to-start')) SG.startGameFromMenu(); });
         SG.menuOverlay.addEventListener('touchend', function(e) {
-            // Only prevent default if menu is actually visible
-            if (SG.menuOverlay.style.display === 'none') return;
             e.preventDefault();
             if (e.target.closest('.tap-to-start')) SG.startGameFromMenu();
         });
@@ -2040,15 +1896,15 @@
             shopBtnMenu.addEventListener('click', function(e) { e.stopPropagation(); SG.showShop(); });
             shopBtnMenu.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showShop(); });
         }
-        var settingsBtnMenu = document.getElementById('settings-btn-menu');
-        if (settingsBtnMenu) {
-            settingsBtnMenu.addEventListener('click', function(e) { e.stopPropagation(); SG.showSettings(); });
-            settingsBtnMenu.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showSettings(); });
-        }
         var profileBtn = document.getElementById('profile-btn');
         if (profileBtn) {
             profileBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showProfile(); });
             profileBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showProfile(); });
+        }
+        var leaderboardBtn = document.getElementById('leaderboard-btn');
+        if (leaderboardBtn) {
+            leaderboardBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showLeaderboard(); });
+            leaderboardBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showLeaderboard(); });
         }
         var signoutBtn = document.getElementById('signout-btn');
         if (signoutBtn) {
@@ -2142,7 +1998,6 @@
     SG.startGameFromMenu = function() {
         if (SG.state.started) return;
         SG.state.started = true;
-        SG.state.legitRun = true; // Reset for new run
         SG.menuOverlay.style.display = 'none';
         SG.pauseBtnEl.style.display = 'block';
         var cb = document.getElementById('con-btn');
@@ -2207,8 +2062,220 @@
         }
     };
 })();
+// ===== SUBWAY SURFER - Controls =====
+(function() {
+    'use strict';
+    var SG = window.__SG = window.__SG || {};
+    var THREE = window.THREE;
 
-// ===== game/homelander.js =====
+    SG.keys = {};
+
+    SG.moveLeft = function() {
+        if (SG.state.homelander && SG.homelanderGroup) {
+            SG.homelanderGroup.position.x -= 0.35;
+            return;
+        }
+        if (SG.state.currentLane > 0) {
+            SG.state.startLaneX = SG.player.position.x;
+            SG.state.currentLane--;
+            SG.state.targetLane = SG.state.currentLane;
+            SG.state.laneLerp = 0;
+        }
+    };
+
+    SG.moveRight = function() {
+        if (SG.state.homelander && SG.homelanderGroup) {
+            SG.homelanderGroup.position.x += 0.35;
+            return;
+        }
+        if (SG.state.currentLane < SG.LANE_COUNT - 1) {
+            SG.state.startLaneX = SG.player.position.x;
+            SG.state.currentLane++;
+            SG.state.targetLane = SG.state.currentLane;
+            SG.state.laneLerp = 0;
+        }
+    };
+
+    SG.jump = function() {
+        if (SG.state.isJumping) {
+            if (SG.state.canJetpack && SG.state.jetpackCooldown <= 0 && SG.state.jetpackFuel <= 0) {
+                SG.state.jetpackFuel = SG.JETPACK_FUEL_MAX;
+                SG.state.jumpVelocity = 0;
+                SG.playJumpSound();
+                return;
+            }
+            if (SG.state.canJetpack && SG.state.jetpackFuel > 0) {
+                return;
+            }
+            if (SG.state.canDoubleJump && !SG.state.hasDoubleJumped) {
+                SG.state.hasDoubleJumped = true;
+                SG.state.jumpVelocity = SG.DOUBLE_JUMP_VELOCITY;
+                SG.state.playerHeight = Math.max(SG.state.playerHeight, 0.5);
+                SG.playJumpSound();
+                return;
+            }
+            return;
+        }
+
+        SG.state.isJumping = true;
+        if (SG.state.isRolling) {
+            SG.state.rollEndTime = Date.now() + 99999;
+            SG.state.targetPlayerHeight = SG.ROLL_HEIGHT;
+            SG.state.jumpVelocity = SG.JUMP_VELOCITY * 1.5;
+            SG.playJumpSound();
+            return;
+        }
+        if (SG.state.onRoof) {
+            SG.state.jumpingFromRoof = true;
+            SG.state.onRoof = false;
+            SG.state.jumpVelocity = SG.JUMP_VELOCITY;
+            SG.playJumpSound();
+            return;
+        }
+        SG.state.jumpVelocity = SG.JUMP_VELOCITY;
+        SG.playJumpSound();
+    };
+
+    SG.roll = function() {
+        if (SG.state.isRolling) return;
+        SG.state.isRolling = true;
+        SG.state.targetPlayerHeight = SG.ROLL_HEIGHT;
+        SG.state.rollEndTime = Date.now() + 400;
+        SG.playRollSound();
+    };
+
+    SG.handleKeyInput = function(key) {
+        if (SG.state.gameOver || !SG.state.started) return;
+        if (SG.state.homelander && (key === 'ArrowLeft' || key === 'ArrowRight' || key === 'ArrowUp' || key === 'ArrowDown')) return;
+
+        if (!SG.audioCtx) SG.initAudio();
+
+        switch (key) {
+            case 'ArrowLeft':
+            case 'a':
+            case 'A':
+                SG.moveLeft();
+                break;
+            case 'ArrowRight':
+            case 'd':
+            case 'D':
+                SG.moveRight();
+                break;
+            case 'ArrowUp':
+            case 'w':
+            case 'W':
+            case ' ':
+                SG.jump();
+                break;
+            case 'ArrowDown':
+            case 's':
+            case 'S':
+                SG.roll();
+                break;
+        }
+    };
+
+    SG.setupControls = function() {
+        document.addEventListener('keydown', function(e) {
+            SG.keys[e.key] = true;
+            if (e.keyCode) { SG.keys['_kc_' + e.keyCode] = true; }
+
+            if (SG.state.homelander && SG.homelanderGroup) {
+                var hlSpeed = 0.25;
+                var k = e.key, kc = e.keyCode || e.which;
+                if (k === 'ArrowLeft' || k === 'a' || k === 'A' || kc === 37 || kc === 65) { SG.homelanderGroup.position.x -= hlSpeed; e.preventDefault(); }
+                if (k === 'ArrowRight' || k === 'd' || k === 'D' || kc === 39 || kc === 68) { SG.homelanderGroup.position.x += hlSpeed; e.preventDefault(); }
+                if (k === 'ArrowUp' || k === 'w' || k === 'W' || kc === 38 || kc === 87) { SG.homelanderGroup.position.y = Math.min(20, SG.homelanderGroup.position.y + hlSpeed); e.preventDefault(); }
+                if (k === 'ArrowDown' || k === 's' || k === 'S' || kc === 40 || kc === 83) { SG.homelanderGroup.position.y = Math.max(1, SG.homelanderGroup.position.y - hlSpeed); e.preventDefault(); }
+            }
+
+            if (e.key === 'Escape') {
+                var devCon = document.getElementById('dev-console');
+                if (devCon && devCon.style.display === 'flex') {
+                    SG.toggleConsole();
+                    return;
+                }
+                if (SG.state.started && !SG.state.gameOver) {
+                    SG.togglePause();
+                    return;
+                }
+            }
+            if (e.key === '`' || e.key === '~') {
+                e.preventDefault();
+                if (SG.state.started) SG.toggleConsole();
+                return;
+            }
+
+            if (!SG.state.started && (e.key === ' ' || e.key === 'Enter')) {
+                SG.startGameFromMenu();
+                return;
+            }
+
+            if ((e.key === 'm' || e.key === 'M') && SG.state.started) {
+                if (!SG.state.gameOver) {
+                    SG.togglePause();
+                    setTimeout(SG.quitToMenu, 100);
+                } else {
+                    SG.quitToMenu();
+                }
+                return;
+            }
+
+            SG.handleKeyInput(e.key);
+        });
+
+        document.addEventListener('keyup', function(e) {
+            SG.keys[e.key] = false;
+        });
+
+        // Touch controls
+        var touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+        var isTouching = false;
+
+        document.addEventListener('touchstart', function(e) {
+            if (SG.state.gameOver) return;
+            var touch = e.changedTouches[0];
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+            touchStartTime = Date.now();
+            isTouching = true;
+            SG.state.hasStartedTouch = true;
+            if (!SG.audioCtx) SG.initAudio();
+            e.preventDefault();
+        }, { passive: false });
+
+        document.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+
+        document.addEventListener('touchend', function(e) {
+            if (SG.state.gameOver) return;
+            if (!isTouching) return;
+            isTouching = false;
+
+            var touch = e.changedTouches[0];
+            var dx = touch.clientX - touchStartX;
+            var dy = touch.clientY - touchStartY;
+            var elapsed = Date.now() - touchStartTime;
+
+            if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy) * 0.7) {
+                if (dx > 0) SG.moveRight();
+                else SG.moveLeft();
+            } else if (dy < -40 && Math.abs(dy) > Math.abs(dx) * 0.7) {
+                SG.jump();
+            } else if (dy > 40 && Math.abs(dy) > Math.abs(dx) * 0.7) {
+                SG.roll();
+            } else if (Math.abs(dx) < 30 && Math.abs(dy) < 30 && elapsed < 300) {
+                var third = window.innerWidth / 3;
+                if (touch.clientX < third) SG.moveLeft();
+                else if (touch.clientX > third * 2) SG.moveRight();
+                else SG.jump();
+            }
+
+            e.preventDefault();
+        }, { passive: false });
+    };
+})();
 // ===== SUBWAY SURFER - Homelander Easter Egg =====
 (function() {
     'use strict';
@@ -2594,226 +2661,6 @@
         SG.state.gameOver = false;
     };
 })();
-
-// ===== game/controls.js =====
-// ===== SUBWAY SURFER - Controls =====
-(function() {
-    'use strict';
-    var SG = window.__SG = window.__SG || {};
-    var THREE = window.THREE;
-
-    SG.keys = {};
-
-    SG.moveLeft = function() {
-        if (SG.state.homelander && SG.homelanderGroup) {
-            SG.homelanderGroup.position.x -= 0.35;
-            return;
-        }
-        if (SG.state.currentLane > 0) {
-            SG.state.startLaneX = SG.player.position.x;
-            SG.state.currentLane--;
-            SG.state.targetLane = SG.state.currentLane;
-            SG.state.laneLerp = 0;
-        }
-    };
-
-    SG.moveRight = function() {
-        if (SG.state.homelander && SG.homelanderGroup) {
-            SG.homelanderGroup.position.x += 0.35;
-            return;
-        }
-        if (SG.state.currentLane < SG.LANE_COUNT - 1) {
-            SG.state.startLaneX = SG.player.position.x;
-            SG.state.currentLane++;
-            SG.state.targetLane = SG.state.currentLane;
-            SG.state.laneLerp = 0;
-        }
-    };
-
-    SG.jump = function() {
-        if (SG.state.isJumping) {
-            // Jetpack: only if equipped (ability 2)
-            if (SG.state.canJetpack && SG.state.equippedAbility === 2 && SG.state.jetpackCooldown <= 0 && SG.state.jetpackFuel <= 0) {
-                SG.state.jetpackFuel = SG.JETPACK_FUEL_MAX;
-                SG.state.jumpVelocity = 0;
-                SG.playJumpSound();
-                return;
-            }
-            if (SG.state.canJetpack && SG.state.equippedAbility === 2 && SG.state.jetpackFuel > 0) {
-                return;
-            }
-            // Double jump: only if equipped (ability 1)
-            if (SG.state.canDoubleJump && SG.state.equippedAbility === 1 && !SG.state.hasDoubleJumped) {
-                SG.state.hasDoubleJumped = true;
-                SG.state.jumpVelocity = SG.DOUBLE_JUMP_VELOCITY;
-                SG.state.playerHeight = Math.max(SG.state.playerHeight, 0.5);
-                SG.playJumpSound();
-                return;
-            }
-            return;
-        }
-
-        SG.state.isJumping = true;
-        if (SG.state.isRolling) {
-            SG.state.rollEndTime = Date.now() + 99999;
-            SG.state.targetPlayerHeight = SG.ROLL_HEIGHT;
-            SG.state.jumpVelocity = SG.JUMP_VELOCITY * 1.5;
-            SG.playJumpSound();
-            return;
-        }
-        if (SG.state.onRoof) {
-            SG.state.jumpingFromRoof = true;
-            SG.state.onRoof = false;
-            SG.state.jumpVelocity = SG.JUMP_VELOCITY;
-            SG.playJumpSound();
-            return;
-        }
-        SG.state.jumpVelocity = SG.JUMP_VELOCITY;
-        SG.playJumpSound();
-    };
-
-    SG.roll = function() {
-        if (SG.state.isRolling) return;
-        SG.state.isRolling = true;
-        SG.state.targetPlayerHeight = SG.ROLL_HEIGHT;
-        SG.state.rollEndTime = Date.now() + 400;
-        SG.playRollSound();
-    };
-
-    SG.handleKeyInput = function(key) {
-        if (SG.state.gameOver || !SG.state.started) return;
-        if (SG.state.homelander && (key === 'ArrowLeft' || key === 'ArrowRight' || key === 'ArrowUp' || key === 'ArrowDown')) return;
-
-        if (!SG.audioCtx) SG.initAudio();
-
-        switch (key) {
-            case 'ArrowLeft':
-            case 'a':
-            case 'A':
-                SG.moveLeft();
-                break;
-            case 'ArrowRight':
-            case 'd':
-            case 'D':
-                SG.moveRight();
-                break;
-            case 'ArrowUp':
-            case 'w':
-            case 'W':
-            case ' ':
-                SG.jump();
-                break;
-            case 'ArrowDown':
-            case 's':
-            case 'S':
-                SG.roll();
-                break;
-        }
-    };
-
-    SG.setupControls = function() {
-        document.addEventListener('keydown', function(e) {
-            SG.keys[e.key] = true;
-            if (e.keyCode) { SG.keys['_kc_' + e.keyCode] = true; }
-
-            if (SG.state.homelander && SG.homelanderGroup) {
-                var hlSpeed = 0.25;
-                var k = e.key, kc = e.keyCode || e.which;
-                if (k === 'ArrowLeft' || k === 'a' || k === 'A' || kc === 37 || kc === 65) { SG.homelanderGroup.position.x -= hlSpeed; e.preventDefault(); }
-                if (k === 'ArrowRight' || k === 'd' || k === 'D' || kc === 39 || kc === 68) { SG.homelanderGroup.position.x += hlSpeed; e.preventDefault(); }
-                if (k === 'ArrowUp' || k === 'w' || k === 'W' || kc === 38 || kc === 87) { SG.homelanderGroup.position.y = Math.min(20, SG.homelanderGroup.position.y + hlSpeed); e.preventDefault(); }
-                if (k === 'ArrowDown' || k === 's' || k === 'S' || kc === 40 || kc === 83) { SG.homelanderGroup.position.y = Math.max(1, SG.homelanderGroup.position.y - hlSpeed); e.preventDefault(); }
-            }
-
-            if (e.key === 'Escape') {
-                var devCon = document.getElementById('dev-console');
-                if (devCon && devCon.style.display === 'flex') {
-                    SG.toggleConsole();
-                    return;
-                }
-                if (SG.state.started && !SG.state.gameOver) {
-                    SG.togglePause();
-                    return;
-                }
-            }
-            if (e.key === '`' || e.key === '~') {
-                e.preventDefault();
-                if (SG.state.started) SG.toggleConsole();
-                return;
-            }
-
-            if (!SG.state.started && (e.key === ' ' || e.key === 'Enter')) {
-                SG.startGameFromMenu();
-                return;
-            }
-
-            if ((e.key === 'm' || e.key === 'M') && SG.state.started) {
-                if (!SG.state.gameOver) {
-                    SG.togglePause();
-                    setTimeout(SG.quitToMenu, 100);
-                } else {
-                    SG.quitToMenu();
-                }
-                return;
-            }
-
-            SG.handleKeyInput(e.key);
-        });
-
-        document.addEventListener('keyup', function(e) {
-            SG.keys[e.key] = false;
-        });
-
-        // Touch controls
-        var touchStartX = 0, touchStartY = 0, touchStartTime = 0;
-        var isTouching = false;
-
-        document.addEventListener('touchstart', function(e) {
-            if (SG.state.gameOver) return;
-            var touch = e.changedTouches[0];
-            touchStartX = touch.clientX;
-            touchStartY = touch.clientY;
-            touchStartTime = Date.now();
-            isTouching = true;
-            SG.state.hasStartedTouch = true;
-            if (!SG.audioCtx) SG.initAudio();
-            e.preventDefault();
-        }, { passive: false });
-
-        document.addEventListener('touchmove', function(e) {
-            e.preventDefault();
-        }, { passive: false });
-
-        document.addEventListener('touchend', function(e) {
-            if (SG.state.gameOver) return;
-            if (!isTouching) return;
-            isTouching = false;
-
-            var touch = e.changedTouches[0];
-            var dx = touch.clientX - touchStartX;
-            var dy = touch.clientY - touchStartY;
-            var elapsed = Date.now() - touchStartTime;
-
-            if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy) * 0.7) {
-                if (dx > 0) SG.moveRight();
-                else SG.moveLeft();
-            } else if (dy < -40 && Math.abs(dy) > Math.abs(dx) * 0.7) {
-                SG.jump();
-            } else if (dy > 40 && Math.abs(dy) > Math.abs(dx) * 0.7) {
-                SG.roll();
-            } else if (Math.abs(dx) < 30 && Math.abs(dy) < 30 && elapsed < 300) {
-                var third = window.innerWidth / 3;
-                if (touch.clientX < third) SG.moveLeft();
-                else if (touch.clientX > third * 2) SG.moveRight();
-                else SG.jump();
-            }
-
-            e.preventDefault();
-        }, { passive: false });
-    };
-})();
-
-// ===== game/police.js =====
 // ===== SUBWAY SURFER - Police Chase System =====
 (function() {
     'use strict';
@@ -3019,8 +2866,6 @@
         SG.state.policeDistance = Math.min(12, SG.state.policeDistance + 1.0);
     };
 })();
-
-// ===== game/main.js =====
 // ===== SUBWAY SURFER - Main Game Loop & Init =====
 (function() {
     'use strict';
@@ -3128,6 +2973,11 @@
             SG.camera.lookAt(0, 0, -10);
         }
 
+        if (SG.state.homelander) {
+            SG.deactivateHomelander();
+            SG.state.homelander = false;
+        }
+
         if (SG.state.theme !== 0) {
             SG.switchTheme(0);
         }
@@ -3159,8 +3009,6 @@
         SG.state.gameOver = false;
         SG.state.started = true;
         SG.state.paused = false;
-        SG.state.legitRun = true;
-        SG.state.homelander = false;
         SG.state.onRoof = false;
         SG.state.currentLane = 1;
         SG.state.targetLane = 1;
@@ -3201,6 +3049,11 @@
         if (SG.pauseOverlay) SG.pauseOverlay.style.display = 'none';
         if (SG.clock) SG.clock.getDelta();
 
+        if (SG.state.homelander) {
+            SG.deactivateHomelander();
+            SG.state.homelander = false;
+        }
+
         if (SG.state.theme !== 0) {
             SG.switchTheme(0);
         }
@@ -3220,20 +3073,18 @@
         SG.stopPoliceChase();
 
         var score = Math.floor(SG.state.score);
-        // Only record distances for legit (non-homelander) runs
-        if (SG.state.legitRun) {
-            if (score > SG.state.bestScore) {
-                SG.state.bestScore = score;
-                try { localStorage.setItem('subwayBest', String(score)); } catch(e) {}
-            }
-            if (score > SG.state.maxLegitDistance) {
-                SG.state.maxLegitDistance = score;
-            }
-            // Per-difficulty max distance
+        if (score > SG.state.bestScore) {
+            SG.state.bestScore = score;
+            try { localStorage.setItem('subwayBest', String(score)); } catch(e) {}
+        }
+        // Per-difficulty max distance (NOT in homelander mode)
+        if (!SG.state.homelander) {
             var diff = SG.state.difficulty;
             var diffKey = ['maxEasy','maxMedium','maxHard'][diff] || 'maxHard';
+            var abilityKey = diffKey + 'Ability';
             if (score > (SG.state[diffKey] || 0)) {
                 SG.state[diffKey] = score;
+                SG.state[abilityKey] = SG.state.equippedAbility || 0;
             }
         }
         SG.finalScoreEl.textContent = score;
@@ -3242,13 +3093,19 @@
         var multipliers = [1, 5, 10];
         var multiplier = multipliers[SG.state.difficulty] || 1;
         var earned = SG.state.coins * multiplier;
-        SG.state.credits += earned;
-        SG.state.totalCoins += SG.state.coins;
-        try {
-            localStorage.setItem('subwayCredits', String(SG.state.credits));
-            localStorage.setItem('subwayTotalCoins', String(SG.state.totalCoins));
-        } catch(e) {}
-        SG.saveShopData();
+
+        // Homelander: don't save coins/credits or shop data
+        if (!SG.state.homelander) {
+            SG.state.credits += earned;
+            SG.state.totalCoins += SG.state.coins;
+            try {
+                localStorage.setItem('subwayCredits', String(SG.state.credits));
+                localStorage.setItem('subwayTotalCoins', String(SG.state.totalCoins));
+            } catch(e) {}
+            SG.saveShopData();
+        } else {
+            earned = 0; // Homelander: show 0 credits earned
+        }
 
         var oldCredits = document.getElementById('credits-earned');
         if (oldCredits) oldCredits.remove();
@@ -3308,44 +3165,6 @@
             var speedLevel = Math.floor((SG.state.speed - SG.START_SPEED) / (SG.MAX_SPEED - SG.START_SPEED) * 49) + 1;
             speedEl.textContent = 'SPD: ' + Math.min(speedLevel, 50) + 'x';
             speedEl.style.color = speedLevel > 35 ? 'rgba(255,30,30,1)' : speedLevel > 15 ? 'rgba(255,100,50,0.9)' : 'rgba(255,255,255,0.5)';
-        }
-
-        // Update equipped skill HUD
-        var skillEl = document.getElementById('skill-indicator');
-        if (skillEl) {
-            var abNames = ['','🦘 Double Jump','🚀 Jetpack','🏃 Roof Walk'];
-            var eq = SG.state.equippedAbility || 0;
-            if (eq > 0 && SG.state.started && !SG.state.gameOver) {
-                skillEl.style.display = 'block';
-                skillEl.textContent = abNames[eq];
-            } else {
-                skillEl.style.display = 'none';
-            }
-        }
-
-        // Update jetpack timer HUD
-        var jetEl = document.getElementById('jetpack-timer');
-        if (jetEl) {
-            var showJet = false;
-            if (SG.state.started && !SG.state.gameOver && SG.state.canJetpack && SG.state.equippedAbility === 2) {
-                if (SG.state.jetpackFuel > 0) {
-                    jetEl.textContent = '🛩 Fuel: ' + SG.state.jetpackFuel.toFixed(1) + 's';
-                    jetEl.style.color = 'rgba(100,200,255,0.9)';
-                    jetEl.style.borderColor = 'rgba(100,200,255,0.4)';
-                    showJet = true;
-                } else if (SG.state.jetpackCooldown > 0) {
-                    jetEl.textContent = '⏳ Cool: ' + SG.state.jetpackCooldown.toFixed(1) + 's';
-                    jetEl.style.color = 'rgba(255,150,50,0.9)';
-                    jetEl.style.borderColor = 'rgba(255,150,50,0.4)';
-                    showJet = true;
-                } else {
-                    jetEl.textContent = '🛩 Ready';
-                    jetEl.style.color = 'rgba(100,255,100,0.9)';
-                    jetEl.style.borderColor = 'rgba(100,255,100,0.4)';
-                    showJet = true;
-                }
-            }
-            jetEl.style.display = showJet ? 'block' : 'none';
         }
 
         // Update best score HUD
@@ -3445,16 +3264,10 @@
             SG.player.position.x = SG.LANE_POSITIONS[SG.state.currentLane];
         }
 
-        // Jetpack (only if equipped)
-        if (SG.state.isJumping && SG.state.canJetpack && SG.state.equippedAbility === 2 && SG.state.jetpackFuel > 0 && SG.state.jetpackCooldown <= 0) {
+        // Jetpack
+        if (SG.state.isJumping && SG.state.canJetpack && SG.state.jetpackFuel > 0 && SG.state.jetpackCooldown <= 0) {
             SG.state.jumpVelocity = 0;
-            // Cap height — hover at max instead of infinite climb
-            if (SG.state.playerHeight < SG.JETPACK_MAX_HEIGHT) {
-                SG.state.playerHeight += SG.JETPACK_LIFT * delta * 60;
-                if (SG.state.playerHeight > SG.JETPACK_MAX_HEIGHT) {
-                    SG.state.playerHeight = SG.JETPACK_MAX_HEIGHT;
-                }
-            }
+            SG.state.playerHeight += SG.JETPACK_LIFT * delta * 60;
             SG.state.jetpackFuel -= delta;
             if (SG.state.jetpackFuel <= 0) {
                 SG.state.jetpackFuel = 0;
@@ -3710,8 +3523,6 @@
 
     // Init triggered by account.js after override
 })();
-
-// ===== game/account.js =====
 // ===== SUBWAY SURFER - Account System v2 =====
 (function() {
     'use strict';
@@ -3794,6 +3605,9 @@
                 SG.state.maxEasy = data.gameData.maxEasy || 0;
                 SG.state.maxMedium = data.gameData.maxMedium || 0;
                 SG.state.maxHard = data.gameData.maxHard || 0;
+                SG.state.maxEasyAbility = data.gameData.maxEasyAbility || 0;
+                SG.state.maxMediumAbility = data.gameData.maxMediumAbility || 0;
+                SG.state.maxHardAbility = data.gameData.maxHardAbility || 0;
                 SG.state.runCount = data.gameData.runCount || 0;
                 var owned = data.gameData.ownedAbilities || [0];
                 SG.state.canDoubleJump = owned.indexOf(1) >= 0;
@@ -3855,10 +3669,13 @@
                     credits: SG.state.credits || 0,
                     equippedAbility: SG.state.equippedAbility || 0,
                     ownedAbilities: owned,
-                    maxDistance: SG.state.maxLegitDistance || SG.state.bestScore || 0,
+                    maxDistance: SG.state.bestScore || SG.state.maxLegitDistance || 0,
                     maxEasy: SG.state.maxEasy || 0,
                     maxMedium: SG.state.maxMedium || 0,
                     maxHard: SG.state.maxHard || 0,
+                    maxEasyAbility: SG.state.maxEasyAbility || 0,
+                    maxMediumAbility: SG.state.maxMediumAbility || 0,
+                    maxHardAbility: SG.state.maxHardAbility || 0,
                     runCount: (SG.state.runCount || 0),
                     highScore: SG.state.bestScore || 0,
                     totalCoins: SG.state.totalCoins || SG.state.coins || 0
@@ -3872,115 +3689,136 @@
     };
 
     SG.loadAccountData = function() {
-        return new Promise(function(resolve) {
-            if (!SG.account.loggedIn || !SG.account.token) { resolve(); return; }
-            fetch('http://' + window.location.hostname + ':3000/api/load', {
-                headers: { 'Authorization': 'Bearer ' + SG.account.token }
-            }).then(function(r) { return r.json(); }).then(function(data) {
-                if (!data.gameData) { resolve(); return; }
-                var g = data.gameData;
-                SG.state.bestScore = Math.max(SG.state.bestScore || 0, g.maxDistance || 0);
-                SG.state.credits = g.credits || 0;
-                SG.state.totalCoins = g.totalCoins || 0;
-                SG.state.equippedAbility = g.equippedAbility || 0;
-                SG.state.maxEasy = g.maxEasy || 0;
-                SG.state.maxMedium = g.maxMedium || 0;
-                SG.state.maxHard = g.maxHard || 0;
-                SG.state.runCount = g.runCount || 0;
-                var owned = g.ownedAbilities || [0];
-                SG.state.canDoubleJump = owned.indexOf(1) >= 0;
-                SG.state.canJetpack = owned.indexOf(2) >= 0;
-                SG.state.canRoofWalk = owned.indexOf(3) >= 0;
-                resolve();
-            }).catch(function(){ resolve(); });
-        });
+        if (!SG.account.loggedIn || !SG.account.token) return;
+        fetch('http://' + window.location.hostname + ':3000/api/load', {
+            headers: { 'Authorization': 'Bearer ' + SG.account.token }
+        }).then(function(r) { return r.json(); }).then(function(data) {
+            if (!data.gameData) return;
+            var g = data.gameData;
+            SG.state.bestScore = Math.max(SG.state.bestScore || 0, g.maxDistance || 0);
+            SG.state.credits = g.credits || 0;
+            SG.state.totalCoins = g.totalCoins || 0;
+            SG.state.equippedAbility = g.equippedAbility || 0;
+            SG.state.maxEasy = g.maxEasy || 0;
+            SG.state.maxMedium = g.maxMedium || 0;
+            SG.state.maxHard = g.maxHard || 0;
+            SG.state.maxEasyAbility = g.maxEasyAbility || 0;
+            SG.state.maxMediumAbility = g.maxMediumAbility || 0;
+            SG.state.maxHardAbility = g.maxHardAbility || 0;
+            SG.state.runCount = g.runCount || 0;
+            var owned = g.ownedAbilities || [0];
+            SG.state.canDoubleJump = owned.indexOf(1) >= 0;
+            SG.state.canJetpack = owned.indexOf(2) >= 0;
+            SG.state.canRoofWalk = owned.indexOf(3) >= 0;
+        }).catch(function(){});
     };
 
     SG.showProfile = function() {
-        // Show overlay IMMEDIATELY with current state (no waiting)
-        SG._renderProfile();
-        // Then refresh from server in background
-        SG.loadAccountData().then(function() {
-            // Update only if overlay is still open
-            var overlay = document.getElementById('profile-overlay');
-            if (overlay && overlay.style.display === 'flex') {
-                SG._renderProfile();
-            }
-        });
-    };
+        SG.loadAccountData();
 
-    SG._renderProfile = function() {
-        try {
         var overlay = document.getElementById('profile-overlay');
         if (!overlay) {
             overlay = document.createElement('div');
             overlay.id = 'profile-overlay';
             overlay.className = 'overlay';
+            overlay.onclick = function(e) { if (e.target === overlay) overlay.style.display = 'none'; };
             document.body.appendChild(overlay);
         }
         overlay.style.display = 'flex';
 
-        var s = SG.state || {};
+        var s = SG.state;
         SG.account.email = localStorage.getItem('subwayEmail');
         var names = {0:'None',1:'Double Jump',2:'Jetpack',3:'Roof Walk'};
-        var ability = names[s.equippedAbility != null ? s.equippedAbility : 0] || 'None';
+        var ability = names[s.equippedAbility] || 'None';
         var owned = [];
         if (s.canDoubleJump) owned.push('Double Jump');
         if (s.canJetpack) owned.push('Jetpack');
         if (s.canRoofWalk) owned.push('Roof Walk');
 
-        // Debug: log state to console
-        if (typeof console !== 'undefined') {
-            console.log('[Profile] credits=' + (s.credits != null ? s.credits : '?') +
-                ' totalCoins=' + (s.totalCoins != null ? s.totalCoins : '?') +
-                ' runCount=' + (s.runCount != null ? s.runCount : '?') +
-                ' maxEasy=' + (s.maxEasy != null ? s.maxEasy : '?') +
-                ' maxMedium=' + (s.maxMedium != null ? s.maxMedium : '?') +
-                ' maxHard=' + (s.maxHard != null ? s.maxHard : '?') +
-                ' email=' + (SG.account.email || 'none'));
-        }
-
-        var html = '<div class="menu-content" style="max-width:380px;text-align:left;overflow-y:auto;max-height:80vh;">';
+        var html = '<div class="menu-content" style="max-width:380px;text-align:left;">';
         html += '<h1 class="menu-title" style="font-size:24px;text-align:center;margin-bottom:10px;">👤 PROFILE</h1>';
         html += '<div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:15px;margin-bottom:10px;">';
-        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Email:</b> <span style="color:#8cf;">' + (SG.account.email || '-') + '</span></div>';
-        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Credits:</b> <span style="color:#FFD700;">' + (s.credits != null ? s.credits : 0) + ' cr</span></div>';
-        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Coins:</b> <span style="color:#FFD700;">' + (s.totalCoins != null ? s.totalCoins : 0) + '</span></div>';
-        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Equipped:</b> <span style="color:#0f0;">' + ability + '</span></div>';
-        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Owned:</b> <span style="color:#0f0;">' + (owned.length ? owned.join(', ') : 'None') + '</span></div>';
-        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Runs:</b> <span style="color:#fff;">' + (s.runCount != null ? s.runCount : 0) + '</span></div>';
+        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Email:</b> ' + (SG.account.email || '-') + '</div>';
+        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Credits:</b> <span style="color:#FFD700;">' + (s.credits || 0) + '</span></div>';
+        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Coins:</b> <span style="color:#FFD700;">' + (s.coins || 0) + '</span></div>';
+        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Equipped:</b> ' + ability + '</div>';
+        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Owned:</b> ' + (owned.length ? owned.join(', ') : 'None') + '</div>';
+        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Runs:</b> ' + (s.runCount || 0) + '</div>';
         html += '</div>';
 
         html += '<div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:15px;">';
-        html += '<div style="font-weight:bold;margin-bottom:8px;color:#fff;">🏆 Best Distances</div>';
-        html += '<div style="margin:3px 0;"><span style="color:#4CAF50;">■</span> Easy: <b style="color:#fff;">' + (s.maxEasy != null ? s.maxEasy : 0) + 'm</b></div>';
-        html += '<div style="margin:3px 0;"><span style="color:#FFC107;">■</span> Medium: <b style="color:#fff;">' + (s.maxMedium != null ? s.maxMedium : 0) + 'm</b></div>';
-        html += '<div style="margin:3px 0;"><span style="color:#F44336;">■</span> Hard: <b style="color:#fff;">' + (s.maxHard != null ? s.maxHard : 0) + 'm</b></div>';
+        var abNames = {0:'None',1:'Double Jump',2:'Jetpack',3:'Roof Walk'};
+        html += '<div style="font-weight:bold;margin-bottom:8px;">🏆 Best Distances</div>';
+        html += '<div style="margin:3px 0;"><span style="color:#4CAF50;">■</span> Easy: <b>' + (s.maxEasy || 0) + 'm</b> <span style="color:#888;font-size:11px;">[' + (abNames[s.maxEasyAbility] || 'None') + ']</span></div>';
+        html += '<div style="margin:3px 0;"><span style="color:#FFC107;">■</span> Medium: <b>' + (s.maxMedium || 0) + 'm</b> <span style="color:#888;font-size:11px;">[' + (abNames[s.maxMediumAbility] || 'None') + ']</span></div>';
+        html += '<div style="margin:3px 0;"><span style="color:#F44336;">■</span> Hard: <b>' + (s.maxHard || 0) + 'm</b> <span style="color:#888;font-size:11px;">[' + (abNames[s.maxHardAbility] || 'None') + ']</span></div>';
         html += '</div>';
 
-        html += '<div class="menu-btn" id="pf-close" style="margin-top:12px;text-align:center;">CLOSE</div>';
+        html += '<div class="menu-btn" onclick="document.getElementById(\'profile-overlay\').style.display=\'none\'" style="margin-top:12px;text-align:center;">CLOSE</div>';
         html += '</div>';
 
         overlay.innerHTML = html;
         document.body.appendChild(overlay);
+        var pc = document.getElementById('pf-close');
+        if (pc) pc.addEventListener('click', function() { overlay.style.display = 'none'; });
+    };
 
-        // CLOSE button (click + touchend for mobile)
-        var pfClose = document.getElementById('pf-close');
-        if (pfClose) {
-            pfClose.addEventListener('click', function(e) { e.stopPropagation(); overlay.style.display = 'none'; });
-            pfClose.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); overlay.style.display = 'none'; });
+    // ===== LEADERBOARD =====
+    SG.showLeaderboard = function() {
+        var overlay = document.getElementById('lb-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'lb-overlay';
+            overlay.className = 'overlay';
+            overlay.onclick = function(e) { if (e.target === overlay) overlay.style.display = 'none'; };
+            document.body.appendChild(overlay);
         }
+        overlay.style.display = 'flex';
+        overlay.innerHTML = '<div class="menu-content" style="max-width:420px;max-height:80vh;overflow-y:auto;">' +
+            '<h1 class="menu-title" style="font-size:24px;margin-bottom:10px;">🏆 LEADERBOARD</h1>' +
+            '<div style="color:#aaa;font-size:13px;margin-bottom:10px;">Loading...</div>' +
+            '</div>';
 
-        // Close on background click/tap
-        overlay.onclick = function(e) {
-            if (e.target === overlay) overlay.style.display = 'none';
-        };
-        overlay.addEventListener('touchend', function(e) {
-            if (e.target === overlay) overlay.style.display = 'none';
+        var url = 'http://' + (window.location.hostname || '35.212.200.85') + ':3000/api/leaderboard';
+        fetch(url)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var entries = data.leaderboard || [];
+            var abNames = {0:'None',1:'Double',2:'Jetpack',3:'Roof'};
+            var html = '<div class="menu-content" style="max-width:420px;max-height:80vh;overflow-y:auto;">';
+            html += '<h1 class="menu-title" style="font-size:24px;margin-bottom:5px;">🏆 LEADERBOARD</h1>';
+            html += '<div style="font-size:11px;color:#666;margin-bottom:10px;">Per-difficulty best distances</div>';
+            if (entries.length === 0) {
+                html += '<div style="color:#888;padding:20px;">No entries yet. Play a game first!</div>';
+            } else {
+                html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+                html += '<tr style="color:#888;border-bottom:1px solid #333;">' +
+                    '<th style="padding:4px;text-align:left;">#</th>' +
+                    '<th style="padding:4px;text-align:left;">Player</th>' +
+                    '<th style="padding:4px;color:#4CAF50;">Easy</th>' +
+                    '<th style="padding:4px;color:#FFC107;">Med</th>' +
+                    '<th style="padding:4px;color:#F44336;">Hard</th>' +
+                    '</tr>';
+                for (var i = 0; i < entries.length; i++) {
+                    var e = entries[i];
+                    var row = (i % 2 === 0) ? 'rgba(255,255,255,0.03)' : 'transparent';
+                    html += '<tr style="background:' + row + ';">' +
+                        '<td style="padding:3px 4px;color:#888;">' + (i+1) + '</td>' +
+                        '<td style="padding:3px 4px;">' + e.email + '</td>' +
+                        '<td style="padding:3px 4px;color:#4CAF50;">' + (e.maxEasy||0) + 'm <span style="color:#666;font-size:10px;">[' + (abNames[e.maxEasyAbility]||'-') + ']</span></td>' +
+                        '<td style="padding:3px 4px;color:#FFC107;">' + (e.maxMedium||0) + 'm <span style="color:#666;font-size:10px;">[' + (abNames[e.maxMediumAbility]||'-') + ']</span></td>' +
+                        '<td style="padding:3px 4px;color:#F44336;">' + (e.maxHard||0) + 'm <span style="color:#666;font-size:10px;">[' + (abNames[e.maxHardAbility]||'-') + ']</span></td>' +
+                        '</tr>';
+                }
+                html += '</table>';
+            }
+            html += '<div class="menu-btn" onclick="document.getElementById(\'lb-overlay\').style.display=\'none\'" style="margin-top:12px;">CLOSE</div>';
+            html += '</div>';
+            overlay.innerHTML = html;
+        })
+        .catch(function() {
+            overlay.innerHTML = '<div class="menu-content"><h1 class="menu-title">🏆 LEADERBOARD</h1><div style="color:#ff4444;padding:20px;">Failed to load. Server offline?</div><div class="menu-btn" onclick="document.getElementById(\'lb-overlay\').style.display=\'none\'">CLOSE</div></div>';
         });
-        } catch(err) {
-            console.error('[Profile] Render error:', err);
-        }
     };
 
     // Auto-save every 30s

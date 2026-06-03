@@ -168,6 +168,7 @@
                 '<div class="menu-btn" id="shop-btn-menu" style="margin-top:10px;font-size:14px;padding:8px 16px;">🛒 SHOP</div>' +
             '<div style="display:flex;gap:8px;justify-content:center;margin-top:6px;">' +
             '<div class="menu-btn" id="profile-btn" style="font-size:12px;padding:6px 12px;">👤 PROFILE</div>' +
+            '<div class="menu-btn" id="leaderboard-btn" style="font-size:12px;padding:6px 12px;">🏆 LEADERBOARD</div>' +
             '<div class="menu-btn" id="signout-btn" style="font-size:12px;padding:6px 12px;border-color:#ff4444;color:#ff6666;">🚪 SIGN OUT</div>' +
             '</div>' +
             '</div>';
@@ -393,6 +394,11 @@
         if (profileBtn) {
             profileBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showProfile(); });
             profileBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showProfile(); });
+        }
+        var leaderboardBtn = document.getElementById('leaderboard-btn');
+        if (leaderboardBtn) {
+            leaderboardBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showLeaderboard(); });
+            leaderboardBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showLeaderboard(); });
         }
         var signoutBtn = document.getElementById('signout-btn');
         if (signoutBtn) {

@@ -66,6 +66,9 @@
         maxEasy: 0,
         maxMedium: 0,
         maxHard: 0,
+        maxEasyAbility: 0,
+        maxMediumAbility: 0,
+        maxHardAbility: 0,
         legitRun: true,
         runCount: 0
     };

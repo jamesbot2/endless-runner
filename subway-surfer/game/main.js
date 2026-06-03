@@ -105,6 +105,11 @@
             SG.camera.lookAt(0, 0, -10);
         }
 
+        if (SG.state.homelander) {
+            SG.deactivateHomelander();
+            SG.state.homelander = false;
+        }
+
         if (SG.state.theme !== 0) {
             SG.switchTheme(0);
         }
@@ -176,6 +181,11 @@
         if (SG.pauseOverlay) SG.pauseOverlay.style.display = 'none';
         if (SG.clock) SG.clock.getDelta();
 
+        if (SG.state.homelander) {
+            SG.deactivateHomelander();
+            SG.state.homelander = false;
+        }
+
         if (SG.state.theme !== 0) {
             SG.switchTheme(0);
         }
@@ -199,11 +209,15 @@
             SG.state.bestScore = score;
             try { localStorage.setItem('subwayBest', String(score)); } catch(e) {}
         }
-        // Per-difficulty max distance
-        var diff = SG.state.difficulty;
-        var diffKey = ['maxEasy','maxMedium','maxHard'][diff] || 'maxHard';
-        if (score > (SG.state[diffKey] || 0)) {
-            SG.state[diffKey] = score;
+        // Per-difficulty max distance (NOT in homelander mode)
+        if (!SG.state.homelander) {
+            var diff = SG.state.difficulty;
+            var diffKey = ['maxEasy','maxMedium','maxHard'][diff] || 'maxHard';
+            var abilityKey = diffKey + 'Ability';
+            if (score > (SG.state[diffKey] || 0)) {
+                SG.state[diffKey] = score;
+                SG.state[abilityKey] = SG.state.equippedAbility || 0;
+            }
         }
         SG.finalScoreEl.textContent = score;
         SG.finalCoinsEl.textContent = SG.state.coins;
@@ -211,13 +225,19 @@
         var multipliers = [1, 5, 10];
         var multiplier = multipliers[SG.state.difficulty] || 1;
         var earned = SG.state.coins * multiplier;
-        SG.state.credits += earned;
-        SG.state.totalCoins += SG.state.coins;
-        try {
-            localStorage.setItem('subwayCredits', String(SG.state.credits));
-            localStorage.setItem('subwayTotalCoins', String(SG.state.totalCoins));
-        } catch(e) {}
-        SG.saveShopData();
+
+        // Homelander: don't save coins/credits or shop data
+        if (!SG.state.homelander) {
+            SG.state.credits += earned;
+            SG.state.totalCoins += SG.state.coins;
+            try {
+                localStorage.setItem('subwayCredits', String(SG.state.credits));
+                localStorage.setItem('subwayTotalCoins', String(SG.state.totalCoins));
+            } catch(e) {}
+            SG.saveShopData();
+        } else {
+            earned = 0; // Homelander: show 0 credits earned
+        }
 
         var oldCredits = document.getElementById('credits-earned');
         if (oldCredits) oldCredits.remove();
