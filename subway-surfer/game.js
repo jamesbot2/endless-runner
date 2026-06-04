@@ -19,9 +19,10 @@
     SG.ROLL_HEIGHT = 0;
     SG.COIN_RADIUS = 0.35;
     SG.GROUND_WIDTH = SG.LANE_WIDTH * SG.LANE_COUNT + 1;
-    SG.JETPACK_FUEL_MAX = 30;
-    SG.JETPACK_COOLDOWN_MAX = 15;
-    SG.JETPACK_LIFT = 0.04;
+    SG.JETPACK_FUEL_MAX = 15;
+    SG.JETPACK_COOLDOWN_MAX = 30;
+    SG.JETPACK_LIFT = 0.08;
+    SG.JETPACK_MAX_HEIGHT = 2.8;
     SG.ROOF_TOP_Y = 1.8;
 })();
 // ===== SUBWAY SURFER - Game State =====
@@ -519,12 +520,42 @@
         SG.playerRightLeg.position.set(0.15, 0.2, 0);
         SG.player.add(SG.playerRightLeg);
 
-        var pack = new THREE.Mesh(
+        // Jetpack pack (backpack)
+        SG.jetpackPack = new THREE.Group();
+        var packBox = new THREE.Mesh(
             new THREE.BoxGeometry(0.4, 0.45, 0.2),
             new THREE.MeshLambertMaterial({ color: 0xcc6622 })
         );
-        pack.position.set(0, 0.8, -0.3);
-        SG.player.add(pack);
+        packBox.position.set(0, 0, 0);
+        SG.jetpackPack.add(packBox);
+
+        // Jetpack thruster nozzle (cone pointing down)
+        var nozzleMat = new THREE.MeshLambertMaterial({ color: 0x884422 });
+        var nozzle = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.12, 6), nozzleMat);
+        nozzle.rotation.x = Math.PI;
+        nozzle.position.set(0, -0.25, 0);
+        SG.jetpackPack.add(nozzle);
+
+        // Jetpack flame (initially invisible, shown during jetpack use)
+        SG.jetpackFlame = new THREE.Mesh(
+            new THREE.ConeGeometry(0.1, 0.3, 6),
+            new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.9 })
+        );
+        SG.jetpackFlame.position.set(0, -0.35, 0);
+        SG.jetpackFlame.visible = false;
+        SG.jetpackPack.add(SG.jetpackFlame);
+
+        // Inner bright flame
+        SG.jetpackFlameInner = new THREE.Mesh(
+            new THREE.ConeGeometry(0.05, 0.18, 6),
+            new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.9 })
+        );
+        SG.jetpackFlameInner.position.set(0, -0.32, 0);
+        SG.jetpackFlameInner.visible = false;
+        SG.jetpackPack.add(SG.jetpackFlameInner);
+
+        SG.jetpackPack.position.set(0, 0.8, -0.3);
+        SG.player.add(SG.jetpackPack);
 
         SG.scene.add(SG.player);
         return SG.player;
@@ -3277,10 +3308,11 @@
                     jetEl.style.borderColor = 'rgba(255,200,50,0.5)';
                     jetEl.style.color = '#FFD700';
                 } else if (cd > 0) {
-                    jetEl.textContent = '⏳ ' + cd + 's';
+                    var cdLabel = (SG.state.isRolling && fuel <= 0) ? '⬇ PUNISH' : '⏳';
+                    jetEl.textContent = cdLabel + ' ' + cd + 's';
                     jetEl.style.display = 'block';
-                    jetEl.style.borderColor = 'rgba(100,200,255,0.2)';
-                    jetEl.style.color = 'rgba(255,255,255,0.5)';
+                    jetEl.style.borderColor = 'rgba(255,68,68,0.3)';
+                    jetEl.style.color = '#ff6666';
                 } else {
                     jetEl.style.display = 'none';
                 }
@@ -3387,17 +3419,47 @@
         }
 
         // Jetpack
+        var jetpackActive = false;
         if (SG.state.isJumping && SG.state.equippedAbility === 2 && SG.state.canJetpack && SG.state.jetpackFuel > 0 && SG.state.jetpackCooldown <= 0) {
+            jetpackActive = true;
             SG.state.jumpVelocity = 0;
-            SG.state.playerHeight += SG.JETPACK_LIFT * delta * 60;
+            // Height limit: cap at JETPACK_MAX_HEIGHT
+            if (SG.state.playerHeight < SG.JETPACK_MAX_HEIGHT) {
+                SG.state.playerHeight += SG.JETPACK_LIFT * delta * 60;
+                if (SG.state.playerHeight > SG.JETPACK_MAX_HEIGHT) {
+                    SG.state.playerHeight = SG.JETPACK_MAX_HEIGHT;
+                }
+            }
             SG.state.jetpackFuel -= delta;
             if (SG.state.jetpackFuel <= 0) {
                 SG.state.jetpackFuel = 0;
                 SG.state.jetpackCooldown = SG.JETPACK_COOLDOWN_MAX;
             }
+            // Cancel jetpack if rolling (pressing down)
+            if (SG.state.isRolling) {
+                SG.state.jetpackFuel = 0;
+                SG.state.jetpackCooldown = SG.JETPACK_COOLDOWN_MAX;
+                jetpackActive = false;
+            }
         } else if (SG.state.jetpackCooldown > 0) {
             SG.state.jetpackCooldown -= delta;
             if (SG.state.jetpackCooldown < 0) SG.state.jetpackCooldown = 0;
+        }
+
+        // Jetpack flame visibility
+        if (SG.jetpackFlame && SG.jetpackFlameInner) {
+            if (jetpackActive) {
+                SG.jetpackFlame.visible = true;
+                SG.jetpackFlameInner.visible = true;
+                // Flicker the flame
+                var flicker = 0.8 + Math.random() * 0.4;
+                SG.jetpackFlame.scale.set(flicker, flicker, flicker);
+                SG.jetpackFlame.material.opacity = 0.6 + Math.random() * 0.4;
+                SG.jetpackFlameInner.scale.set(flicker * 0.6, flicker * 0.6, flicker * 0.6);
+            } else {
+                SG.jetpackFlame.visible = false;
+                SG.jetpackFlameInner.visible = false;
+            }
         }
 
         // Jump physics
