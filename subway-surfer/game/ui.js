@@ -352,6 +352,24 @@
         speedDiv.textContent = 'SPD: 1x';
         SG.uiOverlay.appendChild(speedDiv);
 
+        // ===== SKILL INDICATOR (equipped ability name) =====
+        (function() {
+            var el = document.createElement('div');
+            el.id = 'skill-indicator';
+            el.style.cssText = 'position:absolute;top:64px;right:16px;color:rgba(255,255,255,0.8);font-size:12px;text-shadow:0 1px 8px rgba(0,0,0,0.9);background:rgba(0,0,0,0.35);padding:4px 10px;border-radius:10px;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);border:1px solid rgba(255,200,50,0.2);display:none;pointer-events:none;';
+            el.textContent = '';
+            SG.uiOverlay.appendChild(el);
+        })();
+
+        // ===== JETPACK TIMER (fuel / cooldown) =====
+        (function() {
+            var el = document.createElement('div');
+            el.id = 'jetpack-timer';
+            el.style.cssText = 'position:absolute;top:90px;right:16px;color:rgba(255,255,255,0.8);font-size:11px;text-shadow:0 1px 8px rgba(0,0,0,0.9);background:rgba(0,0,0,0.35);padding:3px 10px;border-radius:10px;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);border:1px solid rgba(100,200,255,0.2);display:none;pointer-events:none;';
+            el.textContent = '';
+            SG.uiOverlay.appendChild(el);
+        })();
+
         // ===== GAME OVER SCREEN =====
         var gameOverDiv = document.createElement('div');
         gameOverDiv.id = 'game-over-screen';
