@@ -168,6 +168,28 @@ function defaultGameData() {
     return { coins: 0, credits: 0, equippedAbility: 0, ownedAbilities: [0], maxDistance: 0, maxEasy: 0, maxMedium: 0, maxHard: 0, maxEasyAbility: 0, maxMediumAbility: 0, maxHardAbility: 0, runCount: 0, highScore: 0, totalCoins: 0 };
 }
 
+function normalizeGameData(g) {
+    if (!g || typeof g !== 'object') return defaultGameData();
+    var total = Math.max(g.totalCoins || 0, g.coins || 0);
+    var dist = Math.max(g.maxDistance || 0, g.highScore || 0, g.maxEasy || 0, g.maxMedium || 0, g.maxHard || 0);
+    return {
+        coins: g.coins || 0,
+        credits: g.credits || 0,
+        totalCoins: total,
+        equippedAbility: g.equippedAbility || 0,
+        ownedAbilities: Array.isArray(g.ownedAbilities) ? g.ownedAbilities : [0],
+        maxDistance: dist,
+        maxEasy: g.maxEasy || 0,
+        maxMedium: g.maxMedium || 0,
+        maxHard: g.maxHard || 0,
+        maxEasyAbility: g.maxEasyAbility || 0,
+        maxMediumAbility: g.maxMediumAbility || 0,
+        maxHardAbility: g.maxHardAbility || 0,
+        runCount: g.runCount || 0,
+        highScore: dist
+    };
+}
+
 function sendEmail(to, subject, body) {
     return new Promise(function(resolve) {
         const smtpUser = process.env.SMTP_USER || '';
@@ -561,26 +583,27 @@ async function handleRequest(req, res) {
         const users = getUsers();
         if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
 
-        const gd = body.gameData || {};
-        const existing = users[email].gameData || defaultGameData();
+        var gd = body.gameData || {};
+        var existing = normalizeGameData(users[email].gameData);
+        gd = normalizeGameData(gd);
         users[email].gameData = {
             coins: gd.coins ?? existing.coins,
             credits: gd.credits ?? existing.credits,
+            totalCoins: Math.max(gd.totalCoins ?? 0, gd.coins ?? 0, existing.totalCoins ?? 0),
             equippedAbility: gd.equippedAbility ?? existing.equippedAbility,
             ownedAbilities: gd.ownedAbilities ?? existing.ownedAbilities,
-            maxDistance: Math.max(gd.maxDistance ?? 0, existing.maxDistance ?? 0),
-            maxEasy: Math.max(gd.maxEasy ?? 0, existing.maxEasy ?? 0),
-            maxMedium: Math.max(gd.maxMedium ?? 0, existing.maxMedium ?? 0),
-            maxHard: Math.max(gd.maxHard ?? 0, existing.maxHard ?? 0),
-            maxEasyAbility: gd.maxEasyAbility ?? existing.maxEasyAbility ?? 0,
-            maxMediumAbility: gd.maxMediumAbility ?? existing.maxMediumAbility ?? 0,
-            maxHardAbility: gd.maxHardAbility ?? existing.maxHardAbility ?? 0,
+            maxDistance: Math.max(gd.maxDistance, existing.maxDistance),
+            maxEasy: Math.max(gd.maxEasy, existing.maxEasy),
+            maxMedium: Math.max(gd.maxMedium, existing.maxMedium),
+            maxHard: Math.max(gd.maxHard, existing.maxHard),
+            maxEasyAbility: gd.maxEasyAbility || existing.maxEasyAbility || 0,
+            maxMediumAbility: gd.maxMediumAbility || existing.maxMediumAbility || 0,
+            maxHardAbility: gd.maxHardAbility || existing.maxHardAbility || 0,
             runCount: gd.runCount ?? existing.runCount,
-            highScore: Math.max(gd.highScore ?? 0, existing.highScore ?? 0),
-            totalCoins: gd.totalCoins ?? existing.totalCoins
+            highScore: Math.max(gd.maxDistance, existing.maxDistance),
         };
         saveUsers(users);
-        sendJSON(res, 200, { message: 'Saved', gameData: users[email].gameData });
+        sendJSON(res, 200, { message: 'Saved', gameData: normalizeGameData(users[email].gameData) });
         return;
     }
 
@@ -590,23 +613,29 @@ async function handleRequest(req, res) {
         if (!email) { sendJSON(res, 401, { error: 'Not authenticated' }); return; }
         const users = getUsers();
         if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
-        sendJSON(res, 200, { gameData: users[email].gameData || defaultGameData() });
+        sendJSON(res, 200, { gameData: normalizeGameData(users[email].gameData) });
         return;
     }
 
     // ---- LEADERBOARD ----
     if (pathname === '/api/leaderboard' && method === 'GET') {
         const users = getUsers();
-        const lb = Object.values(users).filter(u => u.verified).map(u => ({
-            name: u.username || u.email.split('@')[0],
-            maxDistance: (u.gameData && u.gameData.maxDistance) || 0,
-            maxEasy: (u.gameData && u.gameData.maxEasy) || 0,
-            maxMedium: (u.gameData && u.gameData.maxMedium) || 0,
-            maxHard: (u.gameData && u.gameData.maxHard) || 0,
-            maxEasyAbility: (u.gameData && u.gameData.maxEasyAbility) || 0,
-            maxMediumAbility: (u.gameData && u.gameData.maxMediumAbility) || 0,
-            maxHardAbility: (u.gameData && u.gameData.maxHardAbility) || 0
-        })).sort((a, b) => b.maxDistance - a.maxDistance).slice(0, 100);
+        const lb = Object.values(users).filter(u => u.verified).map(function(u) {
+            var g = normalizeGameData(u.gameData);
+            return {
+                name: u.username || u.email.split('@')[0],
+                maxDistance: g.maxDistance,
+                maxEasy: g.maxEasy,
+                maxMedium: g.maxMedium,
+                maxHard: g.maxHard,
+                maxEasyAbility: g.maxEasyAbility,
+                maxMediumAbility: g.maxMediumAbility,
+                maxHardAbility: g.maxHardAbility,
+                credits: g.credits,
+                totalCoins: g.totalCoins,
+                runCount: g.runCount
+            };
+        }).sort(function(a, b) { return b.maxDistance - a.maxDistance; }).slice(0, 100);
         sendJSON(res, 200, { leaderboard: lb });
         return;
     }
