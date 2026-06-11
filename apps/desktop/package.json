@@ -13,7 +13,7 @@
     "build:electron": "tsc -p electron/tsconfig.json",
     "build": "npm run build:renderer && npm run build:electron",
     "prepack": "npm run build",
-    "pack": "electron-builder build --win --dir",
+    "pack": "electron-builder build --win --dir --config.win.signAndEditExecutable=false",
     "predist": "npm run build",
     "dist": "electron-builder build --win",
     "start": "electron .",

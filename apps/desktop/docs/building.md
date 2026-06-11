@@ -55,6 +55,12 @@ Generates `apps/desktop/release/win-unpacked/Subway Surfer.exe` — a
 **portable, no-installer** directory. No symlink privileges required.
 Run the `.exe` directly from that folder.
 
+> `pack` passes `--config.win.signAndEditExecutable=false`, which skips
+> `winCodeSign` entirely — no symlink issue, no code signing, no icon/ resource
+> editing. Suitable for local testing and CI.
+> 
+> For production releases, use `desktop:dist` and handle signing separately.
+
 ---
 
 ## 4. Distributable Installer (NSIS)
@@ -66,10 +72,10 @@ npm run desktop:dist
 Generates `apps/desktop/release/Subway Surfer Setup x.x.x.exe` — a
 Windows NSIS installer.
 
-### ⚠️ Symlink privilege note
+### ⚠️ Symlink / signing privilege note
 
-`electron-builder` calls `winCodeSign` during the NSIS step, which needs
-**Create Symbolic Links** permission. On Windows you may see:
+`electron-builder` calls `winCodeSign` during the NSIS step (`desktop:dist`),
+which needs **Create Symbolic Links** permission. On Windows you may see:
 
 ```
 Cannot create symbolic link，客户端没有所需的特权
@@ -85,17 +91,21 @@ Cannot create symbolic link，客户端没有所需的特权
    ```powershell
    npm run desktop:dist
    ```
-   An elevated shell has symlink rights by default.
 
-3. **Use the `--dir` flag instead** (no installer, no symlink needed)
-   ```bash
-   npm run desktop:pack
-   ```
-   The `release/win-unpacked/` directory works identically — just lacks
-   Start Menu entries and uninstaller.
+3. **Use `desktop:pack` instead** — skips `winCodeSign` entirely
+   (`--config.win.signAndEditExecutable=false`), so no symlink needed.
+   Generates `release/win-unpacked/` — fully functional, just no installer.
 
-If you skip the installer, the `win-unpacked` version is fully functional:
-copy the folder to another machine and run the `.exe` directly.
+### When to use each
+
+| Command | Use case | Signing | Symlink needed |
+|---|---|---|---|
+| `desktop:pack` | Local testing, CI, quick builds | ❌ Skipped | ❌ No |
+| `desktop:dist` | Production installer, public release | ✅ Can sign | ✅ Yes |
+
+> For a release build, run `desktop:pack` on a dev machine for testing,
+> then `desktop:dist` on a CI runner or signed build environment that has
+> both symlink permission and a code signing certificate.
 
 ---
 
