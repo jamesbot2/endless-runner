@@ -20,6 +20,45 @@
 
 ---
 
+## 🖥️ 桌面版 / Desktop Edition
+
+Subway Surfer 可以使用 Electron 本地运行，支持 Windows / macOS / Linux。
+
+### 前置条件
+
+```bash
+cd apps/desktop && npm install
+```
+
+### 开发运行
+
+```bash
+# 从项目根目录
+npm run desktop:dev
+```
+
+Vite 热重载 + Electron 窗口，API 默认连接 `http://localhost:3000`（本地服务）
+或 `http://35.212.200.85:3000`（设置 `SUBWAY_API_BASE_URL` 环境变量）。
+
+### 构建 + 打包
+
+| 命令 | 用途 | 产物 |
+|---|---|---|
+| `npm run desktop:build` | 仅编译（Vite + tsc） | `apps/desktop/dist/` |
+| `npm run desktop:pack` | 免安装便携版（跳过签名） | `release/win-unpacked/` |
+| `npm run desktop:dist` | NSIS 安装包 | `release/*Setup*.exe` |
+
+> ⚠️ `desktop:dist` 在 Windows 上需要 symlink 权限。
+> 如遇 `Cannot create symbolic link`，请启用**开发者模式**或以管理员身份运行。
+> `desktop:pack` 使用 `--config.win.signAndEditExecutable=false` 跳过签名，无需额外权限。
+
+### 详细文档
+
+- [`apps/desktop/docs/building.md`](apps/desktop/docs/building.md) — 构建与打包
+- [`apps/desktop/docs/headless-testing.md`](apps/desktop/docs/headless-testing.md) — GCP/Xvfb 自动化测试
+
+---
+
 ## 📁 项目结构
 
 ```
