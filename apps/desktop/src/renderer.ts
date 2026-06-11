@@ -158,21 +158,10 @@ if (window.desktopAPI) {
         localStorage.setItem('subwayEmail', data.email)
 
         if (data.gameData) {
-          const gd = data.gameData
-          const st = s3.state
-          st.bestScore = Math.max(st.bestScore, gd.maxDistance || 0)
-          st.credits = gd.credits || 0
-          st.totalCoins = gd.totalCoins || 0
-          st.equippedAbility = gd.equippedAbility || 0
-          st.maxEasy = gd.maxEasy || 0
-          st.maxMedium = gd.maxMedium || 0
-          st.maxHard = gd.maxHard || 0
-          st.maxEasyAbility = gd.maxEasyAbility || 0
-          st.maxMediumAbility = gd.maxMediumAbility || 0
-          st.maxHardAbility = gd.maxHardAbility || 0
-          st.runCount = gd.runCount || 0
-          const owned = gd.ownedAbilities || [0]
-          st.canDoubleJump = owned.indexOf(1) >= 0
+          // Use the game's unified applyGameData (since Phase 7 fix)
+          if (typeof s3.applyGameData === 'function') {
+            s3.applyGameData(data.gameData)
+          }
           st.canJetpack = owned.indexOf(2) >= 0
           st.canRoofWalk = owned.indexOf(3) >= 0
         }

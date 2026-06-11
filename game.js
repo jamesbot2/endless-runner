@@ -3870,6 +3870,30 @@
         if (overlay) overlay.style.display = 'none';
     };
 
+    // ── Unified game data applier ────────────────────────
+    SG.applyGameData = function(g) {
+        if (!g) return;
+        SG.state.bestScore = Math.max(SG.state.bestScore || 0, g.maxDistance || 0, g.highScore || 0);
+        SG.state.credits = g.credits || 0;
+        SG.state.totalCoins = Math.max(g.totalCoins || 0, g.coins || 0);
+        SG.state.equippedAbility = g.equippedAbility || 0;
+        SG.state.maxEasy = g.maxEasy || 0;
+        SG.state.maxMedium = g.maxMedium || 0;
+        SG.state.maxHard = g.maxHard || 0;
+        SG.state.maxEasyAbility = g.maxEasyAbility || 0;
+        SG.state.maxMediumAbility = g.maxMediumAbility || 0;
+        SG.state.maxHardAbility = g.maxHardAbility || 0;
+        SG.state.runCount = g.runCount || 0;
+        var owned = Array.isArray(g.ownedAbilities) ? g.ownedAbilities : [0];
+        SG.state.canDoubleJump = owned.indexOf(1) >= 0;
+        SG.state.canJetpack = owned.indexOf(2) >= 0;
+        SG.state.canRoofWalk = owned.indexOf(3) >= 0;
+        localStorage.setItem('subwayCredits', String(SG.state.credits));
+        localStorage.setItem('subwayTotalCoins', String(SG.state.totalCoins));
+        localStorage.setItem('subwayBest', String(SG.state.bestScore || 0));
+        if (SG.updateMenuCredits) SG.updateMenuCredits();
+    };
+
     SG.doLogin = function() {
         var email = document.getElementById('login-email').value.trim();
         var pass = document.getElementById('login-pass').value;
@@ -3892,21 +3916,7 @@
 
             // Sync game data from server
             if (data.gameData) {
-                SG.state.bestScore = Math.max(SG.state.bestScore, data.gameData.maxDistance || 0);
-                SG.state.credits = data.gameData.credits || 0;
-                SG.state.totalCoins = data.gameData.totalCoins || 0;
-                SG.state.equippedAbility = data.gameData.equippedAbility || 0;
-                SG.state.maxEasy = data.gameData.maxEasy || 0;
-                SG.state.maxMedium = data.gameData.maxMedium || 0;
-                SG.state.maxHard = data.gameData.maxHard || 0;
-                SG.state.maxEasyAbility = data.gameData.maxEasyAbility || 0;
-                SG.state.maxMediumAbility = data.gameData.maxMediumAbility || 0;
-                SG.state.maxHardAbility = data.gameData.maxHardAbility || 0;
-                SG.state.runCount = data.gameData.runCount || 0;
-                var owned = data.gameData.ownedAbilities || [0];
-                SG.state.canDoubleJump = owned.indexOf(1) >= 0;
-                SG.state.canJetpack = owned.indexOf(2) >= 0;
-                SG.state.canRoofWalk = owned.indexOf(3) >= 0;
+                SG.applyGameData(data.gameData);
             }
 
             // Store username
@@ -3977,7 +3987,7 @@
                     credits: SG.state.credits || 0,
                     equippedAbility: SG.state.equippedAbility || 0,
                     ownedAbilities: owned,
-                    maxDistance: SG.state.bestScore || SG.state.maxLegitDistance || 0,
+                    maxDistance: Math.max(SG.state.bestScore || 0, SG.state.maxLegitDistance || 0, SG.state.maxEasy || 0, SG.state.maxMedium || 0, SG.state.maxHard || 0),
                     maxEasy: SG.state.maxEasy || 0,
                     maxMedium: SG.state.maxMedium || 0,
                     maxHard: SG.state.maxHard || 0,
@@ -4021,24 +4031,7 @@
             return r.json();
         }).then(function(data) {
             if (!data || !data.gameData) { if (callback) callback(); return; }
-            var g = data.gameData;
-            SG.state.bestScore = Math.max(SG.state.bestScore || 0, g.maxDistance || 0);
-            SG.state.credits = g.credits || 0;
-            SG.state.totalCoins = g.totalCoins || 0;
-            SG.state.equippedAbility = g.equippedAbility || 0;
-            SG.state.maxEasy = g.maxEasy || 0;
-            SG.state.maxMedium = g.maxMedium || 0;
-            SG.state.maxHard = g.maxHard || 0;
-            SG.state.maxEasyAbility = g.maxEasyAbility || 0;
-            SG.state.maxMediumAbility = g.maxMediumAbility || 0;
-            SG.state.maxHardAbility = g.maxHardAbility || 0;
-            SG.state.runCount = g.runCount || 0;
-            var owned = g.ownedAbilities || [0];
-            SG.state.canDoubleJump = owned.indexOf(1) >= 0;
-            SG.state.canJetpack = owned.indexOf(2) >= 0;
-            SG.state.canRoofWalk = owned.indexOf(3) >= 0;
-            // Update menu credits after loading
-            if (SG.updateMenuCredits) SG.updateMenuCredits();
+            SG.applyGameData(data.gameData);
             if (callback) callback();
         }).catch(function(){ if (callback) callback(); });
     };
