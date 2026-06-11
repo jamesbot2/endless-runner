@@ -5,13 +5,14 @@
   "private": true,
   "main": "dist/electron/main.js",
   "scripts": {
-    "dev": "npm run build:electron && concurrently -k -n vite,electron \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron . --dev\"",
-    "dev:headless": "npm run build:electron && concurrently -k -n vite,electron \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development ELECTRON_HEADLESS_CI=1 electron . --dev --no-sandbox\"",
+    "dev": "npm run build:three && npm run build:electron && concurrently -k -n vite,electron \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron . --dev\"",
+    "dev:headless": "npm run build:three && npm run build:electron && concurrently -k -n vite,electron \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development ELECTRON_HEADLESS_CI=1 electron . --dev --no-sandbox\"",
     "test:smoke": "electron tests/smoke.js",
     "test:smoke:headless": "ELECTRON_HEADLESS_CI=1 xvfb-run -a electron tests/smoke.js",
+    "build:three": "vite build --config vite.three.config.ts",
     "build:renderer": "vite build",
     "build:electron": "tsc -p electron/tsconfig.json",
-    "build": "npm run build:renderer && npm run build:electron",
+    "build": "npm run build:three && npm run build:renderer && npm run build:electron",
     "prepack": "npm run build",
     "pack": "electron-builder build --win --dir --config.win.signAndEditExecutable=false",
     "predist": "npm run build",
@@ -20,7 +21,8 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
-    "@types/node": "^25.9.3"
+    "@types/node": "^25.9.3",
+    "three": "^0.128.0"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

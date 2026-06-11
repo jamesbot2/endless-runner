@@ -106,6 +106,7 @@ app.whenReady().then(async () => {
   check('2. Body exists', !!state.bodyExists)
   check('3. window.__SG exists', !!state.sgExists, state.sgExists ? `${state.sgKeys} keys` : undefined)
   check('4. window.THREE exists', !!state.threeExists, state.threeRevision ? `r${state.threeRevision}` : undefined)
+  check('4b. THREE.REVISION === "128"', state.threeRevision === '128', state.threeRevision ? `got ${state.threeRevision}` : 'undefined')
   check('5a. desktopAPI (preload bridge)', !!state.desktopAPI)
   check('5b. __SUBWAY_CONFIG__', !!state.subwayConfig)
   check('6. F11 handler wired (desktopAPI → toggleFullscreen)', !!state.f11HandlerWired)
