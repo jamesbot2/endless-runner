@@ -3874,7 +3874,9 @@
     // ── Unified game data applier ────────────────────────
     SG.applyGameData = function(g) {
         if (!g) return;
-        SG.state.bestScore = Math.max(SG.state.bestScore || 0, g.maxDistance || 0, g.highScore || 0);
+        var best = Math.max(g.maxDistance || 0, g.highScore || 0, g.maxEasy || 0, g.maxMedium || 0, g.maxHard || 0);
+        SG.state.bestScore = Math.max(SG.state.bestScore || 0, best);
+        SG.state.maxLegitDistance = Math.max(SG.state.maxLegitDistance || 0, best);
         SG.state.credits = g.credits || 0;
         SG.state.totalCoins = Math.max(g.totalCoins || 0, g.coins || 0);
         SG.state.equippedAbility = g.equippedAbility || 0;

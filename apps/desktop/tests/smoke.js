@@ -145,6 +145,7 @@ app.whenReady().then(async () => {
       r.authRegTab = document.getElementById('dc-tab-reg') !== null
       r.authOfflineBtn = document.getElementById('dc-offline-btn') !== null
       r.__desktopAuth = window.__SG ? typeof window.__SG.__desktopAuth !== 'undefined' : false
+      r.applyGameData = window.__SG ? typeof window.__SG.applyGameData === 'function' : false
       return r
     })()`)
   } catch (err) {
@@ -176,6 +177,7 @@ app.whenReady().then(async () => {
   check("11. Register tab exists", !!state.authRegTab)
   check("12. Offline play button exists", !!state.authOfflineBtn)
   check("13. SG.__desktopAuth module loaded", !!state.__desktopAuth)
+  check("14. SG.applyGameData is function", !!state.applyGameData)
   // ── IPC read/write test ────────────────────────────
   console.log('')
   console.log('  ── IPC persistence checks ──')

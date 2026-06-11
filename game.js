@@ -3873,7 +3873,9 @@
     // ── Unified game data applier ────────────────────────
     SG.applyGameData = function(g) {
         if (!g) return;
-        SG.state.bestScore = Math.max(SG.state.bestScore || 0, g.maxDistance || 0, g.highScore || 0);
+        var best = Math.max(g.maxDistance || 0, g.highScore || 0, g.maxEasy || 0, g.maxMedium || 0, g.maxHard || 0);
+        SG.state.bestScore = Math.max(SG.state.bestScore || 0, best);
+        SG.state.maxLegitDistance = Math.max(SG.state.maxLegitDistance || 0, best);
         SG.state.credits = g.credits || 0;
         SG.state.totalCoins = Math.max(g.totalCoins || 0, g.coins || 0);
         SG.state.equippedAbility = g.equippedAbility || 0;
@@ -4013,7 +4015,7 @@
 
     SG.loadAccountData = function(callback) {
         if (!SG.account.loggedIn || !SG.account.token) { if (callback) callback(); return; }
-        var url = 'http://' + (window.location.hostname || '35.212.200.85') + ':3000/api/load';
+        var url = API + '/api/load';
         fetch(url, {
             headers: { 'Authorization': 'Bearer ' + SG.account.token }
         }).then(function(r) {
@@ -4115,7 +4117,7 @@
             '<div style="color:#aaa;font-size:13px;margin-bottom:10px;">Loading...</div>' +
             '</div>';
 
-        var url = 'http://' + (window.location.hostname || '35.212.200.85') + ':3000/api/leaderboard';
+        var url = API + '/api/leaderboard';
         fetch(url)
         .then(function(r) { return r.json(); })
         .then(function(data) {

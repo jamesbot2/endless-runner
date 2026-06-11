@@ -157,13 +157,8 @@ if (window.desktopAPI) {
         localStorage.setItem('subwayToken', data.token)
         localStorage.setItem('subwayEmail', data.email)
 
-        if (data.gameData) {
-          // Use the game's unified applyGameData (since Phase 7 fix)
-          if (typeof s3.applyGameData === 'function') {
-            s3.applyGameData(data.gameData)
-          }
-          st.canJetpack = owned.indexOf(2) >= 0
-          st.canRoofWalk = owned.indexOf(3) >= 0
+        if (data.gameData && typeof s3.applyGameData === 'function') {
+          s3.applyGameData(data.gameData)
         }
 
         s3.account.username = data.username || data.email.split('@')[0]
