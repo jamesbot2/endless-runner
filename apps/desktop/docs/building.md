@@ -55,11 +55,42 @@ Generates `apps/desktop/release/win-unpacked/Subway Surfer.exe` — a
 **portable, no-installer** directory. No symlink privileges required.
 Run the `.exe` directly from that folder.
 
+The `win-unpacked` directory contains the full app and can be copied to
+another machine — no installation needed.
+
 > `pack` passes `--config.win.signAndEditExecutable=false`, which skips
 > `winCodeSign` entirely — no symlink issue, no code signing, no icon/ resource
 > editing. Suitable for local testing and CI.
 > 
 > For production releases, use `desktop:dist` and handle signing separately.
+
+### Running the packed app
+
+```
+release/win-unpacked/Subway Surfer.exe
+```
+
+### Configuring the API server
+
+Set the `SUBWAY_API_BASE_URL` environment variable before launching to point
+to a custom account server:
+
+```powershell
+# PowerShell
+$env:SUBWAY_API_BASE_URL="http://35.212.200.85:3000"
+.\release\win-unpacked\Subway Surfer.exe
+```
+
+```cmd
+REM Command Prompt
+set SUBWAY_API_BASE_URL=http://35.212.200.85:3000
+"release\win-unpacked\Subway Surfer.exe"
+```
+
+Default: `http://localhost:3000`.
+
+The API base URL is shown in the app's bottom status bar along with the
+connection status (online / offline).
 
 ---
 
@@ -108,6 +139,40 @@ Cannot create symbolic link，客户端没有所需的特权
 > both symlink permission and a code signing certificate.
 
 ---
+
+## App icon
+
+Source icons are in `apps/desktop/build/`:
+
+| File | Usage |
+|---|---|
+| `build/icon.ico` | Windows `.exe` and installer |
+| `build/icon.png` | Linux / macOS (fallback) |
+
+Electron-builder reads these from the `build/` directory automatically.
+`win` config also references `icon.ico` explicitly.
+
+## Clearing local data
+
+Settings and game saves are stored in the OS user data directory:
+
+```
+Windows: %APPDATA%/subway-surfer-desktop/
+macOS:   ~/Library/Application Support/subway-surfer-desktop/
+Linux:   ~/.config/subway-surfer-desktop/
+```
+
+To reset everything:
+
+```
+# Delete both files:
+rm settings.json save.json
+# Or remove the whole directory:
+rm -rf %APPDATA%/subway-surfer-desktop/
+```
+
+Settings and saves are independent from the cloud. Deleting them doesn't
+affect your server-side account data.
 
 ## Files not committed
 

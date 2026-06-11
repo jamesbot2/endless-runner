@@ -58,6 +58,12 @@ if (window.desktopAPI) {
       console.warn('[Subway Surfer] Server unreachable — offline mode')
       document.title = `Subway Surfer [offline]`
     }
+
+    // Update status bar
+    const statusEl = document.getElementById('electron-status-bar')
+    if (statusEl) {
+      updateStatusBar(statusEl, s2 ? s2.serverOnline : false, apiUrl)
+    }
   })()
 
   // ── Storage Adapter Integration ─────────────────────────
@@ -103,6 +109,9 @@ if (window.desktopAPI) {
     // Also wrap game over — auto-save is already inside game's gameOver,
     // which calls accountSave. The wrapper above handles the local side.
     console.log('[Subway Surfer] Storage adapter wired to SG.accountSave')
+
+    // ── Create status bar ────────────────────────────────
+    createStatusBar(apiUrl)
 
     // ── Restore local save on boot (if no cloud token) ──────
     if (!s3.account?.loggedIn) {
@@ -166,6 +175,57 @@ if (window.desktopAPI) {
 } else {
   console.log('[Subway Surfer] Running in browser')
   console.log('[Subway Surfer] API_BASE_URL (Vite build):', API_BASE_URL)
+}
+
+// ── Status Bar ──────────────────────────────────────────
+
+function createStatusBar(apiUrl: string): void {
+  const bar = document.createElement('div')
+  bar.id = 'electron-status-bar'
+  bar.style.cssText = [
+    'position:fixed',
+    'bottom:0',
+    'left:0',
+    'right:0',
+    'z-index:9999',
+    'display:flex',
+    'align-items:center',
+    'justify-content:center',
+    'gap:16px',
+    'padding:3px 12px',
+    'font-size:10px',
+    'font-family:monospace',
+    'color:rgba(255,255,255,0.5)',
+    'background:rgba(0,0,0,0.6)',
+    'pointer-events:none',
+    'user-select:none',
+  ].join(';')
+
+  // API status
+  bar.innerHTML = [
+    '<span id="es-status-icon">⏳</span>',
+    '<span id="es-status-text">Checking server…</span>',
+    '<span id="es-url" style="color:rgba(255,255,255,0.35)">' + apiUrl + '</span>',
+    '<span id="es-save-status" style="color:rgba(255,255,255,0.35)">local save ✓</span>',
+  ].join('')
+
+  document.body.appendChild(bar)
+}
+
+function updateStatusBar(el: HTMLElement, online: boolean | undefined, _apiUrl: string): void {
+  const icon = el.querySelector('#es-status-icon')
+  const text = el.querySelector('#es-status-text')
+  if (icon && text) {
+    if (online) {
+      icon.textContent = '●'
+      icon.setAttribute('style', 'color:#4CAF50')
+      text.textContent = 'API online'
+    } else {
+      icon.textContent = '○'
+      icon.setAttribute('style', 'color:#FF9800')
+      text.textContent = 'offline — local save only'
+    }
+  }
 }
 
 // ── Desktop Key Bindings ─────────────────────────────────
