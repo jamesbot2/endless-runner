@@ -87,7 +87,7 @@ set SUBWAY_API_BASE_URL=http://35.212.200.85:3000
 "release\win-unpacked\Subway Surfer.exe"
 ```
 
-Default: `http://localhost:3000`.
+Default: `http://35.212.200.85:3000` (packaged release) or `http://localhost:3000` (development).
 
 The API base URL is shown in the app's bottom status bar along with the
 connection status (online / offline).
@@ -174,7 +174,7 @@ env:
   SUBWAY_API_BASE_URL: http://35.212.200.85:3000
 ```
 
-Default: `http://localhost:3000`.
+Default: `http://35.212.200.85:3000` (packaged release) or `http://localhost:3000` (development).
 
 ### Signing
 

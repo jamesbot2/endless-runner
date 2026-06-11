@@ -139,6 +139,12 @@ app.whenReady().then(async () => {
       try { r.requireLeak = typeof require !== 'undefined' } catch(e) { r.requireLeak = false }
       try { r.fsLeak = eval('typeof fs !== \"undefined\"') } catch(e) { r.fsLeak = false }
 
+      // 9-12. Desktop auth UI
+      r.authOverlay = document.getElementById('dc-auth-overlay') !== null
+      r.authLoginBtn = document.getElementById('dc-login-btn') !== null
+      r.authRegTab = document.getElementById('dc-tab-reg') !== null
+      r.authOfflineBtn = document.getElementById('dc-offline-btn') !== null
+      r.__desktopAuth = window.__SG ? typeof window.__SG.__desktopAuth !== 'undefined' : false
       return r
     })()`)
   } catch (err) {
@@ -162,6 +168,14 @@ app.whenReady().then(async () => {
   check('7. No require() leak', !state.requireLeak)
   check('8. No fs leak', !state.fsLeak)
 
+  // ── Auth UI checks ──
+  console.log("")
+  console.log("  ── Auth UI checks ──")
+  check("9. Auth overlay element exists", !!state.authOverlay)
+  check("10. Login button exists", !!state.authLoginBtn)
+  check("11. Register tab exists", !!state.authRegTab)
+  check("12. Offline play button exists", !!state.authOfflineBtn)
+  check("13. SG.__desktopAuth module loaded", !!state.__desktopAuth)
   // ── IPC read/write test ────────────────────────────
   console.log('')
   console.log('  ── IPC persistence checks ──')
@@ -205,6 +219,11 @@ app.whenReady().then(async () => {
   if (envUrl) {
     check('4d. __SUBWAY_CONFIG__.API_BASE_URL matches env', state.apiBaseUrl === envUrl, state.apiBaseUrl)
     check('5c. SG.apiBaseUrl matches env', state.sgApiBaseUrl === envUrl, state.sgApiBaseUrl)
+  } else {
+    // No env var → should use production default
+    const prodUrl = 'http://35.212.200.85:3000'
+    check('4d. API_BASE_URL defaults to production', state.apiBaseUrl === prodUrl, state.apiBaseUrl || 'undefined')
+    check('5c. SG.apiBaseUrl defaults to production', state.sgApiBaseUrl === prodUrl, state.sgApiBaseUrl || 'undefined')
   }
 
   if (process.env.ELECTRON_HEADLESS_CI === '1') {
