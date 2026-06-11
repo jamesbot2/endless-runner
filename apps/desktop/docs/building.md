@@ -166,15 +166,15 @@ Every push to `main` triggers a workflow at `.github/workflows/desktop-build.yml
 
 ### Configure the API server
 
-Set `SUBWAY_API_BASE_URL` in the workflow's environment or via manual dispatch
-input:
+The workflow sets `SUBWAY_API_BASE_URL: http://35.212.200.85:3000` by default
+(configurable via manual dispatch input).
+
+The built app connects to that server automatically. To override:
 
 ```yaml
 env:
-  SUBWAY_API_BASE_URL: http://35.212.200.85:3000
+  SUBWAY_API_BASE_URL: http://your-custom-server:3000
 ```
-
-Default: `http://localhost:3000`.
 
 ### Signing
 
@@ -209,14 +209,22 @@ The workflow will:
 
 ### Configure the API server
 
-Set `SUBWAY_API_BASE_URL` before launching:
+The Release build connects to `http://35.212.200.85:3000` by default.
+Most users don't need to change this.
+
+To use a custom server, set `SUBWAY_API_BASE_URL` before launching:
 
 ```powershell
-$env:SUBWAY_API_BASE_URL="http://35.212.200.85:3000"
+$env:SUBWAY_API_BASE_URL="http://your-custom-server:3000"
 .\Subway Surfer.exe
 ```
 
-Default: `http://localhost:3000`.
+### Development vs Release defaults
+
+| Context | Default API |
+|---|---|
+| `npm run dev` (localhost) | `http://localhost:3000` |
+| `npm run pack` / CI / Release | `http://35.212.200.85:3000` |
 
 ### Notes
 

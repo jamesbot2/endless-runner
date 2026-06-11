@@ -86,10 +86,12 @@ function writeJSON(filePath: string, data: unknown): void {
 function createWindow(): void {
   // ── API base URL ───────────────────────────────────
   // Dev: localhost:3000 | Prod: env var or production server
+  // Priority: SUBWAY_API_BASE_URL env → dev default → production server
   // Dev default: http://localhost:3000
-  // Prod default: SUBWAY_API_BASE_URL env var, or localhost:3000
-  // Set SUBWAY_API_BASE_URL when packaging or deploying to point to your server.
-  const apiBaseUrl = process.env.SUBWAY_API_BASE_URL || 'http://localhost:3000'
+  // Production (packaged app, CI, release) default: http://35.212.200.85:3000
+  // Override by setting SUBWAY_API_BASE_URL at build/launch time.
+  const apiBaseUrl = process.env.SUBWAY_API_BASE_URL
+    || (isDev ? 'http://localhost:3000' : 'http://35.212.200.85:3000')
 
   mainWindow = new BrowserWindow({
     width: 1280,
