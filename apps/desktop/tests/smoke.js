@@ -56,6 +56,12 @@ app.whenReady().then(async () => {
   console.log('═══════════════════════════════════════════')
   console.log('')
 
+  // Pass SUBWAY_API_BASE_URL to preload via additionalArguments
+  const addArgs = []
+  if (process.env.SUBWAY_API_BASE_URL) {
+    addArgs.push('--api-base-url=' + process.env.SUBWAY_API_BASE_URL)
+  }
+
   const win = new BrowserWindow({
     width: 960,
     height: 540,
@@ -65,6 +71,7 @@ app.whenReady().then(async () => {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      additionalArguments: addArgs,
     },
   })
 
@@ -193,8 +200,12 @@ app.whenReady().then(async () => {
   // ── Environment variable check ─────────────────────
   console.log('')
   console.log('  ── Environment config check ──')
-  const envUrl = process.env.SUBWAY_API_BASE_URL || '(not set)'
-  check('SUBWAY_API_BASE_URL env (info)', true, envUrl)
+  const envUrl = process.env.SUBWAY_API_BASE_URL || ''
+  check('SUBWAY_API_BASE_URL env (info)', true, envUrl || '(not set)')
+  if (envUrl) {
+    check('4d. __SUBWAY_CONFIG__.API_BASE_URL matches env', state.apiBaseUrl === envUrl, state.apiBaseUrl)
+    check('5c. SG.apiBaseUrl matches env', state.sgApiBaseUrl === envUrl, state.sgApiBaseUrl)
+  }
 
   if (process.env.ELECTRON_HEADLESS_CI === '1') {
     console.log('')
