@@ -4,15 +4,34 @@
 // Usage:
 //   ELECTRON_HEADLESS_CI=1 xvfb-run -a node tests/smoke.js
 //
-// Or via npm:
-//   ELECTRON_HEADLESS_CI=1 xvfb-run -a npm run test:smoke
+// Or:
+//   SUBWAY_API_BASE_URL=http://test.example.com:3000 npm run test:smoke
 //
 // Exits 0 on pass, 1 on fail.
 
-const { app, BrowserWindow } = require('electron')
+const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path')
+const fs = require('fs')
 
 const DESKTOP = path.resolve(__dirname, '..')
+
+// ── Temp data dir for IPC handler tests ──────────────────
+const TMPDIR = path.join(app.getPath('temp'), 'subway-surfer-smoke-' + Date.now())
+const SETTINGS_FILE = path.join(TMPDIR, 'settings.json')
+const SAVE_FILE = path.join(TMPDIR, 'save.json')
+
+function readJSON(fp) {
+  try {
+    if (!fs.existsSync(fp)) return null
+    return JSON.parse(fs.readFileSync(fp, 'utf-8'))
+  } catch { return null }
+}
+function writeJSON(fp, data) {
+  try {
+    if (!fs.existsSync(path.dirname(fp))) fs.mkdirSync(path.dirname(fp), { recursive: true })
+    fs.writeFileSync(fp, JSON.stringify(data, null, 2), 'utf-8')
+  } catch (e) { console.error('writeJSON error:', e.message) }
+}
 
 // ── Flags for headless CI ────────────────────────────────
 if (process.env.ELECTRON_HEADLESS_CI === '1') {
@@ -49,20 +68,33 @@ app.whenReady().then(async () => {
     },
   })
 
-  // ── Collect main-process errors ─────────────────────
-  let mainProcessErrors = []
+  // ── Register IPC handlers (simulate main.ts) ────────
+  ipcMain.handle('settings:get', () => {
+    const data = readJSON(SETTINGS_FILE)
+    return (typeof data === 'object' && data !== null) ? data : {}
+  })
+  ipcMain.handle('settings:set', (_e, settings) => {
+    writeJSON(SETTINGS_FILE, settings)
+  })
+  ipcMain.handle('save:getLocal', () => {
+    const data = readJSON(SAVE_FILE)
+    return (typeof data === 'object' && data !== null) ? data : null
+  })
+  ipcMain.handle('save:setLocal', (_e, save) => {
+    writeJSON(SAVE_FILE, save)
+  })
 
   // ── Load & wait ─────────────────────────────────────
   try {
     await win.loadFile(path.join(DESKTOP, 'dist/renderer/index.html'))
   } catch (err) {
     check('loadFile', false, err.message)
-    printSummary()
+    await cleanup()
     app.exit(1)
     return
   }
 
-  // Allow Three.js CDN + game.js to initialise
+  // Allow Three.js + game.js + renderer to initialise
   await new Promise(r => setTimeout(r, 6000))
 
   // ── Inject checks ───────────────────────────────────
@@ -70,26 +102,33 @@ app.whenReady().then(async () => {
   try {
     state = await win.webContents.executeJavaScript(`(function() {
       const r = {}
-      // 2. Page loaded — document.body exists
+      // 1. Page loaded
       r.bodyExists = !!document.body
 
-      // 3. window.__SG exists (game.js loaded)
+      // 2. Game loaded
       r.sgExists = typeof window.__SG !== 'undefined' && window.__SG !== null
       r.sgKeys = r.sgExists ? Object.keys(window.__SG).length : 0
 
-      // 4. window.THREE exists (Three.js loaded)
+      // 3. Three.js
       r.threeExists = typeof window.THREE !== 'undefined' && window.THREE !== null
       r.threeRevision = r.threeExists ? window.THREE.REVISION : null
 
-      // 5. desktopAPI accessible (preload)
+      // 4. Preload bridge
       r.desktopAPI = typeof window.desktopAPI !== 'undefined' && window.desktopAPI !== null
       r.subwayConfig = typeof window.__SUBWAY_CONFIG__ !== 'undefined'
 
-      // 6. F11 handler registered — check that the document has keydown listeners
-      //    (our renderer.ts adds a keydown listener to document for F11)
-      r.f11HandlerWired = window.desktopAPI !== null  // de facto: if desktopAPI exists, renderer registers F11
+      // 4b. API_BASE_URL from config
+      r.apiBaseUrl = window.__SUBWAY_CONFIG__ ? window.__SUBWAY_CONFIG__.API_BASE_URL : null
 
-      // Safety: no Node.js leak
+      // 5. SG.runtime set by renderer
+      r.sgRuntime = window.__SG ? window.__SG.runtime : null
+      r.sgApiBaseUrl = window.__SG ? window.__SG.apiBaseUrl : null
+      r.sgOfflineMode = window.__SG ? window.__SG.offlineMode : undefined
+
+      // 6. F11 handler
+      r.f11HandlerWired = window.desktopAPI !== null
+
+      // 7-8. No Node.js leaks
       try { r.requireLeak = typeof require !== 'undefined' } catch(e) { r.requireLeak = false }
       try { r.fsLeak = eval('typeof fs !== \"undefined\"') } catch(e) { r.fsLeak = false }
 
@@ -103,23 +142,74 @@ app.whenReady().then(async () => {
   }
 
   console.log('  ── Core checks ──')
-  check('2. Body exists', !!state.bodyExists)
-  check('3. window.__SG exists', !!state.sgExists, state.sgExists ? `${state.sgKeys} keys` : undefined)
-  check('4. window.THREE exists', !!state.threeExists, state.threeRevision ? `r${state.threeRevision}` : undefined)
-  check('4b. THREE.REVISION === "128"', state.threeRevision === '128', state.threeRevision ? `got ${state.threeRevision}` : 'undefined')
-  check('5a. desktopAPI (preload bridge)', !!state.desktopAPI)
-  check('5b. __SUBWAY_CONFIG__', !!state.subwayConfig)
-  check('6. F11 handler wired (desktopAPI → toggleFullscreen)', !!state.f11HandlerWired)
-  check('7a. No require() leak', !state.requireLeak)
-  check('7b. No fs leak', !state.fsLeak)
+  check('1. Body exists', !!state.bodyExists)
+  check('2. window.__SG exists', !!state.sgExists, state.sgExists ? `${state.sgKeys} keys` : undefined)
+  check('3. window.THREE exists', !!state.threeExists, state.threeRevision ? `r${state.threeRevision}` : undefined)
+  check('3b. THREE.REVISION === "128"', state.threeRevision === '128', state.threeRevision ? `got ${state.threeRevision}` : 'undefined')
+  check('4a. desktopAPI (preload bridge)', !!state.desktopAPI)
+  check('4b. __SUBWAY_CONFIG__ exists', !!state.subwayConfig)
+  check('4c. API_BASE_URL is non-empty', !!state.apiBaseUrl, state.apiBaseUrl || 'empty')
+  check('5a. SG.runtime === "electron"', state.sgRuntime === 'electron', state.sgRuntime || 'undefined')
+  check('5b. SG.apiBaseUrl set', !!state.sgApiBaseUrl, state.sgApiBaseUrl || 'undefined')
+  check('6. F11 handler wired', !!state.f11HandlerWired)
+  check('7. No require() leak', !state.requireLeak)
+  check('8. No fs leak', !state.fsLeak)
+
+  // ── IPC read/write test ────────────────────────────
+  console.log('')
+  console.log('  ── IPC persistence checks ──')
+
+  try {
+    const ipcResult = await win.webContents.executeJavaScript(`(async function() {
+      const ok = {}
+      // Test settings write+read round-trip
+      try {
+        await window.desktopAPI.settings.set({ musicVolume: 0.3, sfxVolume: 0.6, theme: 1 })
+        const loaded = await window.desktopAPI.settings.get()
+        ok.settingsWrite = true
+        ok.settingsRead = loaded && loaded.musicVolume === 0.3 && loaded.sfxVolume === 0.6
+        ok.settingsValue = JSON.stringify(loaded)
+      } catch(e) { ok.settingsError = e.message }
+
+      // Test save write+read round-trip
+      try {
+        const testSave = { credits: 99, totalCoins: 100, maxDistance: 500, runCount: 3, ownedAbilities: [0,1], equippedAbility: 1, updatedAt: new Date().toISOString() }
+        await window.desktopAPI.save.setLocal(testSave)
+        const loadedSave = await window.desktopAPI.save.getLocal()
+        ok.saveWrite = true
+        ok.saveRead = loadedSave && loadedSave.credits === 99 && loadedSave.maxDistance === 500
+        ok.saveValue = JSON.stringify(loadedSave)
+      } catch(e) { ok.saveError = e.message }
+
+      return JSON.stringify(ok)
+    })()`)
+    const ipc = JSON.parse(ipcResult)
+    check('IPC settings write+read', !!ipc.settingsWrite && !!ipc.settingsRead, ipc.settingsRead ? 'musicVolume=0.3' : ipc.settingsError || 'write failed')
+    check('IPC save write+read', !!ipc.saveWrite && !!ipc.saveRead, ipc.saveRead ? 'credits=99, distance=500' : ipc.saveError || 'write failed')
+  } catch (err) {
+    check('IPC executeJavaScript', false, err.message)
+  }
+
+  // ── Environment variable check ─────────────────────
+  console.log('')
+  console.log('  ── Environment config check ──')
+  const envUrl = process.env.SUBWAY_API_BASE_URL || '(not set)'
+  check('SUBWAY_API_BASE_URL env (info)', true, envUrl)
 
   if (process.env.ELECTRON_HEADLESS_CI === '1') {
     console.log('')
     console.log('  ── Headless notes ──')
-    console.log('  ℹ️  WebGL visual checks (3D scene, login overlay) require')
-    console.log('  ℹ️  a real GPU or manual verification on Windows.')
-    console.log('  ℹ️  SwiftShader is used here — frame rate may be low.')
+    console.log('  ℹ️  WebGL visual checks require a real GPU or manual')
+    console.log('  ℹ️  verification on Windows.')
+    console.log('  ℹ️  Server connectivity requires a running account server.')
   }
+
+  // ── Cleanup ───────────────────────────────────────
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) fs.unlinkSync(SETTINGS_FILE)
+    if (fs.existsSync(SAVE_FILE)) fs.unlinkSync(SAVE_FILE)
+    if (fs.existsSync(TMPDIR)) fs.rmdirSync(TMPDIR)
+  } catch {}
 
   // ── Summary ─────────────────────────────────────────
   printSummary()
