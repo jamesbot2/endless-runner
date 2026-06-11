@@ -16,6 +16,7 @@ on:
         type: string
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   SUBWAY_API_BASE_URL: ${{ inputs.SUBWAY_API_BASE_URL || 'http://localhost:3000' }}
 
 jobs:
