@@ -227,10 +227,6 @@
         }).then(function(data) {
             if (!data || !data.gameData) { if (callback) callback(); return; }
             SG.applyGameData(data.gameData);
-            SG.state.canJetpack = owned.indexOf(2) >= 0;
-            SG.state.canRoofWalk = owned.indexOf(3) >= 0;
-            // Update menu credits after loading
-            if (SG.updateMenuCredits) SG.updateMenuCredits();
             if (callback) callback();
         }).catch(function(){ if (callback) callback(); });
     };

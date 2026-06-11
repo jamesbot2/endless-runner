@@ -178,6 +178,43 @@ app.whenReady().then(async () => {
   check("12. Offline play button exists", !!state.authOfflineBtn)
   check("13. SG.__desktopAuth module loaded", !!state.__desktopAuth)
   check("14. SG.applyGameData is function", !!state.applyGameData)
+
+  // -- applyGameData runtime test --
+  try {
+    const agdResult = await win.webContents.executeJavaScript(`(function() {
+      try {
+        window.__SG.applyGameData({
+          credits: 7,
+          totalCoins: 11,
+          maxEasy: 100,
+          maxMedium: 50,
+          maxHard: 25,
+          maxDistance: 100,
+          ownedAbilities: [0, 1],
+          equippedAbility: 1,
+          runCount: 3
+        })
+        var s = window.__SG.state
+        return JSON.stringify({
+          ok: true,
+          credits: s.credits,
+          totalCoins: s.totalCoins,
+          maxEasy: s.maxEasy,
+          canDoubleJump: s.canDoubleJump
+        })
+      } catch(e) {
+        return JSON.stringify({ ok: false, error: e.message })
+      }
+    })()`)
+    const agd = JSON.parse(agdResult)
+    check("15. applyGameData runs without error", !!agd.ok, agd.error || "")
+    check("16. state.credits === 7", agd.credits === 7, String(agd.credits))
+    check("17. state.totalCoins === 11", agd.totalCoins === 11, String(agd.totalCoins))
+    check("18. state.maxEasy === 100", agd.maxEasy === 100, String(agd.maxEasy))
+    check("19. state.canDoubleJump === true", agd.canDoubleJump === true, String(agd.canDoubleJump))
+  } catch (err) {
+    check("applyGameData runtime", false, err.message)
+  }
   // ── IPC read/write test ────────────────────────────
   console.log('')
   console.log('  ── IPC persistence checks ──')
