@@ -7,8 +7,8 @@
   "scripts": {
     "dev": "npm run build:electron && concurrently -k -n vite,electron \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron . --dev\"",
     "dev:headless": "npm run build:electron && concurrently -k -n vite,electron \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development ELECTRON_HEADLESS_CI=1 electron . --dev --no-sandbox\"",
-    "test:smoke": "node_modules/.bin/electron tests/smoke.js",
-    "test:smoke:headless": "ELECTRON_HEADLESS_CI=1 xvfb-run -a node_modules/.bin/electron tests/smoke.js",
+    "test:smoke": "electron tests/smoke.js",
+    "test:smoke:headless": "ELECTRON_HEADLESS_CI=1 xvfb-run -a electron tests/smoke.js",
     "build:renderer": "vite build",
     "build:electron": "tsc -p electron/tsconfig.json",
     "build": "npm run build:renderer && npm run build:electron",

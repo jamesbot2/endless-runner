@@ -2,12 +2,12 @@
   "scripts": {
     "server:account": "node server/account-server.js",
     "server:static": "node server/static-server.js",
-    "desktop:dev": "cd apps/desktop && npm run dev",
-    "desktop:build": "cd apps/desktop && npm run build",
-    "desktop:dist": "cd apps/desktop && npm run dist",
-    "desktop:test:smoke": "cd apps/desktop && ./node_modules/.bin/electron tests/smoke.js",
-    "desktop:test:smoke:headless": "cd apps/desktop && ELECTRON_HEADLESS_CI=1 xvfb-run -a ./node_modules/.bin/electron tests/smoke.js",
-    "desktop:dev:headless": "cd apps/desktop && ELECTRON_HEADLESS_CI=1 xvfb-run -a npm run dev:headless"
+    "desktop:dev": "npm --prefix apps/desktop run dev",
+    "desktop:build": "npm --prefix apps/desktop run build",
+    "desktop:dist": "npm --prefix apps/desktop run dist",
+    "desktop:test:smoke": "npm --prefix apps/desktop run test:smoke",
+    "desktop:test:smoke:headless": "ELECTRON_HEADLESS_CI=1 xvfb-run -a npm --prefix apps/desktop run test:smoke",
+    "desktop:dev:headless": "ELECTRON_HEADLESS_CI=1 xvfb-run -a npm --prefix apps/desktop run dev:headless"
   },
   "dependencies": {
     "nodemailer": "^8.0.10"

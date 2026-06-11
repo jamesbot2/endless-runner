@@ -11,9 +11,12 @@ import { contextBridge, ipcRenderer } from 'electron'
 // The API base URL is passed from main.ts via additionalArguments,
 // so it works even with sandbox: true.
 const apiArg = process.argv.find(a => a.startsWith('--api-base-url='))
+// main.ts passes --api-base-url via additionalArguments.
+// If that somehow fails, fall back to localhost:3000 (development default).
+// Override at build/pack time by setting SUBWAY_API_BASE_URL.
 const API_BASE_URL = apiArg
   ? apiArg.split('=', 2)[1]
-  : 'http://35.212.200.85:3000' // hard fallback (shouldn't reach here)
+  : 'http://localhost:3000'
 
 contextBridge.exposeInMainWorld('__SUBWAY_CONFIG__', {
   API_BASE_URL,

@@ -3809,7 +3809,8 @@
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
-    var API = 'http://' + (window.location.hostname || '35.212.200.85') + ':3000';
+    var API = (window.__SUBWAY_CONFIG__ && window.__SUBWAY_CONFIG__.API_BASE_URL)
+           || 'http://' + (window.location.hostname || '35.212.200.85') + ':3000';
 
     SG.account = {
         token: localStorage.getItem('subwayToken') || null,
@@ -3955,7 +3956,11 @@
         localStorage.removeItem('subwayToken');
         localStorage.removeItem('subwayEmail');
         localStorage.removeItem('subwayRemember');
-        window.location.href = 'http://' + window.location.hostname + ':3000/';
+        if (window.desktopAPI) {
+            SG.showLogin(true);
+        } else {
+            window.location.href = API + '/';
+        }
     };
 
     SG.accountSave = function() {
@@ -4003,7 +4008,7 @@
 
     SG.loadAccountData = function(callback) {
         if (!SG.account.loggedIn || !SG.account.token) { if (callback) callback(); return; }
-        var url = 'http://' + (window.location.hostname || '35.212.200.85') + ':3000/api/load';
+        var url = API + '/api/load';
         fetch(url, {
             headers: { 'Authorization': 'Bearer ' + SG.account.token }
         }).then(function(r) {
@@ -4122,7 +4127,7 @@
             '<div style="color:#aaa;font-size:13px;margin-bottom:10px;">Loading...</div>' +
             '</div>';
 
-        var url = 'http://' + (window.location.hostname || '35.212.200.85') + ':3000/api/leaderboard';
+        var url = API + '/api/leaderboard';
         fetch(url)
         .then(function(r) { return r.json(); })
         .then(function(data) {
