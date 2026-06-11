@@ -8,6 +8,7 @@
 import { API_BASE_URL } from './config'
 import { loadLocalSave, saveLocalGame, loadSettings, saveSettings } from './account/storageAdapter'
 import type { GameSave, AppSettings } from './account/storageAdapter'
+import { initDesktopAuth } from './auth/desktop-auth'
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -34,16 +35,23 @@ if (window.desktopAPI) {
   if (s) {
     s.runtime = 'electron'
     s.apiBaseUrl = apiUrl
+
+    // Immediately suppress legacy login overlay (game.js may have shown it)
+    // The full auth UI override is set up below once async init completes.
+    const legacyOverlay = document.getElementById('login-overlay')
+    if (legacyOverlay) legacyOverlay.style.display = 'none'
   }
 
   // ── API connectivity check ──────────────────────────────
   ;(async () => {
     const s2 = SG()
+    let online = false
     try {
       const resp = await fetch(apiUrl + '/api/leaderboard', {
         method: 'GET',
         signal: AbortSignal.timeout(3000),
       })
+      online = resp.ok
       if (s2) {
         s2.serverOnline = resp.ok
         s2.offlineMode = false
@@ -62,23 +70,20 @@ if (window.desktopAPI) {
     // Update status bar
     const statusEl = document.getElementById('electron-status-bar')
     if (statusEl) {
-      updateStatusBar(statusEl, s2 ? s2.serverOnline : false, apiUrl)
+      updateStatusBar(statusEl, online, apiUrl)
     }
   })()
 
   // ── Storage Adapter Integration ─────────────────────────
   // Wrap SG.accountSave to persist locally on every save.
-  // Cloud save (original) runs first; local save runs after.
   ;(async () => {
     const s3 = SG()
     if (!s3 || typeof s3.accountSave !== 'function') return
 
     const origSave = s3.accountSave
     s3.accountSave = function () {
-      // Call original cloud save (no await — it's sync fetch)
       const result = origSave.apply(s3, arguments)
 
-      // Also persist locally via storageAdapter
       const state = s3.state
       if (state) {
         const owned = [0]
@@ -102,12 +107,9 @@ if (window.desktopAPI) {
           console.warn('[Subway Surfer] Local save failed:', e)
         )
       }
-
       return result
     }
 
-    // Also wrap game over — auto-save is already inside game's gameOver,
-    // which calls accountSave. The wrapper above handles the local side.
     console.log('[Subway Surfer] Storage adapter wired to SG.accountSave')
 
     // ── Create status bar ────────────────────────────────
@@ -135,7 +137,6 @@ if (window.desktopAPI) {
             st.canJetpack = local.ownedAbilities.indexOf(2) >= 0
             st.canRoofWalk = local.ownedAbilities.indexOf(3) >= 0
           }
-          // Persist to localStorage so game's own UI reads it too
           localStorage.setItem('subwayCredits', String(st.credits))
           localStorage.setItem('subwayTotalCoins', String(st.totalCoins))
           localStorage.setItem('subwayBest', String(st.bestScore || 0))
@@ -145,10 +146,73 @@ if (window.desktopAPI) {
         console.warn('[Subway Surfer] Local save restore failed:', e)
       }
     }
+
+    // ── Initialize desktop auth UI ─────────────────────────
+    initDesktopAuth(s3, apiUrl, {
+      onLoginSuccess: (data) => {
+        // Match what legacy SG.doLogin does
+        s3.account.token = data.token
+        s3.account.email = data.email
+        s3.account.loggedIn = true
+        localStorage.setItem('subwayToken', data.token)
+        localStorage.setItem('subwayEmail', data.email)
+
+        if (data.gameData) {
+          const gd = data.gameData
+          const st = s3.state
+          st.bestScore = Math.max(st.bestScore, gd.maxDistance || 0)
+          st.credits = gd.credits || 0
+          st.totalCoins = gd.totalCoins || 0
+          st.equippedAbility = gd.equippedAbility || 0
+          st.maxEasy = gd.maxEasy || 0
+          st.maxMedium = gd.maxMedium || 0
+          st.maxHard = gd.maxHard || 0
+          st.maxEasyAbility = gd.maxEasyAbility || 0
+          st.maxMediumAbility = gd.maxMediumAbility || 0
+          st.maxHardAbility = gd.maxHardAbility || 0
+          st.runCount = gd.runCount || 0
+          const owned = gd.ownedAbilities || [0]
+          st.canDoubleJump = owned.indexOf(1) >= 0
+          st.canJetpack = owned.indexOf(2) >= 0
+          st.canRoofWalk = owned.indexOf(3) >= 0
+        }
+
+        s3.account.username = data.username || data.email.split('@')[0]
+        localStorage.setItem('subwayUsername', s3.account.username)
+
+        // Update account button if it exists
+        const btn = document.getElementById('account-btn-menu')
+        if (btn) btn.textContent = '👤 ' + s3.account.username
+
+        // Show main menu (same as legacy SG.doLogin does)
+        if (s3.menuOverlay) s3.menuOverlay.style.display = 'flex'
+      },
+      onOfflinePlay: () => {
+        console.log('[Subway Surfer] Playing offline (local saves only)')
+        s3.account.loggedIn = false
+        // Show main menu directly
+        if (s3.menuOverlay) s3.menuOverlay.style.display = 'flex'
+      },
+    })
+
+    // Force our auth UI to show — game.js showed the legacy overlay
+    // before our override was in place, so we re-trigger.
+    const lo = document.getElementById('login-overlay')
+    if (lo) lo.style.display = 'none'
+    if (!s3.account?.loggedIn) {
+      // Directly call our showAuth (bypass showLogin to avoid recursion)
+      const auth = (s3 as any).__desktopAuth
+      if (auth && typeof auth.showAuth === 'function') {
+        auth.showAuth(true)
+      } else if (typeof s3.showLogin === 'function') {
+        // Fallback: use the overridden showLogin
+        s3.showLogin(true)
+      }
+    }
+    console.log('[Subway Surfer] Desktop auth UI initialized')
   })()
 
   // ── Settings sync ───────────────────────────────────────
-  // On boot: read Electron settings and apply to game's localStorage keys.
   ;(async () => {
     try {
       const settings = await loadSettings()
@@ -160,8 +224,6 @@ if (window.desktopAPI) {
   })()
 
   // ── Intercept localStorage writes for settings keys ─────
-  // When the game writes subwayMusicVol / subwaySfxVol via the UI,
-  // also persist via storageAdapter.
   const origSetItem = localStorage.setItem.bind(localStorage)
   localStorage.setItem = (key: string, value: string) => {
     origSetItem(key, value)
@@ -201,7 +263,6 @@ function createStatusBar(apiUrl: string): void {
     'user-select:none',
   ].join(';')
 
-  // API status
   bar.innerHTML = [
     '<span id="es-status-icon">⏳</span>',
     '<span id="es-status-text">Checking server…</span>',
