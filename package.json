@@ -4,6 +4,7 @@
     "server:static": "node server/static-server.js",
     "desktop:dev": "npm --prefix apps/desktop run dev",
     "desktop:build": "npm --prefix apps/desktop run build",
+    "desktop:pack": "npm --prefix apps/desktop run pack",
     "desktop:dist": "npm --prefix apps/desktop run dist",
     "desktop:test:smoke": "npm --prefix apps/desktop run test:smoke",
     "desktop:test:smoke:headless": "ELECTRON_HEADLESS_CI=1 xvfb-run -a npm --prefix apps/desktop run test:smoke",
