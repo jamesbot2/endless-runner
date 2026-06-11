@@ -9,6 +9,7 @@ server/data/
 dist/
 apps/desktop/dist/
 apps/desktop/release/
+apps/desktop/src/public/three-bootstrap.js
 
 # Logs
 *.log
