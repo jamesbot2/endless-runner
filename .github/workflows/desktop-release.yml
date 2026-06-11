@@ -1,0 +1,88 @@
+# ===== Subway Surfer Desktop — Release =====
+# Triggered by a tag push (e.g. v1.0.0).
+# Builds, smoke-tests, packages and publishes a GitHub Release.
+# Output: Subway-Surfer-windows-x64-v<tag>.zip  (unsigned, portable)
+
+name: Release Desktop
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        working-directory: apps/desktop
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (Vite + tsc)
+        run: npm run build
+
+      - name: Smoke test
+        run: npm run test:smoke
+        env:
+          ELECTRON_HEADLESS_CI: '1'
+
+      - name: Package (win-unpacked)
+        run: npm run pack
+        env:
+          ELECTRON_HEADLESS_CI: '1'
+
+      - name: Build release zip
+        shell: powershell
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $zipName = "Subway-Surfer-windows-x64-${tag}.zip"
+          Compress-Archive -Path release/win-unpacked/* -DestinationPath "${{ runner.temp }}/${zipName}"
+          echo "ZIP_PATH=${{ runner.temp }}/${zipName}" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "ZIP_NAME=${zipName}" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Subway Surfer ${{ github.ref_name }}
+          body: |
+            ## Subway Surfer ${{ github.ref_name }}
+
+            ### Downloads
+
+            - **Windows (64-bit)**: `${{ env.ZIP_NAME }}` — portable, no installer required.
+
+            ### Usage
+
+            1. Download and extract the zip.
+            2. Run `Subway Surfer.exe`.
+            3. Configure the API server by setting `SUBWAY_API_BASE_URL` before launching
+               (default: `http://localhost:3000`).
+
+            > ⚠️  This build is **unsigned**. Windows SmartScreen may show a warning.
+            > Click "More info" → "Run anyway" to proceed.
+
+            ### What's inside
+
+            - Electron + Vite desktop shell
+            - Three.js r128 (bundled, no CDN)
+            - Local save / settings via IPC
+            - Smoke-tested in CI
+          tag_name: ${{ github.ref_name }}
+          files: ${{ env.ZIP_PATH }}

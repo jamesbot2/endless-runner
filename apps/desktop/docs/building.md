@@ -184,6 +184,48 @@ with a code signing certificate.
 
 ---
 
+## Release (tag-triggered)
+
+Pushing a tag like `v1.0.0` triggers `.github/workflows/desktop-release.yml`.
+
+### Create a tag & release
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The workflow will:
+1. Build + smoke test + pack
+2. Zip `win-unpacked` → `Subway-Surfer-windows-x64-v1.0.0.zip`
+3. Create a GitHub Release with the zip attached
+
+### Download the release
+
+1. Go to the repository → **Releases** sidebar
+2. Click the latest release (e.g. `Subway Surfer v1.0.0`)
+3. Download `Subway-Surfer-windows-x64-v1.0.0.zip`
+4. Extract and run `Subway Surfer.exe`
+
+### Configure the API server
+
+Set `SUBWAY_API_BASE_URL` before launching:
+
+```powershell
+$env:SUBWAY_API_BASE_URL="http://35.212.200.85:3000"
+.\Subway Surfer.exe
+```
+
+Default: `http://localhost:3000`.
+
+### Notes
+
+- No code signing (SmartScreen warning expected)
+- No NSIS installer — portable `win-unpacked` only
+- The `v` prefix is required for the workflow to trigger
+
+---
+
 ## App icon
 
 Source icons are in `apps/desktop/build/`:
