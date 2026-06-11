@@ -1,0 +1,62 @@
+# ===== Subway Surfer Desktop — CI Build =====
+# Builds, smoke-tests and packages the Electron desktop app.
+# Output: win-unpacked portable directory (unsigned).
+
+name: Desktop Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      SUBWAY_API_BASE_URL:
+        description: 'Account server URL'
+        required: false
+        default: 'http://localhost:3000'
+        type: string
+
+env:
+  SUBWAY_API_BASE_URL: ${{ inputs.SUBWAY_API_BASE_URL || 'http://localhost:3000' }}
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        working-directory: apps/desktop
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (Vite + tsc)
+        run: npm run build
+
+      - name: Smoke test
+        id: smoke
+        continue-on-error: false
+        run: npm run test:smoke
+
+      - name: Package (win-unpacked)
+        run: npm run pack
+        env:
+          ELECTRON_HEADLESS_CI: '1'
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Subway-Surfer-win-unpacked
+          path: apps/desktop/release/win-unpacked/**
+          if-no-files-found: error
+          retention-days: 14

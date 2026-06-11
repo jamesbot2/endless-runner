@@ -140,6 +140,50 @@ Cannot create symbolic link，客户端没有所需的特权
 
 ---
 
+## CI / GitHub Actions
+
+Every push to `main` triggers a workflow at `.github/workflows/desktop-build.yml`.
+
+### What it does
+
+1. `npm ci` — clean install
+2. `npm run build` — Vite + tsc
+3. `npm run test:smoke` — Electron smoke test (Windows runner)
+4. `npm run pack` — `electron-builder --win --dir`
+5. Upload `win-unpacked/**` as workflow artifact
+
+### Trigger
+
+- **Automatic**: on push to `main`
+- **Manual**: `workflow_dispatch` with optional `SUBWAY_API_BASE_URL` input
+
+### Download the artifact
+
+1. Go to the repository on GitHub
+2. Click **Actions** → select the latest workflow run
+3. Scroll to **Artifacts** → click `Subway-Surfer-win-unpacked`
+4. Extract the zip, run `Subway Surfer.exe`
+
+### Configure the API server
+
+Set `SUBWAY_API_BASE_URL` in the workflow's environment or via manual dispatch
+input:
+
+```yaml
+env:
+  SUBWAY_API_BASE_URL: http://35.212.200.85:3000
+```
+
+Default: `http://localhost:3000`.
+
+### Signing
+
+No code signing is performed in CI. The built `.exe` will show a Windows
+SmartScreen warning. For signed releases, run `desktop:dist` on a machine
+with a code signing certificate.
+
+---
+
 ## App icon
 
 Source icons are in `apps/desktop/build/`:
