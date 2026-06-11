@@ -1,4 +1,14 @@
+# Dependencies
 node_modules/
 **/node_modules/
+
+# Server
 server/data/
+
+# Desktop (Electron)
+dist/
+apps/desktop/dist/
+apps/desktop/release/
+
+# Logs
 *.log

@@ -1,0 +1,52 @@
+{
+  "name": "subway-surfer-desktop",
+  "version": "1.0.0",
+  "description": "Subway Surfer - Desktop Edition (Electron)",
+  "private": true,
+  "main": "dist/electron/main.js",
+  "scripts": {
+    "dev": "npm run build:electron && concurrently -k -n vite,electron \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron . --dev\"",
+    "dev:headless": "npm run build:electron && concurrently -k -n vite,electron \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development ELECTRON_HEADLESS_CI=1 electron . --dev --no-sandbox\"",
+    "test:smoke": "node_modules/.bin/electron tests/smoke.js",
+    "test:smoke:headless": "ELECTRON_HEADLESS_CI=1 xvfb-run -a node_modules/.bin/electron tests/smoke.js",
+    "build:renderer": "vite build",
+    "build:electron": "tsc -p electron/tsconfig.json",
+    "build": "npm run build:renderer && npm run build:electron",
+    "predist": "npm run build",
+    "dist": "electron-builder build --win",
+    "start": "electron .",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "@types/node": "^25.9.3"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.9.3",
+    "vite": "^6.1.0",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.neo.subway-surfer",
+    "productName": "Subway Surfer",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

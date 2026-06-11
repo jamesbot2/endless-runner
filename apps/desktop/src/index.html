@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subway Surfer</title>
+    <link rel="stylesheet" href="legacy/style.css">
+</head>
+<body>
+    <div id="three-error" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;text-align:center;font-family:Arial;padding:20px;z-index:999;background:rgba(0,0,0,0.85);border-radius:12px;max-width:300px;">
+        <h2 style="color:#ff6;margin:0 0 10px;font-size:20px;">⚠️ WebGL Required</h2>
+        <p style="color:#aaa;font-size:13px;line-height:1.5;margin:0;">This game needs WebGL to run.<br>Please open in Chrome/Safari browser.</p>
+    </div>
+
+    <!-- Three.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
+        onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js';s.onerror=function(){document.getElementById('three-error').style.display='block';};document.head.appendChild(s);">
+    </script>
+
+    <!-- Legacy game bundle (IIFE, not ESM) — handles login overlay + game loop -->
+    <script src="legacy/game.js"></script>
+
+    <!-- Renderer entry (ESM, processed by Vite) -->
+    <script type="module" src="./renderer.ts"></script>
+</body>
+</html>
