@@ -9,6 +9,57 @@
     SG.laserLeftBeam = null;
     SG.laserRightBeam = null;
     SG.homelanderCape = null;
+    SG.homelanderModelPath = SG.homelanderModelPath || 'models/homelander.glb';
+
+    function normalizeHomelanderModel(model) {
+        var box = new THREE.Box3().setFromObject(model);
+        var size = new THREE.Vector3();
+        var center = new THREE.Vector3();
+        box.getSize(size);
+        box.getCenter(center);
+        var targetHeight = 1.75;
+        var scale = size.y > 0 ? targetHeight / size.y : 1;
+        model.scale.setScalar(scale);
+        model.updateMatrixWorld(true);
+        box.setFromObject(model);
+        box.getCenter(center);
+        model.position.set(-center.x, -box.min.y, -center.z);
+    }
+
+    SG.loadHomelanderModel = function(group, proceduralParts) {
+        if (!group || !THREE || !THREE.GLTFLoader) return;
+        var loader = new THREE.GLTFLoader();
+        loader.load(SG.homelanderModelPath, function(gltf) {
+            if (!SG.homelanderGroup || group !== SG.homelanderGroup) return;
+            var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+            if (!model) return;
+            model.name = 'HomelanderGLB';
+            normalizeHomelanderModel(model);
+            model.rotation.y = 0;
+            model.traverse(function(node) {
+                if (node && node.isMesh) {
+                    node.castShadow = true;
+                    node.receiveShadow = true;
+                    if (node.material) {
+                        var mats = Array.isArray(node.material) ? node.material : [node.material];
+                        for (var mi = 0; mi < mats.length; mi++) {
+                            if (mats[mi]) {
+                                mats[mi].side = THREE.FrontSide;
+                                mats[mi].needsUpdate = true;
+                            }
+                        }
+                    }
+                }
+            });
+            group.add(model);
+            SG.homelanderModel = model;
+            for (var i = 0; i < proceduralParts.length; i++) {
+                if (proceduralParts[i]) proceduralParts[i].visible = false;
+            }
+        }, undefined, function(err) {
+            SG.homelanderModelError = err;
+        });
+    };
 
     SG.activateHomelander = function() {
         SG.state.legitRun = false; // Homelander: exclude from leaderboard
@@ -247,6 +298,11 @@
         SG.homelanderAura.rotation.x = Math.PI / 2;
         SG.homelanderGroup.add(SG.homelanderAura);
 
+        SG.homelanderProceduralParts = SG.homelanderGroup.children.filter(function(child) {
+            return child !== SG.homelanderAura;
+        });
+        SG.loadHomelanderModel(SG.homelanderGroup, SG.homelanderProceduralParts);
+
         SG.scene.add(SG.homelanderGroup);
         if (window.__neoGame) window.__neoGame.homelanderGroup = SG.homelanderGroup;
 
@@ -290,6 +346,8 @@
         SG.laserBeams = [];
         SG.homelanderCape = null;
         SG.homelanderAura = null;
+        SG.homelanderModel = null;
+        SG.homelanderProceduralParts = [];
         if (SG.player) SG.player.visible = true;
     };
 
@@ -331,7 +389,8 @@
             SG.homelanderAura.material.opacity = 0.10 + Math.sin(SG.state.gameTime * 5) * 0.04;
         }
 
-        var laserLength = 12;
+        var laserBaseLength = 18;
+        var laserLength = SG.state.firstPerson ? 18 : 12;
         SG.laserBeams.length = 0;
         var eyeY = SG.homelanderGroup.position.y + 1.35;
 
@@ -341,22 +400,28 @@
             var bz = SG.homelanderGroup.position.z + 0.2;
 
             var dirZ = -1.0;
-            var dirY = -0.35;
+            var dirY = -0.28;
+            if (SG.state.firstPerson && SG.camera) {
+                bx = SG.camera.position.x + side9 * 0.035;
+                by = SG.camera.position.y - 0.08;
+                bz = SG.camera.position.z - 1.2;
+                dirY = -0.08;
+            }
             var len = Math.sqrt(dirZ * dirZ + dirY * dirY);
             var nz = dirZ / len;
             var ny = dirY / len;
 
             var beam = side9 === -1 ? SG.laserLeftBeam : SG.laserRightBeam;
             if (!beam) {
-                var laserGeo = new THREE.CylinderGeometry(0.025, 0.08, laserLength, 4);
+                var laserGeo = new THREE.CylinderGeometry(0.008, 0.012, laserBaseLength, 8);
                 var laserMat = new THREE.MeshBasicMaterial({
-                    color: 0xFF2200, transparent: true, opacity: 0.85,
+                    color: 0xFFF1A0, transparent: true, opacity: 1.0,
                     blending: THREE.AdditiveBlending
                 });
                 beam = new THREE.Mesh(laserGeo, laserMat);
-                var glowGeo = new THREE.CylinderGeometry(0.05, 0.15, laserLength, 4);
+                var glowGeo = new THREE.CylinderGeometry(0.026, 0.040, laserBaseLength, 8);
                 var glowMat = new THREE.MeshBasicMaterial({
-                    color: 0xFF0000, transparent: true, opacity: 0.2,
+                    color: 0xFF0000, transparent: true, opacity: 0.22,
                     blending: THREE.AdditiveBlending
                 });
                 var glow = new THREE.Mesh(glowGeo, glowMat);
@@ -367,14 +432,8 @@
                 else SG.laserRightBeam = beam;
             }
 
-            if (SG.state.firstPerson) {
-                beam.material.opacity = 0.50;
-                if (beam.userData.glow) beam.userData.glow.material.opacity = 0.20;
-            } else {
-                beam.material.opacity = 0.85;
-                if (beam.userData.glow) beam.userData.glow.material.opacity = 0.25;
-            }
             beam.scale.x = 1;
+            beam.scale.y = laserLength / laserBaseLength;
             beam.scale.z = 1;
             beam.visible = true;
             if (beam.userData.glow) beam.userData.glow.visible = true;
@@ -393,11 +452,12 @@
             if (beam.userData.glow) {
                 beam.userData.glow.position.copy(beam.position);
                 beam.userData.glow.rotation.copy(beam.rotation);
+                beam.userData.glow.scale.y = beam.scale.y;
             }
 
-            var pulse = 0.85 + Math.sin(SG.state.gameTime * 8 + side9) * 0.15;
-            beam.material.opacity = pulse;
-            if (beam.userData.glow) beam.userData.glow.material.opacity = pulse * 0.25;
+            var pulse = 0.86 + Math.sin(SG.state.gameTime * 12 + side9) * 0.14;
+            beam.material.opacity = SG.state.firstPerson ? pulse * 0.58 : pulse;
+            if (beam.userData.glow) beam.userData.glow.material.opacity = SG.state.firstPerson ? pulse * 0.05 : pulse * 0.20;
 
             for (var oi = SG.state.obstacles.length - 1; oi >= 0; oi--) {
                 var obs = SG.state.obstacles[oi];
