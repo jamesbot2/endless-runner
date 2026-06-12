@@ -475,9 +475,10 @@
         // Roll release
         if (SG.state.isRolling && !SG.state.isJumping) {
             var now = Date.now();
-            var downHeld = SG.keys['ArrowDown'] || SG.keys['s'] || SG.keys['S'];
+            var rollReleaseDelay = Math.max(0, Math.min(1000, SG.state.rollReleaseDelay || 200));
+            var downHeld = SG.isActionHeld ? SG.isActionHeld('down') : SG.keys['ArrowDown'];
             if (downHeld) {
-                SG.state.rollEndTime = now + 200;
+                SG.state.rollEndTime = now + rollReleaseDelay;
                 SG.state.rolledLand = false;
             } else if (SG.state.rolledLand && now > SG.state.rolledLandTime + 400) {
                 SG.state.isRolling = false;

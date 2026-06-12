@@ -5,6 +5,79 @@
     var THREE = window.THREE;
 
     SG.keys = {};
+    SG.defaultKeyBindings = SG.defaultKeyBindings || {
+        left: 'ArrowLeft',
+        right: 'ArrowRight',
+        up: 'ArrowUp',
+        down: 'ArrowDown'
+    };
+
+    SG.keyBindingLabels = SG.keyBindingLabels || {
+        left: 'Left',
+        right: 'Right',
+        up: 'Up',
+        down: 'Down'
+    };
+
+    SG.loadKeyBindings = function() {
+        var saved = null;
+        try { saved = JSON.parse(localStorage.getItem('subwayKeyBindings') || 'null'); } catch(e) {}
+        var bindings = {};
+        for (var action in SG.defaultKeyBindings) {
+            if (!Object.prototype.hasOwnProperty.call(SG.defaultKeyBindings, action)) continue;
+            bindings[action] = (saved && typeof saved[action] === 'string' && saved[action]) ?
+                saved[action] : SG.defaultKeyBindings[action];
+        }
+        SG.keyBindings = bindings;
+        return bindings;
+    };
+
+    SG.getKeyBindings = function() {
+        if (!SG.keyBindings) return SG.loadKeyBindings();
+        return SG.keyBindings;
+    };
+
+    SG.saveKeyBindings = function(bindings) {
+        SG.keyBindings = bindings || SG.getKeyBindings();
+        try { localStorage.setItem('subwayKeyBindings', JSON.stringify(SG.keyBindings)); } catch(e) {}
+    };
+
+    SG.setKeyBinding = function(action, key) {
+        if (!SG.defaultKeyBindings[action] || !key) return false;
+        var bindings = SG.getKeyBindings();
+        bindings[action] = key;
+        SG.saveKeyBindings(bindings);
+        return true;
+    };
+
+    SG.resetKeyBindings = function() {
+        SG.keyBindings = Object.assign({}, SG.defaultKeyBindings);
+        SG.saveKeyBindings(SG.keyBindings);
+    };
+
+    SG.formatKeyName = function(key) {
+        var names = {
+            ArrowLeft: 'Left',
+            ArrowRight: 'Right',
+            ArrowUp: 'Up',
+            ArrowDown: 'Down',
+            ' ': 'Space'
+        };
+        return names[key] || key;
+    };
+
+    SG.getInputActionForKey = function(key) {
+        var bindings = SG.getKeyBindings();
+        for (var action in bindings) {
+            if (Object.prototype.hasOwnProperty.call(bindings, action) && bindings[action] === key) return action;
+        }
+        return null;
+    };
+
+    SG.isActionHeld = function(action) {
+        var key = SG.getKeyBindings()[action];
+        return !!(key && SG.keys[key]);
+    };
 
     SG.forceJetpackLanding = function() {
         if (!(SG.state.equippedAbility === 2 && SG.state.canJetpack && SG.state.jetpackFuel > 0)) return false;
@@ -98,30 +171,22 @@
 
     SG.handleKeyInput = function(key) {
         if (SG.state.gameOver || !SG.state.started) return;
-        if (SG.state.homelander && (key === 'ArrowLeft' || key === 'ArrowRight' || key === 'ArrowUp' || key === 'ArrowDown')) return;
+        var action = SG.getInputActionForKey(key);
+        if (SG.state.homelander && action) return;
 
         if (!SG.audioCtx) SG.initAudio();
 
-        switch (key) {
-            case 'ArrowLeft':
-            case 'a':
-            case 'A':
+        switch (action) {
+            case 'left':
                 SG.moveLeft();
                 break;
-            case 'ArrowRight':
-            case 'd':
-            case 'D':
+            case 'right':
                 SG.moveRight();
                 break;
-            case 'ArrowUp':
-            case 'w':
-            case 'W':
-            case ' ':
+            case 'up':
                 SG.jump();
                 break;
-            case 'ArrowDown':
-            case 's':
-            case 'S':
+            case 'down':
                 SG.roll();
                 break;
         }
@@ -134,11 +199,11 @@
 
             if (SG.state.homelander && SG.homelanderGroup) {
                 var hlSpeed = 0.25;
-                var k = e.key, kc = e.keyCode || e.which;
-                if (k === 'ArrowLeft' || k === 'a' || k === 'A' || kc === 37 || kc === 65) { SG.homelanderGroup.position.x -= hlSpeed; e.preventDefault(); }
-                if (k === 'ArrowRight' || k === 'd' || k === 'D' || kc === 39 || kc === 68) { SG.homelanderGroup.position.x += hlSpeed; e.preventDefault(); }
-                if (k === 'ArrowUp' || k === 'w' || k === 'W' || kc === 38 || kc === 87) { SG.homelanderGroup.position.y = Math.min(20, SG.homelanderGroup.position.y + hlSpeed); e.preventDefault(); }
-                if (k === 'ArrowDown' || k === 's' || k === 'S' || kc === 40 || kc === 83) { SG.homelanderGroup.position.y = Math.max(1, SG.homelanderGroup.position.y - hlSpeed); e.preventDefault(); }
+                var hla = SG.getInputActionForKey(e.key);
+                if (hla === 'left') { SG.homelanderGroup.position.x -= hlSpeed; e.preventDefault(); }
+                if (hla === 'right') { SG.homelanderGroup.position.x += hlSpeed; e.preventDefault(); }
+                if (hla === 'up') { SG.homelanderGroup.position.y = Math.min(20, SG.homelanderGroup.position.y + hlSpeed); e.preventDefault(); }
+                if (hla === 'down') { SG.homelanderGroup.position.y = Math.max(1, SG.homelanderGroup.position.y - hlSpeed); e.preventDefault(); }
             }
 
             if (e.key === 'Escape') {
@@ -178,6 +243,7 @@
 
         document.addEventListener('keyup', function(e) {
             SG.keys[e.key] = false;
+            if (e.keyCode) { SG.keys['_kc_' + e.keyCode] = false; }
         });
 
         // Touch controls

@@ -25,6 +25,8 @@ export interface AppSettings {
   musicVolume: number
   sfxVolume: number
   theme: number
+  rollReleaseDelay?: number
+  keyBindings?: Record<string, string>
   [key: string]: unknown
 }
 
@@ -59,6 +61,13 @@ function defaultSettings(): AppSettings {
     musicVolume: 0.5,
     sfxVolume: 0.8,
     theme: 0,
+    rollReleaseDelay: 200,
+    keyBindings: {
+      left: 'ArrowLeft',
+      right: 'ArrowRight',
+      up: 'ArrowUp',
+      down: 'ArrowDown',
+    },
   }
 }
 

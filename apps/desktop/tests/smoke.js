@@ -156,6 +156,36 @@ app.whenReady().then(async () => {
       r.jetpackMaxHeight = window.__SG ? window.__SG.JETPACK_MAX_HEIGHT : null
       r.abilityHud = window.__SG ? typeof window.__SG.updateAbilityHUD === 'function' : false
       r.abilityVisuals = window.__SG ? typeof window.__SG.updateAbilityVisuals === 'function' : false
+      r.defaultKeyBindings = window.__SG && window.__SG.getKeyBindings ? Object.assign({}, window.__SG.getKeyBindings()) : null
+      r.keyBindingActionBefore = window.__SG && window.__SG.getInputActionForKey ? window.__SG.getInputActionForKey('ArrowUp') : null
+      r.keyBindingActionAfter = null
+      r.keyBindingSaved = false
+      r.rollReleaseDelaySetting = null
+      r.settingsBindingButtons = 0
+      r.settingsVolumeGridLeftAligned = false
+      if (window.__SG && window.__SG.setKeyBinding && window.__SG.resetKeyBindings && window.__SG.showSettings) {
+        window.__SG.setKeyBinding('up', 'k')
+        r.keyBindingActionAfter = window.__SG.getInputActionForKey ? window.__SG.getInputActionForKey('k') : null
+        r.keyBindingSaved = localStorage.getItem('subwayKeyBindings') && localStorage.getItem('subwayKeyBindings').indexOf('"up":"k"') >= 0
+        localStorage.setItem('subwayRollReleaseDelay', '350')
+        window.__SG.state.rollReleaseDelay = 350
+        window.__SG.showSettings()
+        var delaySlider = document.getElementById('__roll-delay')
+        r.rollReleaseDelaySetting = delaySlider ? parseInt(delaySlider.value, 10) : null
+        r.settingsBindingButtons = document.querySelectorAll('#settings-overlay .__bind-btn').length
+        var volumeRows = document.querySelectorAll('#settings-overlay .__vol-slider')
+        if (volumeRows.length >= 2) {
+          var row0 = volumeRows[0].parentElement
+          var row1 = volumeRows[1].parentElement
+          r.settingsVolumeGridLeftAligned = row0 && row1 &&
+            getComputedStyle(row0).display === 'grid' &&
+            getComputedStyle(row1).display === 'grid' &&
+            getComputedStyle(row0).gridTemplateColumns.split(' ').length >= 4
+        }
+        var settingsOverlay = document.getElementById('settings-overlay')
+        if (settingsOverlay) settingsOverlay.style.display = 'none'
+        window.__SG.resetKeyBindings()
+      }
       r.consoleCommands = window.__SG && window.__SG.consoleCommands ? Object.keys(window.__SG.consoleCommands).sort() : []
       r.executeConsoleCommand = window.__SG ? typeof window.__SG.executeConsoleCommand === 'function' : false
       r.homelanderModelPath = window.__SG ? window.__SG.homelanderModelPath : null
@@ -406,6 +436,10 @@ app.whenReady().then(async () => {
   check("14c. player animations indexed", state.playerAnimations && state.playerAnimations.length >= 1, state.playerAnimations ? state.playerAnimations.join(', ') : 'none')
   check("14d. ability HUD updater exists", !!state.abilityHud)
   check("14e. ability visual updater exists", !!state.abilityVisuals)
+  check("14e-1. default key bindings use arrow keys", !!state.defaultKeyBindings && state.defaultKeyBindings.up === 'ArrowUp' && state.defaultKeyBindings.down === 'ArrowDown' && state.defaultKeyBindings.left === 'ArrowLeft' && state.defaultKeyBindings.right === 'ArrowRight', state.defaultKeyBindings ? JSON.stringify(state.defaultKeyBindings) : 'missing')
+  check("14e-2. key binding remap updates action lookup", state.keyBindingActionBefore === 'up' && state.keyBindingActionAfter === 'up' && !!state.keyBindingSaved, `before=${state.keyBindingActionBefore}, after=${state.keyBindingActionAfter}`)
+  check("14e-3. settings exposes roll delay and key binding controls", state.rollReleaseDelaySetting === 350 && state.settingsBindingButtons === 4, `delay=${state.rollReleaseDelaySetting}, buttons=${state.settingsBindingButtons}`)
+  check("14e-4. settings volume rows keep icons on the left", !!state.settingsVolumeGridLeftAligned)
   check("14f. restart keeps player facing forward", Math.abs(state.restartRotationY - Math.PI) < 0.001, String(state.restartRotationY))
   check("14g. console command runner exists", !!state.executeConsoleCommand)
   check("14h. console includes Homelander easter egg", state.consoleCommands && state.consoleCommands.includes('homelander'), state.consoleCommands ? state.consoleCommands.join(', ') : 'none')

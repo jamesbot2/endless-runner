@@ -219,6 +219,16 @@ if (window.desktopAPI) {
       const settings = await loadSettings()
       localStorage.setItem('subwayMusicVol', String(settings.musicVolume))
       localStorage.setItem('subwaySfxVol', String(settings.sfxVolume))
+      if (typeof settings.rollReleaseDelay === 'number') {
+        localStorage.setItem('subwayRollReleaseDelay', String(settings.rollReleaseDelay))
+        const s4 = SG()
+        if (s4?.state) s4.state.rollReleaseDelay = settings.rollReleaseDelay
+      }
+      if (settings.keyBindings && typeof settings.keyBindings === 'object') {
+        localStorage.setItem('subwayKeyBindings', JSON.stringify(settings.keyBindings))
+        const s5 = SG()
+        if (s5 && typeof s5.loadKeyBindings === 'function') s5.loadKeyBindings()
+      }
     } catch {
       // defaults are fine
     }
@@ -233,6 +243,16 @@ if (window.desktopAPI) {
       saveSettings({
         [key === 'subwayMusicVol' ? 'musicVolume' : 'sfxVolume']: parseFloat(value),
       }).catch(() => {})
+    }
+    if (key === 'subwayRollReleaseDelay') {
+      saveSettings({ rollReleaseDelay: parseInt(value, 10) }).catch(() => {})
+    }
+    if (key === 'subwayKeyBindings') {
+      try {
+        saveSettings({ keyBindings: JSON.parse(value) }).catch(() => {})
+      } catch {
+        // ignore malformed transient values
+      }
     }
   }
 } else {

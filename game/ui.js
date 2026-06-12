@@ -297,24 +297,45 @@
         }
         var music = parseFloat(localStorage.getItem('subwayMusicVol') || '0.5');
         var sfx = parseFloat(localStorage.getItem('subwaySfxVol') || '0.8');
+        var rollDelay = Math.max(0, Math.min(1000, parseInt(localStorage.getItem('subwayRollReleaseDelay') || String(SG.state.rollReleaseDelay || 200))));
+        var bindings = SG.getKeyBindings ? SG.getKeyBindings() : { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown' };
         SG.state.musicVolume = music;
         SG.state.sfxVolume = sfx;
+        SG.state.rollReleaseDelay = rollDelay;
 
-        var html = '<div class="menu-content" style="max-width:360px;">';
+        var actionOrder = ['up', 'down', 'left', 'right'];
+        var html = '<div class="menu-content" style="max-width:520px;width:min(92vw,520px);">';
         html += '<h1 class="menu-title" style="font-size:24px;">⚙ SETTINGS</h1>';
         html += '<div style="margin:12px 0;text-align:center;">';
         html += '<span class="s-label">🔊 Master</span>';
         html += '<button class="diff-btn" id="__mute-btn">' + (SG.state.muted ? 'OFF' : 'ON') + '</button>';
         html += '</div>';
         html += '<div style="margin:10px 0;">';
-        html += '<div class="s-label" style="margin-bottom:6px;">🎵 Music</div>';
-        html += '<div style="display:flex;align-items:center;gap:8px;"><input type="range" min="0" max="1" step="0.1" value="' + music + '" class="__vol-slider" data-key="subwayMusicVol"><span class="vol-pct">' + Math.round(music * 100) + '%</span></div>';
+        html += '<div style="display:grid;grid-template-columns:30px 76px 1fr 44px;align-items:center;gap:8px;">';
+        html += '<span style="justify-self:start;font-size:18px;">🎵</span><span class="s-label">Music</span><input type="range" min="0" max="1" step="0.1" value="' + music + '" class="__vol-slider" data-key="subwayMusicVol"><span class="vol-pct">' + Math.round(music * 100) + '%</span>';
+        html += '</div>';
         html += '</div>';
         html += '<div style="margin:10px 0;">';
-        html += '<div class="s-label" style="margin-bottom:6px;">🔊 SFX</div>';
-        html += '<div style="display:flex;align-items:center;gap:8px;"><input type="range" min="0" max="1" step="0.1" value="' + sfx + '" class="__vol-slider" data-key="subwaySfxVol"><span class="vol-pct">' + Math.round(sfx * 100) + '%</span></div>';
+        html += '<div style="display:grid;grid-template-columns:30px 76px 1fr 44px;align-items:center;gap:8px;">';
+        html += '<span style="justify-self:start;font-size:18px;">🔊</span><span class="s-label">SFX</span><input type="range" min="0" max="1" step="0.1" value="' + sfx + '" class="__vol-slider" data-key="subwaySfxVol"><span class="vol-pct">' + Math.round(sfx * 100) + '%</span>';
         html += '</div>';
-        html += '<div style="color:#aaa;font-size:13px;margin:12px 0;">↑ Jump | ↓ Roll | ← → Move | 👁 FPV</div>';
+        html += '</div>';
+        html += '<div style="margin:14px 0 10px;">';
+        html += '<div class="s-label" style="margin-bottom:6px;">Roll Release Delay</div>';
+        html += '<div style="display:grid;grid-template-columns:1fr 58px;align-items:center;gap:10px;"><input type="range" min="0" max="1000" step="50" value="' + rollDelay + '" id="__roll-delay"><span id="__roll-delay-val" class="vol-pct">' + rollDelay + 'ms</span></div>';
+        html += '</div>';
+        html += '<div style="margin:14px 0 8px;">';
+        html += '<div class="s-label" style="margin-bottom:8px;">Key Bindings</div>';
+        html += '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">';
+        for (var ai = 0; ai < actionOrder.length; ai++) {
+            var action = actionOrder[ai];
+            var label = SG.keyBindingLabels && SG.keyBindingLabels[action] ? SG.keyBindingLabels[action] : action;
+            var keyLabel = SG.formatKeyName ? SG.formatKeyName(bindings[action]) : bindings[action];
+            html += '<button class="diff-btn __bind-btn" data-action="' + action + '" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 10px;"><span>' + label + '</span><strong>' + keyLabel + '</strong></button>';
+        }
+        html += '</div>';
+        html += '<button class="diff-btn" id="__reset-bindings" style="width:100%;margin-top:8px;">RESET KEYS</button>';
+        html += '</div>';
         html += '<div class="menu-btn modal-close-btn" id="__settings-close">CLOSE</div>';
         html += '</div>';
 
@@ -341,6 +362,59 @@
                 else if (key === 'subwaySfxVol') SG.state.sfxVolume = val;
                 var pct = this.parentNode.querySelector('.vol-pct');
                 if (pct) pct.textContent = Math.round(val * 100) + '%';
+            };
+        }
+        var rollDelaySlider = document.getElementById('__roll-delay');
+        if (rollDelaySlider) {
+            rollDelaySlider.oninput = function() {
+                var val = Math.max(0, Math.min(1000, parseInt(this.value || '200')));
+                SG.state.rollReleaseDelay = val;
+                localStorage.setItem('subwayRollReleaseDelay', String(val));
+                var out = document.getElementById('__roll-delay-val');
+                if (out) out.textContent = val + 'ms';
+            };
+        }
+        function refreshBindingButtons() {
+            var btns = overlay.querySelectorAll('.__bind-btn');
+            var current = SG.getKeyBindings ? SG.getKeyBindings() : bindings;
+            for (var bi = 0; bi < btns.length; bi++) {
+                var action = btns[bi].getAttribute('data-action');
+                var strong = btns[bi].querySelector('strong');
+                if (strong) strong.textContent = SG.formatKeyName ? SG.formatKeyName(current[action]) : current[action];
+                btns[bi].classList.remove('selected');
+            }
+        }
+        var bindBtns = overlay.querySelectorAll('.__bind-btn');
+        for (var bj = 0; bj < bindBtns.length; bj++) {
+            bindBtns[bj].onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var btn = this;
+                var action = btn.getAttribute('data-action');
+                refreshBindingButtons();
+                btn.classList.add('selected');
+                var strong = btn.querySelector('strong');
+                if (strong) strong.textContent = '...';
+                var capture = function(ev) {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    document.removeEventListener('keydown', capture, true);
+                    if (ev.key === 'Escape') {
+                        refreshBindingButtons();
+                        return;
+                    }
+                    if (SG.setKeyBinding) SG.setKeyBinding(action, ev.key);
+                    refreshBindingButtons();
+                };
+                setTimeout(function() { document.addEventListener('keydown', capture, true); }, 0);
+            };
+        }
+        var resetBindings = document.getElementById('__reset-bindings');
+        if (resetBindings) {
+            resetBindings.onclick = function(e) {
+                e.preventDefault();
+                if (SG.resetKeyBindings) SG.resetKeyBindings();
+                refreshBindingButtons();
             };
         }
         // Wire up close button
