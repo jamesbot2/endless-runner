@@ -162,6 +162,7 @@ app.whenReady().then(async () => {
       r.homelanderLoader = window.__SG ? typeof window.__SG.loadHomelanderModel === 'function' : false
       r.homelanderTuning = window.__SG && window.__SG.homelanderModelTuning ? {
         modelRotationY: window.__SG.homelanderModelTuning.modelRotationY,
+        modelYOffset: window.__SG.homelanderModelTuning.modelYOffset,
         eyeOffsetY: window.__SG.homelanderModelTuning.eyeOffsetY,
         eyeOffsetZ: window.__SG.homelanderModelTuning.eyeOffsetZ
       } : null
@@ -192,6 +193,7 @@ app.whenReady().then(async () => {
       r.cityScenerySpacing = window.__SG && window.__SG.getScenerySpacing ? window.__SG.getScenerySpacing(0) : null
       r.citySceneryRows = window.__SG && window.__SG.getSceneryRowCount ? window.__SG.getSceneryRowCount(0) : null
       r.citySceneryAligned = false
+      r.citySceneryNoDuplicateSpawn = false
       if (window.__SG && window.__SG.spawnSceneryRow && window.__SG.disposeObject && window.__SG.scene) {
         var previousTheme = window.__SG.state.theme
         window.__SG.state.theme = 0
@@ -209,6 +211,33 @@ app.whenReady().then(async () => {
         window.__SG.disposeObject(nearCity)
         window.__SG.disposeObject(farCity)
         window.__SG.state.theme = previousTheme
+      }
+      if (window.__SG && window.__SG.spawnBuildings && window.__SG.disposeObject && window.__SG.scene) {
+        var savedTheme = window.__SG.state.theme
+        var savedBuildings = window.__SG.state.buildings.slice()
+        window.__SG.state.theme = 0
+        window.__SG.state.buildings = []
+        window.__SG.spawnBuildings()
+        var firstCount = window.__SG.state.buildings.length
+        window.__SG.spawnBuildings()
+        var secondCount = window.__SG.state.buildings.length
+        var seenScenery = {}
+        var uniqueCount = 0
+        for (var sci = 0; sci < window.__SG.state.buildings.length; sci++) {
+          var sb = window.__SG.state.buildings[sci]
+          var key = Math.round(sb.position.x * 10) + ':' + Math.round(sb.position.z * 10)
+          if (!seenScenery[key]) {
+            seenScenery[key] = true
+            uniqueCount++
+          }
+        }
+        r.citySceneryNoDuplicateSpawn = firstCount > 0 && firstCount === secondCount && uniqueCount === secondCount
+        for (var sdi = window.__SG.state.buildings.length - 1; sdi >= 0; sdi--) {
+          window.__SG.scene.remove(window.__SG.state.buildings[sdi])
+          window.__SG.disposeObject(window.__SG.state.buildings[sdi])
+        }
+        window.__SG.state.buildings = savedBuildings
+        window.__SG.state.theme = savedTheme
       }
       r.rollUnderSize = null
       if (window.__SG && window.__SG.createRollUnderTrain && window.__SG.disposeObject) {
@@ -336,7 +365,7 @@ app.whenReady().then(async () => {
   check("14g. console command runner exists", !!state.executeConsoleCommand)
   check("14h. console includes Homelander easter egg", state.consoleCommands && state.consoleCommands.includes('homelander'), state.consoleCommands ? state.consoleCommands.join(', ') : 'none')
   check("14i. Homelander GLB loader exists", !!state.homelanderLoader && state.homelanderModelPath === 'models/homelander.glb', state.homelanderModelPath || 'missing path')
-  check("14i-1. Homelander GLB tuning faces forward with eye lasers", !!state.homelanderTuning && Math.abs(state.homelanderTuning.modelRotationY + Math.PI / 2) < 0.001 && state.homelanderTuning.eyeOffsetY > 1.5 && state.homelanderTuning.eyeOffsetZ < 0, state.homelanderTuning ? JSON.stringify(state.homelanderTuning) : 'missing tuning')
+  check("14i-1. Homelander GLB tuning faces forward with eye lasers", !!state.homelanderTuning && Math.abs(state.homelanderTuning.modelRotationY) < 0.001 && state.homelanderTuning.modelYOffset <= -0.15 && state.homelanderTuning.eyeOffsetY > 1.5 && state.homelanderTuning.eyeOffsetZ < 0, state.homelanderTuning ? JSON.stringify(state.homelanderTuning) : 'missing tuning')
   check("14i-2. Homelander GLB loads into scene", !!state.homelanderModelLoaded && state.homelanderModelHeight > 1.7, `height=${state.homelanderModelHeight}`)
   check("14j. vehicle model loader exists", !!state.vehicleLoader, state.vehicleTrainPath || 'missing train path')
   check("14k. obstacle spacing guard exists", !!state.obstacleSpacing)
@@ -345,8 +374,9 @@ app.whenReady().then(async () => {
   check("14m-1. city scenery spacing is performance tuned", state.cityScenerySpacing >= 10, `spacing=${state.cityScenerySpacing}`)
   check("14m-2. city scenery rows are grid aligned", !!state.citySceneryAligned)
   check("14m-3. city scenery uses a single building row", state.citySceneryRows === 1, `rows=${state.citySceneryRows}`)
-  check("14m-4. roll-under obstacle is narrower and lower", !!state.rollUnderSize && state.rollUnderSize.width <= 1.8 && state.rollUnderSize.height <= 0.38 && state.rollUnderSize.yOffset <= 1.3, state.rollUnderSize ? JSON.stringify(state.rollUnderSize) : 'missing')
-  check("14m-5. train roof ramp matches train width", state.trainRampWidth !== null && state.trainRampWidth <= 2.05, `rampWidth=${state.trainRampWidth}`)
+  check("14m-4. city scenery spawn avoids duplicate overlap", !!state.citySceneryNoDuplicateSpawn)
+  check("14m-5. roll-under obstacle is narrower and lower", !!state.rollUnderSize && state.rollUnderSize.width <= 1.35 && state.rollUnderSize.height <= 0.28 && state.rollUnderSize.yOffset <= 1.2, state.rollUnderSize ? JSON.stringify(state.rollUnderSize) : 'missing')
+  check("14m-6. train roof ramp matches train width", state.trainRampWidth !== null && state.trainRampWidth <= 1.6, `rampWidth=${state.trainRampWidth}`)
   check("14n. character catalog loaded", state.characterCatalogCount >= 12, String(state.characterCatalogCount))
   check("14o. character selector menu exists", !!state.characterSelector && !!state.charactersButton)
   check("14p. character price follows unlock count", state.characterBuy && state.characterPrice === state.expectedCharacterPrice, `price=${state.characterPrice}, owned=${state.ownedCharacterCount}`)

@@ -1099,6 +1099,31 @@
         return SG.createScenery(x, z + zJitter);
     };
 
+    SG.canPlaceScenery = function(x, z, depth) {
+        var minDepth = depth || 6;
+        for (var i = 0; i < SG.state.buildings.length; i++) {
+            var other = SG.state.buildings[i];
+            if (!other || !other.position) continue;
+            if (Math.abs(other.position.x - x) > 1.2) continue;
+            var otherDepth = other.userData && other.userData.depth ? other.userData.depth : minDepth;
+            var minGap = (minDepth + otherDepth) * 0.5 + 1.2;
+            if (Math.abs(other.position.z - z) < minGap) return false;
+        }
+        return true;
+    };
+
+    SG.addSceneryRow = function(z, side, row) {
+        var theme = SG.state.theme || 0;
+        var base = SG.GROUND_WIDTH / 2 + (theme === 0 ? 2.25 : 1.7);
+        var laneOffset = theme === 0 ? row * 3.9 : row * 2.25;
+        var x = side * (base + laneOffset);
+        var expectedDepth = theme === 0 ? 7.0 : 3.5;
+        if (!SG.canPlaceScenery(x, z, expectedDepth)) return null;
+        var scenery = SG.spawnSceneryRow(z, side, row);
+        SG.state.buildings.push(scenery);
+        return scenery;
+    };
+
     SG.spawnBuildings = function() {
         for (var i = SG.state.buildings.length - 1; i >= 0; i--) {
             if (SG.state.buildings[i].position.z > SG.DESPAWN_BEHIND) {
@@ -1114,14 +1139,13 @@
 
         var theme = SG.state.theme || 0;
         var spacing = SG.getScenerySpacing(theme);
-        for (var z = farthestZ; z > -SG.SPAWN_AHEAD; z -= spacing) {
-            if (z > farthestZ) continue;
+        var startZ = SG.state.buildings.length > 0 ? farthestZ - spacing : 0;
+        for (var z = startZ; z > -SG.SPAWN_AHEAD; z -= spacing) {
             for (var side = -1; side <= 1; side += 2) {
                 var rows = SG.getSceneryRowCount(theme);
                 for (var row = 0; row < rows; row++) {
                     if (theme !== 0 && Math.random() < 0.18) continue;
-                    var scenery = SG.spawnSceneryRow(z - row * spacing * 0.5, side, row);
-                    SG.state.buildings.push(scenery);
+                    SG.addSceneryRow(z - row * spacing * 0.5, side, row);
                 }
             }
         }
@@ -1167,8 +1191,7 @@
                 var rows = SG.getSceneryRowCount(themeIndex);
                 for (var row = 0; row < rows; row++) {
                     if (themeIndex !== 0 && Math.random() < 0.18) continue;
-                    var sc = SG.spawnSceneryRow(z - row * spacing * 0.5, side, row);
-                    SG.state.buildings.push(sc);
+                    SG.addSceneryRow(z - row * spacing * 0.5, side, row);
                 }
             }
         }
@@ -1379,31 +1402,31 @@
         var hasRamp = Math.random() < 0.3;
         if (hasRamp) {
             var rampMat = new THREE.MeshLambertMaterial({ color: 0xFF6600 });
-            var ramp = new THREE.Mesh(new THREE.BoxGeometry(2.02, 0.08, 2.8), rampMat);
+            var ramp = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.07, 2.35), rampMat);
             ramp.position.set(0, 0.9, 4.5);
             ramp.rotation.x = 0.65;
             group.add(ramp);
             var railMat = new THREE.MeshLambertMaterial({ color: 0xDD4400 });
             for (var side3 = -1; side3 <= 1; side3 += 2) {
-                var r = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.42, 2.8), railMat);
-                r.position.set(side3 * 1.01, 1.16, 4.5);
+                var r = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.36, 2.35), railMat);
+                r.position.set(side3 * 0.78, 1.12, 4.5);
                 r.rotation.x = 0.65;
                 group.add(r);
             }
             var warnMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
             for (var i2 = -2; i2 <= 2; i2++) {
                 if (i2 === 0) continue;
-                var s = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.02, 0.05), warnMat);
+                var s = new THREE.Mesh(new THREE.BoxGeometry(1.22, 0.02, 0.045), warnMat);
                 s.position.set(0, 0.03, 4.5 + i2 * 0.5);
                 group.add(s);
             }
             var tipMat = new THREE.MeshBasicMaterial({ color: 0xFFFF00 });
-            var tip = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.12, 0.05), tipMat);
+            var tip = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.10, 0.045), tipMat);
             tip.position.set(0, 0.05, 5.8);
             group.add(tip);
 
             group.userData.hasRamp = true;
-            group.userData.rampWidth = 2.02;
+            group.userData.rampWidth = 1.55;
         }
 
         group.position.set(laneX, 0, zPos);
@@ -1558,23 +1581,23 @@
         var laneX = SG.LANE_POSITIONS[lane];
 
         var top = new THREE.Mesh(
-            new THREE.BoxGeometry(2.0, 0.38, 4.6),
+            new THREE.BoxGeometry(1.42, 0.28, 3.75),
             new THREE.MeshLambertMaterial({ color: 0xFF6600 })
         );
-        top.position.set(0, 1.28, 0);
+        top.position.set(0, 1.18, 0);
         group.add(top);
 
         var stripe = new THREE.Mesh(
-            new THREE.BoxGeometry(1.82, 0.04, 4.35),
+            new THREE.BoxGeometry(1.24, 0.035, 3.45),
             new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
         );
-        stripe.position.set(0, 1.06, 0);
+        stripe.position.set(0, 0.98, 0);
         group.add(stripe);
 
         var supMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
         for (var side = -1; side <= 1; side += 2) {
-            var sup = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.52, 0.12), supMat);
-            sup.position.set(side * 0.9, 0.76, 0);
+            var sup = new THREE.Mesh(new THREE.BoxGeometry(0.10, 1.34, 0.10), supMat);
+            sup.position.set(side * 0.66, 0.67, 0);
             group.add(sup);
         }
 
@@ -1582,7 +1605,7 @@
         for (var side2 = -1; side2 <= 1; side2 += 2) {
             for (var end = -1; end <= 1; end += 2) {
                 var w = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.25, 0.08), warnMat);
-                w.position.set(side2 * 0.96, 1.05, end * 2.2);
+                w.position.set(side2 * 0.72, 0.96, end * 1.78);
                 group.add(w);
             }
         }
@@ -1591,13 +1614,13 @@
         for (var side3 = -1; side3 <= 1; side3 += 2) {
             for (var end2 = -1; end2 <= 1; end2 += 2) {
                 var m = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.12, 0.05), markerMat);
-                m.position.set(side3 * 0.82, 0.1, end2 * 2.55);
+                m.position.set(side3 * 0.60, 0.1, end2 * 2.12);
                 group.add(m);
             }
         }
 
         group.position.set(laneX, 0, zPos);
-        group.userData = { type: 'roll_under', lane: lane, width: 1.8, height: 0.38, depth: 4.6, visualDepth: 5.0, yOffset: 1.28 };
+        group.userData = { type: 'roll_under', lane: lane, width: 1.35, height: 0.28, depth: 3.75, visualDepth: 4.1, yOffset: 1.18 };
         return group;
     };
 
@@ -1973,8 +1996,9 @@
 
             if (od.type === 'train' && od.hasRamp && !state.onRoof) {
                 var trainBack = obs.position.z + (od.depth || 5.5) / 2;
+                var rampReach = (od.rampWidth || 2.0) / 2 + playerHitbox.w / 2;
                 if (playerPos.z >= trainBack - 1.5 && playerPos.z <= trainBack + 3.5 &&
-                    Math.abs(playerPos.x - obsBox.x) < 1.5) {
+                    Math.abs(playerPos.x - obsBox.x) < rampReach) {
                     state.onRoof = true;
                     continue;
                 }
@@ -3199,8 +3223,8 @@
     SG.homelanderModelPath = SG.homelanderModelPath || 'models/homelander.glb';
     SG.homelanderModelTuning = SG.homelanderModelTuning || {
         targetHeight: 1.85,
-        modelRotationY: -Math.PI / 2,
-        modelYOffset: -0.02,
+        modelRotationY: 0,
+        modelYOffset: -0.16,
         eyeOffsetX: 0.055,
         eyeOffsetY: 1.56,
         eyeOffsetZ: -0.34

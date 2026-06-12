@@ -207,6 +207,31 @@
         return SG.createScenery(x, z + zJitter);
     };
 
+    SG.canPlaceScenery = function(x, z, depth) {
+        var minDepth = depth || 6;
+        for (var i = 0; i < SG.state.buildings.length; i++) {
+            var other = SG.state.buildings[i];
+            if (!other || !other.position) continue;
+            if (Math.abs(other.position.x - x) > 1.2) continue;
+            var otherDepth = other.userData && other.userData.depth ? other.userData.depth : minDepth;
+            var minGap = (minDepth + otherDepth) * 0.5 + 1.2;
+            if (Math.abs(other.position.z - z) < minGap) return false;
+        }
+        return true;
+    };
+
+    SG.addSceneryRow = function(z, side, row) {
+        var theme = SG.state.theme || 0;
+        var base = SG.GROUND_WIDTH / 2 + (theme === 0 ? 2.25 : 1.7);
+        var laneOffset = theme === 0 ? row * 3.9 : row * 2.25;
+        var x = side * (base + laneOffset);
+        var expectedDepth = theme === 0 ? 7.0 : 3.5;
+        if (!SG.canPlaceScenery(x, z, expectedDepth)) return null;
+        var scenery = SG.spawnSceneryRow(z, side, row);
+        SG.state.buildings.push(scenery);
+        return scenery;
+    };
+
     SG.spawnBuildings = function() {
         for (var i = SG.state.buildings.length - 1; i >= 0; i--) {
             if (SG.state.buildings[i].position.z > SG.DESPAWN_BEHIND) {
@@ -222,14 +247,13 @@
 
         var theme = SG.state.theme || 0;
         var spacing = SG.getScenerySpacing(theme);
-        for (var z = farthestZ; z > -SG.SPAWN_AHEAD; z -= spacing) {
-            if (z > farthestZ) continue;
+        var startZ = SG.state.buildings.length > 0 ? farthestZ - spacing : 0;
+        for (var z = startZ; z > -SG.SPAWN_AHEAD; z -= spacing) {
             for (var side = -1; side <= 1; side += 2) {
                 var rows = SG.getSceneryRowCount(theme);
                 for (var row = 0; row < rows; row++) {
                     if (theme !== 0 && Math.random() < 0.18) continue;
-                    var scenery = SG.spawnSceneryRow(z - row * spacing * 0.5, side, row);
-                    SG.state.buildings.push(scenery);
+                    SG.addSceneryRow(z - row * spacing * 0.5, side, row);
                 }
             }
         }
@@ -275,8 +299,7 @@
                 var rows = SG.getSceneryRowCount(themeIndex);
                 for (var row = 0; row < rows; row++) {
                     if (themeIndex !== 0 && Math.random() < 0.18) continue;
-                    var sc = SG.spawnSceneryRow(z - row * spacing * 0.5, side, row);
-                    SG.state.buildings.push(sc);
+                    SG.addSceneryRow(z - row * spacing * 0.5, side, row);
                 }
             }
         }

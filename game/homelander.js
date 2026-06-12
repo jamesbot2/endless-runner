@@ -12,8 +12,8 @@
     SG.homelanderModelPath = SG.homelanderModelPath || 'models/homelander.glb';
     SG.homelanderModelTuning = SG.homelanderModelTuning || {
         targetHeight: 1.85,
-        modelRotationY: -Math.PI / 2,
-        modelYOffset: -0.02,
+        modelRotationY: 0,
+        modelYOffset: -0.16,
         eyeOffsetX: 0.055,
         eyeOffsetY: 1.56,
         eyeOffsetZ: -0.34

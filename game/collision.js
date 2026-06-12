@@ -60,8 +60,9 @@
 
             if (od.type === 'train' && od.hasRamp && !state.onRoof) {
                 var trainBack = obs.position.z + (od.depth || 5.5) / 2;
+                var rampReach = (od.rampWidth || 2.0) / 2 + playerHitbox.w / 2;
                 if (playerPos.z >= trainBack - 1.5 && playerPos.z <= trainBack + 3.5 &&
-                    Math.abs(playerPos.x - obsBox.x) < 1.5) {
+                    Math.abs(playerPos.x - obsBox.x) < rampReach) {
                     state.onRoof = true;
                     continue;
                 }
