@@ -72,6 +72,8 @@
         maxMediumAbility: 0,
         maxHardAbility: 0,
         legitRun: true,
-        runCount: 0
+        runCount: 0,
+        selectedCharacter: localStorage.getItem('subwaySelectedCharacter') || 'runner',
+        ownedCharacters: ['runner']
     };
 })();

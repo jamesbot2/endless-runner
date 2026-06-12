@@ -83,6 +83,15 @@
         SG.state.canDoubleJump = owned.indexOf(1) >= 0;
         SG.state.canJetpack = owned.indexOf(2) >= 0;
         SG.state.canRoofWalk = owned.indexOf(3) >= 0;
+        if (Array.isArray(g.ownedCharacters) && g.ownedCharacters.length) {
+            SG.state.ownedCharacters = g.ownedCharacters;
+            localStorage.setItem('subwayOwnedCharacters', JSON.stringify(g.ownedCharacters));
+        }
+        if (g.selectedCharacter) {
+            SG.state.selectedCharacter = g.selectedCharacter;
+            localStorage.setItem('subwaySelectedCharacter', g.selectedCharacter);
+            if (SG.selectCharacter && SG.characterIsOwned(g.selectedCharacter)) SG.selectCharacter(g.selectedCharacter);
+        }
         localStorage.setItem('subwayCredits', String(SG.state.credits));
         localStorage.setItem('subwayTotalCoins', String(SG.state.totalCoins));
         localStorage.setItem('subwayBest', String(SG.state.bestScore || 0));
@@ -191,7 +200,9 @@
                     maxHardAbility: SG.state.maxHardAbility || 0,
                     runCount: (SG.state.runCount || 0),
                     highScore: SG.state.bestScore || 0,
-                    totalCoins: SG.state.totalCoins || SG.state.coins || 0
+                    totalCoins: SG.state.totalCoins || SG.state.coins || 0,
+                    ownedCharacters: SG.getOwnedCharacters ? SG.getOwnedCharacters() : (SG.state.ownedCharacters || ['runner']),
+                    selectedCharacter: SG.state.selectedCharacter || 'runner'
                 }
             })
         }).catch(function() {});

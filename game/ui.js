@@ -17,6 +17,10 @@
                 SG.state.canDoubleJump = data.doubleJump || false;
                 SG.state.canJetpack = data.jetpack || false;
                 SG.state.canRoofWalk = data.roofWalk || false;
+                SG.state.ownedCharacters = Array.isArray(data.ownedCharacters) && data.ownedCharacters.length ? data.ownedCharacters : ['runner'];
+                SG.state.selectedCharacter = data.selectedCharacter || SG.state.selectedCharacter || 'runner';
+                localStorage.setItem('subwayOwnedCharacters', JSON.stringify(SG.state.ownedCharacters));
+                localStorage.setItem('subwaySelectedCharacter', SG.state.selectedCharacter);
             }
         } catch(e) {}
     };
@@ -28,7 +32,9 @@
                 equippedAbility: SG.state.equippedAbility,
                 doubleJump: SG.state.canDoubleJump,
                 jetpack: SG.state.canJetpack,
-                roofWalk: SG.state.canRoofWalk
+                roofWalk: SG.state.canRoofWalk,
+                ownedCharacters: SG.getOwnedCharacters ? SG.getOwnedCharacters() : (SG.state.ownedCharacters || ['runner']),
+                selectedCharacter: SG.state.selectedCharacter || 'runner'
             };
             localStorage.setItem('subwayShop', JSON.stringify(data));
         } catch(e) {}
@@ -126,6 +132,151 @@
 
     };  // end showShop
 
+    SG.characterOverlay = null;
+    SG.characterPreview = null;
+
+    function esc(str) {
+        return String(str || '').replace(/[&<>"']/g, function(ch) {
+            return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+        });
+    }
+
+    function disposeCharacterPreviewModel() {
+        if (!SG.characterPreview || !SG.characterPreview.model) return;
+        SG.characterPreview.scene.remove(SG.characterPreview.model);
+        if (SG.disposeObject) SG.disposeObject(SG.characterPreview.model);
+        SG.characterPreview.model = null;
+        SG.characterPreview.mixer = null;
+    }
+
+    SG.previewCharacter = function(id) {
+        if (!SG.characterPreview || !THREE || !THREE.GLTFLoader) return;
+        var character = SG.getCharacterById ? SG.getCharacterById(id) : null;
+        if (!character) return;
+        SG.characterPreview.current = character.id;
+        disposeCharacterPreviewModel();
+        var loader = new THREE.GLTFLoader();
+        loader.load(character.path, function(gltf) {
+            var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+            if (!model || !SG.characterPreview || SG.characterPreview.current !== character.id) return;
+            model.name = 'Preview-' + character.id;
+            if (SG.normalizePlayerModel) SG.normalizePlayerModel(model);
+            model.traverse(function(node) {
+                if (node && node.isMesh) {
+                    node.castShadow = true;
+                    node.receiveShadow = true;
+                }
+            });
+            SG.characterPreview.model = model;
+            SG.characterPreview.scene.add(model);
+            if (gltf.animations && gltf.animations.length && THREE.AnimationMixer) {
+                SG.characterPreview.mixer = new THREE.AnimationMixer(model);
+                var clip = gltf.animations.filter(function(c) { return String(c.name).toLowerCase() === 'idle'; })[0] || gltf.animations[0];
+                SG.characterPreview.mixer.clipAction(clip).play();
+            }
+        }, undefined, function(err) {
+            SG.characterPreview.error = err;
+        });
+    };
+
+    function ensureCharacterPreview(canvas) {
+        if (!canvas || !THREE) return;
+        if (!SG.characterPreview) {
+            var renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+            var scene = new THREE.Scene();
+            var camera = new THREE.PerspectiveCamera(35, 1, 0.1, 30);
+            camera.position.set(0, 1.15, 4.0);
+            var hemi = new THREE.HemisphereLight(0xffffff, 0x273347, 1.5);
+            scene.add(hemi);
+            var key = new THREE.DirectionalLight(0xffffff, 1.8);
+            key.position.set(2, 4, 3);
+            scene.add(key);
+            SG.characterPreview = { renderer: renderer, scene: scene, camera: camera, model: null, mixer: null, clock: new THREE.Clock(), current: null, running: false };
+        } else if (SG.characterPreview.renderer.domElement !== canvas) {
+            SG.characterPreview.renderer.dispose();
+            SG.characterPreview.renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+            SG.characterPreview.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        }
+
+        function loop() {
+            if (!SG.characterOverlay || SG.characterOverlay.style.display === 'none' || !SG.characterPreview) {
+                if (SG.characterPreview) SG.characterPreview.running = false;
+                return;
+            }
+            SG.characterPreview.running = true;
+            var w = Math.max(220, canvas.clientWidth || 320);
+            var h = Math.max(260, canvas.clientHeight || 360);
+            SG.characterPreview.renderer.setSize(w, h, false);
+            SG.characterPreview.camera.aspect = w / h;
+            SG.characterPreview.camera.updateProjectionMatrix();
+            var delta = SG.characterPreview.clock.getDelta();
+            if (SG.characterPreview.mixer) SG.characterPreview.mixer.update(delta);
+            if (SG.characterPreview.model) SG.characterPreview.model.rotation.y += delta * 0.75;
+            SG.characterPreview.renderer.render(SG.characterPreview.scene, SG.characterPreview.camera);
+            requestAnimationFrame(loop);
+        }
+        if (!SG.characterPreview.running) loop();
+    }
+
+    SG.showCharacters = function() {
+        if (!SG.characterOverlay) {
+            SG.characterOverlay = document.createElement('div');
+            SG.characterOverlay.id = 'characters-overlay';
+            SG.characterOverlay.className = 'overlay';
+            SG.characterOverlay.onclick = function(e) { if (e.target === SG.characterOverlay || e.target.closest('.modal-close-btn')) SG.characterOverlay.style.display = 'none'; };
+            SG.characterOverlay.addEventListener('touchend', function(e) { if (e.target === SG.characterOverlay || e.target.closest('.modal-close-btn')) { e.preventDefault(); SG.characterOverlay.style.display = 'none'; } });
+            document.body.appendChild(SG.characterOverlay);
+        }
+
+        var selected = SG.state.selectedCharacter || 'runner';
+        var owned = SG.getOwnedCharacters ? SG.getOwnedCharacters() : ['runner'];
+        var nextPrice = SG.getNextCharacterPrice ? SG.getNextCharacterPrice() : 0;
+        var html = '<div class="menu-content character-modal">';
+        html += '<h1 class="menu-title" style="font-size:28px;margin-bottom:5px;">CHARACTERS</h1>';
+        html += '<div class="character-credit-line">' + (SG.state.credits || 0) + ' credits</div>';
+        html += '<div class="character-layout">';
+        html += '<div class="character-preview-wrap"><canvas id="character-preview-canvas"></canvas><div id="character-preview-name">' + esc((SG.getCharacterById ? SG.getCharacterById(selected).name : selected)) + '</div></div>';
+        html += '<div class="character-list">';
+        for (var i = 0; i < SG.characterCatalog.length; i++) {
+            var ch = SG.characterCatalog[i];
+            var isOwned = owned.indexOf(ch.id) >= 0;
+            var isSelected = selected === ch.id;
+            html += '<div class="character-card' + (isOwned ? ' owned' : '') + (isSelected ? ' selected' : '') + '" onclick="__neoPreviewCharacter(\'' + ch.id + '\')">';
+            html += '<div class="character-info"><div class="character-name">' + esc(ch.name) + '</div><div class="character-desc">' + esc(ch.desc) + '</div></div>';
+            if (isSelected) html += '<button class="diff-btn active" disabled>SELECTED</button>';
+            else if (isOwned) html += '<button class="diff-btn" onclick="event.stopPropagation();__neoSelectCharacter(\'' + ch.id + '\')">SELECT</button>';
+            else html += '<button class="diff-btn" onclick="event.stopPropagation();__neoBuyCharacter(\'' + ch.id + '\')">' + nextPrice + 'cr</button>';
+            html += '</div>';
+        }
+        html += '</div></div>';
+        html += '<div class="menu-btn modal-close-btn">CLOSE</div>';
+        html += '</div>';
+
+        SG.characterOverlay.innerHTML = html;
+        SG.characterOverlay.style.display = 'flex';
+
+        window.__neoPreviewCharacter = function(id) {
+            var ch = SG.getCharacterById(id);
+            var nameEl = document.getElementById('character-preview-name');
+            if (ch && nameEl) nameEl.textContent = ch.name;
+            SG.previewCharacter(id);
+        };
+        window.__neoSelectCharacter = function(id) {
+            if (SG.selectCharacter(id)) {
+                if (SG.saveShopData) SG.saveShopData();
+                if (SG.accountSave) SG.accountSave();
+                SG.showCharacters();
+            }
+        };
+        window.__neoBuyCharacter = function(id) {
+            if (SG.buyCharacter(id)) SG.showCharacters();
+        };
+
+        ensureCharacterPreview(document.getElementById('character-preview-canvas'));
+        SG.previewCharacter(selected);
+    };
+
     SG.updateMenuCredits = function() {
         var el = document.getElementById('menu-credits');
         if (el) el.textContent = '💰 TOTAL: ' + SG.state.credits;
@@ -211,6 +362,7 @@
                 '<aside class="menu-sidebar">' +
                     '<div class="menu-brand">SUBWAY SURFER<small>NEO EDITION</small></div>' +
                     '<div class="menu-nav-btn" id="shop-btn-menu"><span class="nav-ico">🛒</span> Shop</div>' +
+                    '<div class="menu-nav-btn" id="characters-btn"><span class="nav-ico">◆</span> Characters</div>' +
                     '<div class="menu-nav-btn" id="profile-btn"><span class="nav-ico">👤</span> Profile</div>' +
                     '<div class="menu-nav-btn" id="leaderboard-btn"><span class="nav-ico">🏆</span> Leaderboard</div>' +
                     '<div class="menu-nav-btn" id="settings-btn-menu"><span class="nav-ico">⚙</span> Settings</div>' +
@@ -470,6 +622,11 @@
         if (shopBtnMenu) {
             shopBtnMenu.addEventListener('click', function(e) { e.stopPropagation(); SG.showShop(); });
             shopBtnMenu.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showShop(); });
+        }
+        var charactersBtn = document.getElementById('characters-btn');
+        if (charactersBtn) {
+            charactersBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showCharacters(); });
+            charactersBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showCharacters(); });
         }
         var profileBtn = document.getElementById('profile-btn');
         if (profileBtn) {

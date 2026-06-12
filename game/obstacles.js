@@ -40,6 +40,54 @@
         return clone;
     };
 
+    SG.getObstacleLanes = function(obstacle) {
+        if (!obstacle || !obstacle.userData) return [];
+        if (obstacle.userData.type === 'full_barrier' || obstacle.userData.moving) return [0, 1, 2];
+        if (typeof obstacle.userData.lane === 'number') return [obstacle.userData.lane];
+        return [0, 1, 2];
+    };
+
+    SG.getObstacleDepth = function(obstacle) {
+        if (!obstacle || !obstacle.userData) return 2;
+        var depth = obstacle.userData.visualDepth || obstacle.userData.depth || 2;
+        if (obstacle.userData.hasRamp) depth = Math.max(depth, 9.5);
+        if (obstacle.userData.moving) depth += 1.5;
+        return depth;
+    };
+
+    SG.obstacleLanesOverlap = function(a, b) {
+        for (var i = 0; i < a.length; i++) {
+            if (b.indexOf(a[i]) >= 0) return true;
+        }
+        return false;
+    };
+
+    SG.canPlaceObstacle = function(obstacle, z) {
+        var lanes = SG.getObstacleLanes(obstacle);
+        var depth = SG.getObstacleDepth(obstacle);
+        for (var i = 0; i < SG.state.obstacles.length; i++) {
+            var other = SG.state.obstacles[i];
+            if (!other || !other.userData) continue;
+            if (!SG.obstacleLanesOverlap(lanes, SG.getObstacleLanes(other))) continue;
+            var minGap = (depth + SG.getObstacleDepth(other)) * 0.5 + 2.0;
+            if (Math.abs(other.position.z - z) < minGap) return false;
+        }
+        return true;
+    };
+
+    SG.trackObstacle = function(obstacle, lane, z) {
+        if (!obstacle) return false;
+        if (!SG.canPlaceObstacle(obstacle, z)) {
+            SG.disposeObject(obstacle);
+            return false;
+        }
+        SG.scene.add(obstacle);
+        SG.state.obstacles.push(obstacle);
+        SG.state.coinObstacleMap.set(obstacle.uuid, []);
+        SG.spawnCoinsNearObstacle(obstacle, lane, z);
+        return true;
+    };
+
     SG.createTrain = function(lane, zPos, isMoving) {
         var group = new THREE.Group();
         var laneX = SG.LANE_POSITIONS[lane];
@@ -124,6 +172,7 @@
         group.userData.width = 2.0;
         group.userData.height = 1.8;
         group.userData.depth = 5.5;
+        group.userData.visualDepth = hasRamp ? 9.5 : 5.8;
         group.userData.hasRamp = hasRamp;
         group.userData.moving = moving;
         if (moving) {
@@ -177,7 +226,7 @@
         group.add(cap);
 
         group.position.set(laneX, 0, zPos);
-        group.userData = { type: 'barrier', lane: lane, width: 1.6, height: 0.6, depth: 1.0 };
+        group.userData = { type: 'barrier', lane: lane, width: 1.6, height: 0.6, depth: 1.0, visualDepth: 1.4 };
         return group;
     };
 
@@ -213,7 +262,7 @@
         }
 
         group.position.set(0, 0, zPos);
-        group.userData = { type: 'full_barrier', width: SG.GROUND_WIDTH + 1.5, height: 0.5, depth: 1.2 };
+        group.userData = { type: 'full_barrier', width: SG.GROUND_WIDTH + 1.5, height: 0.5, depth: 1.2, visualDepth: 1.6 };
         return group;
     };
 
@@ -260,7 +309,7 @@
         }
 
         group.position.set(laneX, 0, zPos);
-        group.userData = { type: 'low_flying', lane: lane, width: 1.0, height: 0.8, depth: 0.8, yOffset: 0.8 };
+        group.userData = { type: 'low_flying', lane: lane, width: 1.0, height: 0.8, depth: 0.8, visualDepth: 1.2, yOffset: 0.8 };
         return group;
     };
 
@@ -308,7 +357,7 @@
         }
 
         group.position.set(laneX, 0, zPos);
-        group.userData = { type: 'roll_under', lane: lane, width: 2.0, height: 0.5, depth: 5.0 };
+        group.userData = { type: 'roll_under', lane: lane, width: 2.0, height: 0.5, depth: 5.0, visualDepth: 5.4 };
         return group;
     };
 
@@ -339,10 +388,7 @@
                         if (t < 0.55) obs = SG.createTrain(lane, z, false);
                         else if (t < 0.80) obs = SG.createLowFlyingObstacle(lane, z);
                         else obs = SG.createRollUnderTrain(lane, z);
-                        SG.scene.add(obs);
-                        SG.state.obstacles.push(obs);
-                        SG.state.coinObstacleMap.set(obs.uuid, []);
-                        SG.spawnCoinsNearObstacle(obs, lane, z);
+                        SG.trackObstacle(obs, lane, z);
                     }
                 } else {
                     var lane2 = pi % 3;
@@ -359,10 +405,7 @@
                     else if (type < 0.60) obs2 = SG.createLowFlyingObstacle(lane2, z);
                     else if (type < 0.75) obs2 = SG.createFullLaneBarrier(z);
                     else obs2 = SG.createRollUnderTrain(lane2, z);
-                    SG.scene.add(obs2);
-                    SG.state.obstacles.push(obs2);
-                    SG.state.coinObstacleMap.set(obs2.uuid, []);
-                    SG.spawnCoinsNearObstacle(obs2, lane2, z);
+                    SG.trackObstacle(obs2, lane2, z);
                 }
             }
             for (var zc = -5; zc > -28; zc -= 5) {
@@ -383,9 +426,8 @@
 
         if (ahead.length < targetCount) {
             var z2 = spawnZ;
-            var zBlocked = SG.state.obstacles.some(function(o) {
-                return Math.abs(o.position.z - z2) < 4;
-            });
+            var rowProbe = { position: { z: z2 }, userData: { type: 'row_probe', lane: 1, depth: 1.0, visualDepth: 1.0 } };
+            var zBlocked = !SG.canPlaceObstacle(rowProbe, z2);
             if (!zBlocked) {
                 if (Math.random() < 0.10) {
                     var openLane2 = Math.floor(Math.random() * 3);
@@ -397,10 +439,7 @@
                         if (t2 < 0.55) obs3 = SG.createTrain(lane3, z2, true);
                         else if (t2 < 0.80) obs3 = SG.createLowFlyingObstacle(lane3, z2);
                         else obs3 = SG.createRollUnderTrain(lane3, z2);
-                        SG.scene.add(obs3);
-                        SG.state.obstacles.push(obs3);
-                        SG.state.coinObstacleMap.set(obs3.uuid, []);
-                        SG.spawnCoinsNearObstacle(obs3, lane3, z2);
+                        SG.trackObstacle(obs3, lane3, z2);
                     }
                 } else {
                     var busy = new Set();
@@ -434,10 +473,7 @@
                     else if (type2 < 0.60) obs4 = SG.createLowFlyingObstacle(lane4, z2);
                     else if (type2 < 0.75) obs4 = SG.createFullLaneBarrier(z2);
                     else obs4 = SG.createRollUnderTrain(lane4, z2);
-                    SG.scene.add(obs4);
-                    SG.state.obstacles.push(obs4);
-                    SG.state.coinObstacleMap.set(obs4.uuid, []);
-                    SG.spawnCoinsNearObstacle(obs4, lane4, z2);
+                    SG.trackObstacle(obs4, lane4, z2);
                 }
             }
         }

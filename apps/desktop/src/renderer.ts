@@ -101,6 +101,8 @@ if (window.desktopAPI) {
           runCount: state.runCount || 0,
           ownedAbilities: owned,
           equippedAbility: state.equippedAbility || 0,
+          ownedCharacters: Array.isArray(state.ownedCharacters) ? state.ownedCharacters : ['runner'],
+          selectedCharacter: state.selectedCharacter || 'runner',
           updatedAt: new Date().toISOString(),
         }
         saveLocalGame(save).catch((e: Error) =>
@@ -136,6 +138,21 @@ if (window.desktopAPI) {
             st.canDoubleJump = local.ownedAbilities.indexOf(1) >= 0
             st.canJetpack = local.ownedAbilities.indexOf(2) >= 0
             st.canRoofWalk = local.ownedAbilities.indexOf(3) >= 0
+          }
+          if (Array.isArray(local.ownedCharacters) && local.ownedCharacters.length > 0) {
+            st.ownedCharacters = local.ownedCharacters
+            localStorage.setItem('subwayOwnedCharacters', JSON.stringify(local.ownedCharacters))
+          }
+          if (local.selectedCharacter && typeof local.selectedCharacter === 'string') {
+            st.selectedCharacter = local.selectedCharacter
+            localStorage.setItem('subwaySelectedCharacter', local.selectedCharacter)
+            if (
+              typeof s3.selectCharacter === 'function' &&
+              typeof s3.characterIsOwned === 'function' &&
+              s3.characterIsOwned(local.selectedCharacter)
+            ) {
+              s3.selectCharacter(local.selectedCharacter)
+            }
           }
           localStorage.setItem('subwayCredits', String(st.credits))
           localStorage.setItem('subwayTotalCoins', String(st.totalCoins))

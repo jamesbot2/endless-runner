@@ -99,7 +99,9 @@
         maxMediumAbility: 0,
         maxHardAbility: 0,
         legitRun: true,
-        runCount: 0
+        runCount: 0,
+        selectedCharacter: localStorage.getItem('subwaySelectedCharacter') || 'runner',
+        ownedCharacters: ['runner']
     };
 })();
 // ===== SUBWAY SURFER - Audio System =====
@@ -487,6 +489,81 @@
     const THREE = window.THREE;
 
     SG.playerModelPath = SG.playerModelPath || 'models/player.glb';
+    SG.characterCatalog = SG.characterCatalog || [
+        { id: 'runner', name: 'Neo Runner', path: 'models/player.glb', desc: 'Original subway runner' },
+        { id: 'adventurer', name: 'Adventurer', path: 'models/characters/Adventurer.gltf', desc: 'Backpack and field gear' },
+        { id: 'beach', name: 'Beach', path: 'models/characters/Beach.gltf', desc: 'Light summer outfit' },
+        { id: 'casual2', name: 'Casual 2', path: 'models/characters/Casual_2.gltf', desc: 'Street casual outfit' },
+        { id: 'hoodie', name: 'Hoodie', path: 'models/characters/Casual_Hoodie.gltf', desc: 'Casual hoodie outfit' },
+        { id: 'farmer', name: 'Farmer', path: 'models/characters/Farmer.gltf', desc: 'Workwear runner' },
+        { id: 'king', name: 'King', path: 'models/characters/King.gltf', desc: 'Royal outfit' },
+        { id: 'punk', name: 'Punk', path: 'models/characters/Punk.gltf', desc: 'High contrast punk outfit' },
+        { id: 'spacesuit', name: 'Spacesuit', path: 'models/characters/Spacesuit.gltf', desc: 'Space explorer suit' },
+        { id: 'suit', name: 'Suit', path: 'models/characters/Suit.gltf', desc: 'Formal runner' },
+        { id: 'swat', name: 'SWAT', path: 'models/characters/Swat.gltf', desc: 'Tactical outfit' },
+        { id: 'worker', name: 'Worker', path: 'models/characters/Worker.gltf', desc: 'Construction outfit' }
+    ];
+
+    function parseOwnedCharacters() {
+        try {
+            var saved = JSON.parse(localStorage.getItem('subwayOwnedCharacters') || '["runner"]');
+            if (Array.isArray(saved) && saved.length) return saved.indexOf('runner') >= 0 ? saved : ['runner'].concat(saved);
+        } catch(e) {}
+        return ['runner'];
+    }
+
+    function saveOwnedCharacters(owned) {
+        try { localStorage.setItem('subwayOwnedCharacters', JSON.stringify(owned)); } catch(e) {}
+    }
+
+    SG.getCharacterById = function(id) {
+        for (var i = 0; i < SG.characterCatalog.length; i++) {
+            if (SG.characterCatalog[i].id === id) return SG.characterCatalog[i];
+        }
+        return SG.characterCatalog[0];
+    };
+
+    SG.getOwnedCharacters = function() {
+        if (!Array.isArray(SG.state.ownedCharacters) || !SG.state.ownedCharacters.length) {
+            SG.state.ownedCharacters = parseOwnedCharacters();
+        }
+        return SG.state.ownedCharacters;
+    };
+
+    SG.characterIsOwned = function(id) {
+        return SG.getOwnedCharacters().indexOf(id) >= 0;
+    };
+
+    SG.getNextCharacterPrice = function() {
+        return Math.max(0, SG.getOwnedCharacters().length - 1) * 10000;
+    };
+
+    SG.selectCharacter = function(id) {
+        var character = SG.getCharacterById(id);
+        if (!character || !SG.characterIsOwned(character.id)) return false;
+        SG.state.selectedCharacter = character.id;
+        SG.playerModelPath = character.path;
+        try { localStorage.setItem('subwaySelectedCharacter', character.id); } catch(e) {}
+        if (SG.player) SG.reloadPlayerModel();
+        return true;
+    };
+
+    SG.buyCharacter = function(id) {
+        var character = SG.getCharacterById(id);
+        if (!character || SG.characterIsOwned(character.id)) return SG.selectCharacter(id);
+        var price = SG.getNextCharacterPrice();
+        if ((SG.state.credits || 0) < price) return false;
+        SG.state.credits -= price;
+        var owned = SG.getOwnedCharacters().slice();
+        owned.push(character.id);
+        SG.state.ownedCharacters = owned;
+        saveOwnedCharacters(owned);
+        SG.selectCharacter(character.id);
+        if (SG.updateMenuCredits) SG.updateMenuCredits();
+        if (SG.saveShopData) SG.saveShopData();
+        if (SG.accountSave) SG.accountSave();
+        return true;
+    };
 
     function rememberLegacyPart(part) {
         SG.playerLegacyParts = SG.playerLegacyParts || [];
@@ -498,6 +575,13 @@
         var parts = SG.playerLegacyParts || [];
         for (var i = 0; i < parts.length; i++) {
             if (parts[i]) parts[i].visible = false;
+        }
+    }
+
+    function showLegacyBodyParts() {
+        var parts = SG.playerLegacyParts || [];
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i]) parts[i].visible = true;
         }
     }
 
@@ -516,6 +600,7 @@
         box.getCenter(center);
         model.position.set(-center.x, -box.min.y, -center.z);
     }
+    SG.normalizePlayerModel = normalizeModel;
 
     function indexAnimationActions(gltf, model) {
         SG.playerMixer = null;
@@ -569,6 +654,11 @@
     SG.loadPlayerModel = function() {
         if (SG.playerModelRequested || !SG.player || !THREE || !THREE.GLTFLoader) return;
         SG.playerModelRequested = true;
+        var selected = SG.state.selectedCharacter || localStorage.getItem('subwaySelectedCharacter') || 'runner';
+        if (!SG.characterIsOwned(selected)) selected = 'runner';
+        var character = SG.getCharacterById(selected);
+        SG.state.selectedCharacter = character.id;
+        SG.playerModelPath = character.path;
 
         var loader = new THREE.GLTFLoader();
         loader.load(SG.playerModelPath, function(gltf) {
@@ -577,7 +667,7 @@
             var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
             if (!model) return;
 
-            model.name = 'PlayerGLB';
+            model.name = 'PlayerGLB-' + character.id;
             normalizeModel(model);
             model.traverse(function(node) {
                 if (node && node.isMesh) {
@@ -599,7 +689,24 @@
         }, undefined, function(err) {
             SG.playerModelError = err;
             SG.playerModelLoaded = false;
+            showLegacyBodyParts();
         });
+    };
+
+    SG.reloadPlayerModel = function() {
+        if (!SG.player || !THREE) return;
+        if (SG.playerModel && SG.playerModel.parent) {
+            SG.playerModel.parent.remove(SG.playerModel);
+            if (SG.disposeObject) SG.disposeObject(SG.playerModel);
+        }
+        SG.playerModel = null;
+        SG.playerModelLoaded = false;
+        SG.playerModelRequested = false;
+        SG.playerMixer = null;
+        SG.playerActions = {};
+        SG.playerAction = null;
+        showLegacyBodyParts();
+        SG.loadPlayerModel();
     };
 
     SG.createPlayer = function() {
@@ -610,6 +717,10 @@
         SG.playerModel = null;
         SG.playerModelLoaded = false;
         SG.playerModelRequested = false;
+        SG.state.ownedCharacters = parseOwnedCharacters();
+        SG.state.selectedCharacter = localStorage.getItem('subwaySelectedCharacter') || SG.state.selectedCharacter || 'runner';
+        if (!SG.characterIsOwned(SG.state.selectedCharacter)) SG.state.selectedCharacter = 'runner';
+        SG.playerModelPath = SG.getCharacterById(SG.state.selectedCharacter).path;
 
         var bodyMat = new THREE.MeshLambertMaterial({ color: 0x2255aa });
         SG.playerBody = rememberLegacyPart(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.4), bodyMat));
@@ -1013,6 +1124,54 @@
         return clone;
     };
 
+    SG.getObstacleLanes = function(obstacle) {
+        if (!obstacle || !obstacle.userData) return [];
+        if (obstacle.userData.type === 'full_barrier' || obstacle.userData.moving) return [0, 1, 2];
+        if (typeof obstacle.userData.lane === 'number') return [obstacle.userData.lane];
+        return [0, 1, 2];
+    };
+
+    SG.getObstacleDepth = function(obstacle) {
+        if (!obstacle || !obstacle.userData) return 2;
+        var depth = obstacle.userData.visualDepth || obstacle.userData.depth || 2;
+        if (obstacle.userData.hasRamp) depth = Math.max(depth, 9.5);
+        if (obstacle.userData.moving) depth += 1.5;
+        return depth;
+    };
+
+    SG.obstacleLanesOverlap = function(a, b) {
+        for (var i = 0; i < a.length; i++) {
+            if (b.indexOf(a[i]) >= 0) return true;
+        }
+        return false;
+    };
+
+    SG.canPlaceObstacle = function(obstacle, z) {
+        var lanes = SG.getObstacleLanes(obstacle);
+        var depth = SG.getObstacleDepth(obstacle);
+        for (var i = 0; i < SG.state.obstacles.length; i++) {
+            var other = SG.state.obstacles[i];
+            if (!other || !other.userData) continue;
+            if (!SG.obstacleLanesOverlap(lanes, SG.getObstacleLanes(other))) continue;
+            var minGap = (depth + SG.getObstacleDepth(other)) * 0.5 + 2.0;
+            if (Math.abs(other.position.z - z) < minGap) return false;
+        }
+        return true;
+    };
+
+    SG.trackObstacle = function(obstacle, lane, z) {
+        if (!obstacle) return false;
+        if (!SG.canPlaceObstacle(obstacle, z)) {
+            SG.disposeObject(obstacle);
+            return false;
+        }
+        SG.scene.add(obstacle);
+        SG.state.obstacles.push(obstacle);
+        SG.state.coinObstacleMap.set(obstacle.uuid, []);
+        SG.spawnCoinsNearObstacle(obstacle, lane, z);
+        return true;
+    };
+
     SG.createTrain = function(lane, zPos, isMoving) {
         var group = new THREE.Group();
         var laneX = SG.LANE_POSITIONS[lane];
@@ -1097,6 +1256,7 @@
         group.userData.width = 2.0;
         group.userData.height = 1.8;
         group.userData.depth = 5.5;
+        group.userData.visualDepth = hasRamp ? 9.5 : 5.8;
         group.userData.hasRamp = hasRamp;
         group.userData.moving = moving;
         if (moving) {
@@ -1150,7 +1310,7 @@
         group.add(cap);
 
         group.position.set(laneX, 0, zPos);
-        group.userData = { type: 'barrier', lane: lane, width: 1.6, height: 0.6, depth: 1.0 };
+        group.userData = { type: 'barrier', lane: lane, width: 1.6, height: 0.6, depth: 1.0, visualDepth: 1.4 };
         return group;
     };
 
@@ -1186,7 +1346,7 @@
         }
 
         group.position.set(0, 0, zPos);
-        group.userData = { type: 'full_barrier', width: SG.GROUND_WIDTH + 1.5, height: 0.5, depth: 1.2 };
+        group.userData = { type: 'full_barrier', width: SG.GROUND_WIDTH + 1.5, height: 0.5, depth: 1.2, visualDepth: 1.6 };
         return group;
     };
 
@@ -1233,7 +1393,7 @@
         }
 
         group.position.set(laneX, 0, zPos);
-        group.userData = { type: 'low_flying', lane: lane, width: 1.0, height: 0.8, depth: 0.8, yOffset: 0.8 };
+        group.userData = { type: 'low_flying', lane: lane, width: 1.0, height: 0.8, depth: 0.8, visualDepth: 1.2, yOffset: 0.8 };
         return group;
     };
 
@@ -1281,7 +1441,7 @@
         }
 
         group.position.set(laneX, 0, zPos);
-        group.userData = { type: 'roll_under', lane: lane, width: 2.0, height: 0.5, depth: 5.0 };
+        group.userData = { type: 'roll_under', lane: lane, width: 2.0, height: 0.5, depth: 5.0, visualDepth: 5.4 };
         return group;
     };
 
@@ -1312,10 +1472,7 @@
                         if (t < 0.55) obs = SG.createTrain(lane, z, false);
                         else if (t < 0.80) obs = SG.createLowFlyingObstacle(lane, z);
                         else obs = SG.createRollUnderTrain(lane, z);
-                        SG.scene.add(obs);
-                        SG.state.obstacles.push(obs);
-                        SG.state.coinObstacleMap.set(obs.uuid, []);
-                        SG.spawnCoinsNearObstacle(obs, lane, z);
+                        SG.trackObstacle(obs, lane, z);
                     }
                 } else {
                     var lane2 = pi % 3;
@@ -1332,10 +1489,7 @@
                     else if (type < 0.60) obs2 = SG.createLowFlyingObstacle(lane2, z);
                     else if (type < 0.75) obs2 = SG.createFullLaneBarrier(z);
                     else obs2 = SG.createRollUnderTrain(lane2, z);
-                    SG.scene.add(obs2);
-                    SG.state.obstacles.push(obs2);
-                    SG.state.coinObstacleMap.set(obs2.uuid, []);
-                    SG.spawnCoinsNearObstacle(obs2, lane2, z);
+                    SG.trackObstacle(obs2, lane2, z);
                 }
             }
             for (var zc = -5; zc > -28; zc -= 5) {
@@ -1356,9 +1510,8 @@
 
         if (ahead.length < targetCount) {
             var z2 = spawnZ;
-            var zBlocked = SG.state.obstacles.some(function(o) {
-                return Math.abs(o.position.z - z2) < 4;
-            });
+            var rowProbe = { position: { z: z2 }, userData: { type: 'row_probe', lane: 1, depth: 1.0, visualDepth: 1.0 } };
+            var zBlocked = !SG.canPlaceObstacle(rowProbe, z2);
             if (!zBlocked) {
                 if (Math.random() < 0.10) {
                     var openLane2 = Math.floor(Math.random() * 3);
@@ -1370,10 +1523,7 @@
                         if (t2 < 0.55) obs3 = SG.createTrain(lane3, z2, true);
                         else if (t2 < 0.80) obs3 = SG.createLowFlyingObstacle(lane3, z2);
                         else obs3 = SG.createRollUnderTrain(lane3, z2);
-                        SG.scene.add(obs3);
-                        SG.state.obstacles.push(obs3);
-                        SG.state.coinObstacleMap.set(obs3.uuid, []);
-                        SG.spawnCoinsNearObstacle(obs3, lane3, z2);
+                        SG.trackObstacle(obs3, lane3, z2);
                     }
                 } else {
                     var busy = new Set();
@@ -1407,10 +1557,7 @@
                     else if (type2 < 0.60) obs4 = SG.createLowFlyingObstacle(lane4, z2);
                     else if (type2 < 0.75) obs4 = SG.createFullLaneBarrier(z2);
                     else obs4 = SG.createRollUnderTrain(lane4, z2);
-                    SG.scene.add(obs4);
-                    SG.state.obstacles.push(obs4);
-                    SG.state.coinObstacleMap.set(obs4.uuid, []);
-                    SG.spawnCoinsNearObstacle(obs4, lane4, z2);
+                    SG.trackObstacle(obs4, lane4, z2);
                 }
             }
         }
@@ -1756,6 +1903,10 @@
                 SG.state.canDoubleJump = data.doubleJump || false;
                 SG.state.canJetpack = data.jetpack || false;
                 SG.state.canRoofWalk = data.roofWalk || false;
+                SG.state.ownedCharacters = Array.isArray(data.ownedCharacters) && data.ownedCharacters.length ? data.ownedCharacters : ['runner'];
+                SG.state.selectedCharacter = data.selectedCharacter || SG.state.selectedCharacter || 'runner';
+                localStorage.setItem('subwayOwnedCharacters', JSON.stringify(SG.state.ownedCharacters));
+                localStorage.setItem('subwaySelectedCharacter', SG.state.selectedCharacter);
             }
         } catch(e) {}
     };
@@ -1767,7 +1918,9 @@
                 equippedAbility: SG.state.equippedAbility,
                 doubleJump: SG.state.canDoubleJump,
                 jetpack: SG.state.canJetpack,
-                roofWalk: SG.state.canRoofWalk
+                roofWalk: SG.state.canRoofWalk,
+                ownedCharacters: SG.getOwnedCharacters ? SG.getOwnedCharacters() : (SG.state.ownedCharacters || ['runner']),
+                selectedCharacter: SG.state.selectedCharacter || 'runner'
             };
             localStorage.setItem('subwayShop', JSON.stringify(data));
         } catch(e) {}
@@ -1865,6 +2018,151 @@
 
     };  // end showShop
 
+    SG.characterOverlay = null;
+    SG.characterPreview = null;
+
+    function esc(str) {
+        return String(str || '').replace(/[&<>"']/g, function(ch) {
+            return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+        });
+    }
+
+    function disposeCharacterPreviewModel() {
+        if (!SG.characterPreview || !SG.characterPreview.model) return;
+        SG.characterPreview.scene.remove(SG.characterPreview.model);
+        if (SG.disposeObject) SG.disposeObject(SG.characterPreview.model);
+        SG.characterPreview.model = null;
+        SG.characterPreview.mixer = null;
+    }
+
+    SG.previewCharacter = function(id) {
+        if (!SG.characterPreview || !THREE || !THREE.GLTFLoader) return;
+        var character = SG.getCharacterById ? SG.getCharacterById(id) : null;
+        if (!character) return;
+        SG.characterPreview.current = character.id;
+        disposeCharacterPreviewModel();
+        var loader = new THREE.GLTFLoader();
+        loader.load(character.path, function(gltf) {
+            var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+            if (!model || !SG.characterPreview || SG.characterPreview.current !== character.id) return;
+            model.name = 'Preview-' + character.id;
+            if (SG.normalizePlayerModel) SG.normalizePlayerModel(model);
+            model.traverse(function(node) {
+                if (node && node.isMesh) {
+                    node.castShadow = true;
+                    node.receiveShadow = true;
+                }
+            });
+            SG.characterPreview.model = model;
+            SG.characterPreview.scene.add(model);
+            if (gltf.animations && gltf.animations.length && THREE.AnimationMixer) {
+                SG.characterPreview.mixer = new THREE.AnimationMixer(model);
+                var clip = gltf.animations.filter(function(c) { return String(c.name).toLowerCase() === 'idle'; })[0] || gltf.animations[0];
+                SG.characterPreview.mixer.clipAction(clip).play();
+            }
+        }, undefined, function(err) {
+            SG.characterPreview.error = err;
+        });
+    };
+
+    function ensureCharacterPreview(canvas) {
+        if (!canvas || !THREE) return;
+        if (!SG.characterPreview) {
+            var renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+            var scene = new THREE.Scene();
+            var camera = new THREE.PerspectiveCamera(35, 1, 0.1, 30);
+            camera.position.set(0, 1.15, 4.0);
+            var hemi = new THREE.HemisphereLight(0xffffff, 0x273347, 1.5);
+            scene.add(hemi);
+            var key = new THREE.DirectionalLight(0xffffff, 1.8);
+            key.position.set(2, 4, 3);
+            scene.add(key);
+            SG.characterPreview = { renderer: renderer, scene: scene, camera: camera, model: null, mixer: null, clock: new THREE.Clock(), current: null, running: false };
+        } else if (SG.characterPreview.renderer.domElement !== canvas) {
+            SG.characterPreview.renderer.dispose();
+            SG.characterPreview.renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+            SG.characterPreview.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        }
+
+        function loop() {
+            if (!SG.characterOverlay || SG.characterOverlay.style.display === 'none' || !SG.characterPreview) {
+                if (SG.characterPreview) SG.characterPreview.running = false;
+                return;
+            }
+            SG.characterPreview.running = true;
+            var w = Math.max(220, canvas.clientWidth || 320);
+            var h = Math.max(260, canvas.clientHeight || 360);
+            SG.characterPreview.renderer.setSize(w, h, false);
+            SG.characterPreview.camera.aspect = w / h;
+            SG.characterPreview.camera.updateProjectionMatrix();
+            var delta = SG.characterPreview.clock.getDelta();
+            if (SG.characterPreview.mixer) SG.characterPreview.mixer.update(delta);
+            if (SG.characterPreview.model) SG.characterPreview.model.rotation.y += delta * 0.75;
+            SG.characterPreview.renderer.render(SG.characterPreview.scene, SG.characterPreview.camera);
+            requestAnimationFrame(loop);
+        }
+        if (!SG.characterPreview.running) loop();
+    }
+
+    SG.showCharacters = function() {
+        if (!SG.characterOverlay) {
+            SG.characterOverlay = document.createElement('div');
+            SG.characterOverlay.id = 'characters-overlay';
+            SG.characterOverlay.className = 'overlay';
+            SG.characterOverlay.onclick = function(e) { if (e.target === SG.characterOverlay || e.target.closest('.modal-close-btn')) SG.characterOverlay.style.display = 'none'; };
+            SG.characterOverlay.addEventListener('touchend', function(e) { if (e.target === SG.characterOverlay || e.target.closest('.modal-close-btn')) { e.preventDefault(); SG.characterOverlay.style.display = 'none'; } });
+            document.body.appendChild(SG.characterOverlay);
+        }
+
+        var selected = SG.state.selectedCharacter || 'runner';
+        var owned = SG.getOwnedCharacters ? SG.getOwnedCharacters() : ['runner'];
+        var nextPrice = SG.getNextCharacterPrice ? SG.getNextCharacterPrice() : 0;
+        var html = '<div class="menu-content character-modal">';
+        html += '<h1 class="menu-title" style="font-size:28px;margin-bottom:5px;">CHARACTERS</h1>';
+        html += '<div class="character-credit-line">' + (SG.state.credits || 0) + ' credits</div>';
+        html += '<div class="character-layout">';
+        html += '<div class="character-preview-wrap"><canvas id="character-preview-canvas"></canvas><div id="character-preview-name">' + esc((SG.getCharacterById ? SG.getCharacterById(selected).name : selected)) + '</div></div>';
+        html += '<div class="character-list">';
+        for (var i = 0; i < SG.characterCatalog.length; i++) {
+            var ch = SG.characterCatalog[i];
+            var isOwned = owned.indexOf(ch.id) >= 0;
+            var isSelected = selected === ch.id;
+            html += '<div class="character-card' + (isOwned ? ' owned' : '') + (isSelected ? ' selected' : '') + '" onclick="__neoPreviewCharacter(\'' + ch.id + '\')">';
+            html += '<div class="character-info"><div class="character-name">' + esc(ch.name) + '</div><div class="character-desc">' + esc(ch.desc) + '</div></div>';
+            if (isSelected) html += '<button class="diff-btn active" disabled>SELECTED</button>';
+            else if (isOwned) html += '<button class="diff-btn" onclick="event.stopPropagation();__neoSelectCharacter(\'' + ch.id + '\')">SELECT</button>';
+            else html += '<button class="diff-btn" onclick="event.stopPropagation();__neoBuyCharacter(\'' + ch.id + '\')">' + nextPrice + 'cr</button>';
+            html += '</div>';
+        }
+        html += '</div></div>';
+        html += '<div class="menu-btn modal-close-btn">CLOSE</div>';
+        html += '</div>';
+
+        SG.characterOverlay.innerHTML = html;
+        SG.characterOverlay.style.display = 'flex';
+
+        window.__neoPreviewCharacter = function(id) {
+            var ch = SG.getCharacterById(id);
+            var nameEl = document.getElementById('character-preview-name');
+            if (ch && nameEl) nameEl.textContent = ch.name;
+            SG.previewCharacter(id);
+        };
+        window.__neoSelectCharacter = function(id) {
+            if (SG.selectCharacter(id)) {
+                if (SG.saveShopData) SG.saveShopData();
+                if (SG.accountSave) SG.accountSave();
+                SG.showCharacters();
+            }
+        };
+        window.__neoBuyCharacter = function(id) {
+            if (SG.buyCharacter(id)) SG.showCharacters();
+        };
+
+        ensureCharacterPreview(document.getElementById('character-preview-canvas'));
+        SG.previewCharacter(selected);
+    };
+
     SG.updateMenuCredits = function() {
         var el = document.getElementById('menu-credits');
         if (el) el.textContent = '💰 TOTAL: ' + SG.state.credits;
@@ -1950,6 +2248,7 @@
                 '<aside class="menu-sidebar">' +
                     '<div class="menu-brand">SUBWAY SURFER<small>NEO EDITION</small></div>' +
                     '<div class="menu-nav-btn" id="shop-btn-menu"><span class="nav-ico">🛒</span> Shop</div>' +
+                    '<div class="menu-nav-btn" id="characters-btn"><span class="nav-ico">◆</span> Characters</div>' +
                     '<div class="menu-nav-btn" id="profile-btn"><span class="nav-ico">👤</span> Profile</div>' +
                     '<div class="menu-nav-btn" id="leaderboard-btn"><span class="nav-ico">🏆</span> Leaderboard</div>' +
                     '<div class="menu-nav-btn" id="settings-btn-menu"><span class="nav-ico">⚙</span> Settings</div>' +
@@ -2209,6 +2508,11 @@
         if (shopBtnMenu) {
             shopBtnMenu.addEventListener('click', function(e) { e.stopPropagation(); SG.showShop(); });
             shopBtnMenu.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showShop(); });
+        }
+        var charactersBtn = document.getElementById('characters-btn');
+        if (charactersBtn) {
+            charactersBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showCharacters(); });
+            charactersBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showCharacters(); });
         }
         var profileBtn = document.getElementById('profile-btn');
         if (profileBtn) {
@@ -4159,6 +4463,15 @@
         SG.state.canDoubleJump = owned.indexOf(1) >= 0;
         SG.state.canJetpack = owned.indexOf(2) >= 0;
         SG.state.canRoofWalk = owned.indexOf(3) >= 0;
+        if (Array.isArray(g.ownedCharacters) && g.ownedCharacters.length) {
+            SG.state.ownedCharacters = g.ownedCharacters;
+            localStorage.setItem('subwayOwnedCharacters', JSON.stringify(g.ownedCharacters));
+        }
+        if (g.selectedCharacter) {
+            SG.state.selectedCharacter = g.selectedCharacter;
+            localStorage.setItem('subwaySelectedCharacter', g.selectedCharacter);
+            if (SG.selectCharacter && SG.characterIsOwned(g.selectedCharacter)) SG.selectCharacter(g.selectedCharacter);
+        }
         localStorage.setItem('subwayCredits', String(SG.state.credits));
         localStorage.setItem('subwayTotalCoins', String(SG.state.totalCoins));
         localStorage.setItem('subwayBest', String(SG.state.bestScore || 0));
@@ -4267,7 +4580,9 @@
                     maxHardAbility: SG.state.maxHardAbility || 0,
                     runCount: (SG.state.runCount || 0),
                     highScore: SG.state.bestScore || 0,
-                    totalCoins: SG.state.totalCoins || SG.state.coins || 0
+                    totalCoins: SG.state.totalCoins || SG.state.coins || 0,
+                    ownedCharacters: SG.getOwnedCharacters ? SG.getOwnedCharacters() : (SG.state.ownedCharacters || ['runner']),
+                    selectedCharacter: SG.state.selectedCharacter || 'runner'
                 }
             })
         }).catch(function() {});

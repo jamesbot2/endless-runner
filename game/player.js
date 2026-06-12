@@ -5,6 +5,81 @@
     const THREE = window.THREE;
 
     SG.playerModelPath = SG.playerModelPath || 'models/player.glb';
+    SG.characterCatalog = SG.characterCatalog || [
+        { id: 'runner', name: 'Neo Runner', path: 'models/player.glb', desc: 'Original subway runner' },
+        { id: 'adventurer', name: 'Adventurer', path: 'models/characters/Adventurer.gltf', desc: 'Backpack and field gear' },
+        { id: 'beach', name: 'Beach', path: 'models/characters/Beach.gltf', desc: 'Light summer outfit' },
+        { id: 'casual2', name: 'Casual 2', path: 'models/characters/Casual_2.gltf', desc: 'Street casual outfit' },
+        { id: 'hoodie', name: 'Hoodie', path: 'models/characters/Casual_Hoodie.gltf', desc: 'Casual hoodie outfit' },
+        { id: 'farmer', name: 'Farmer', path: 'models/characters/Farmer.gltf', desc: 'Workwear runner' },
+        { id: 'king', name: 'King', path: 'models/characters/King.gltf', desc: 'Royal outfit' },
+        { id: 'punk', name: 'Punk', path: 'models/characters/Punk.gltf', desc: 'High contrast punk outfit' },
+        { id: 'spacesuit', name: 'Spacesuit', path: 'models/characters/Spacesuit.gltf', desc: 'Space explorer suit' },
+        { id: 'suit', name: 'Suit', path: 'models/characters/Suit.gltf', desc: 'Formal runner' },
+        { id: 'swat', name: 'SWAT', path: 'models/characters/Swat.gltf', desc: 'Tactical outfit' },
+        { id: 'worker', name: 'Worker', path: 'models/characters/Worker.gltf', desc: 'Construction outfit' }
+    ];
+
+    function parseOwnedCharacters() {
+        try {
+            var saved = JSON.parse(localStorage.getItem('subwayOwnedCharacters') || '["runner"]');
+            if (Array.isArray(saved) && saved.length) return saved.indexOf('runner') >= 0 ? saved : ['runner'].concat(saved);
+        } catch(e) {}
+        return ['runner'];
+    }
+
+    function saveOwnedCharacters(owned) {
+        try { localStorage.setItem('subwayOwnedCharacters', JSON.stringify(owned)); } catch(e) {}
+    }
+
+    SG.getCharacterById = function(id) {
+        for (var i = 0; i < SG.characterCatalog.length; i++) {
+            if (SG.characterCatalog[i].id === id) return SG.characterCatalog[i];
+        }
+        return SG.characterCatalog[0];
+    };
+
+    SG.getOwnedCharacters = function() {
+        if (!Array.isArray(SG.state.ownedCharacters) || !SG.state.ownedCharacters.length) {
+            SG.state.ownedCharacters = parseOwnedCharacters();
+        }
+        return SG.state.ownedCharacters;
+    };
+
+    SG.characterIsOwned = function(id) {
+        return SG.getOwnedCharacters().indexOf(id) >= 0;
+    };
+
+    SG.getNextCharacterPrice = function() {
+        return Math.max(0, SG.getOwnedCharacters().length - 1) * 10000;
+    };
+
+    SG.selectCharacter = function(id) {
+        var character = SG.getCharacterById(id);
+        if (!character || !SG.characterIsOwned(character.id)) return false;
+        SG.state.selectedCharacter = character.id;
+        SG.playerModelPath = character.path;
+        try { localStorage.setItem('subwaySelectedCharacter', character.id); } catch(e) {}
+        if (SG.player) SG.reloadPlayerModel();
+        return true;
+    };
+
+    SG.buyCharacter = function(id) {
+        var character = SG.getCharacterById(id);
+        if (!character || SG.characterIsOwned(character.id)) return SG.selectCharacter(id);
+        var price = SG.getNextCharacterPrice();
+        if ((SG.state.credits || 0) < price) return false;
+        SG.state.credits -= price;
+        var owned = SG.getOwnedCharacters().slice();
+        owned.push(character.id);
+        SG.state.ownedCharacters = owned;
+        saveOwnedCharacters(owned);
+        SG.selectCharacter(character.id);
+        if (SG.updateMenuCredits) SG.updateMenuCredits();
+        if (SG.saveShopData) SG.saveShopData();
+        if (SG.accountSave) SG.accountSave();
+        return true;
+    };
 
     function rememberLegacyPart(part) {
         SG.playerLegacyParts = SG.playerLegacyParts || [];
@@ -16,6 +91,13 @@
         var parts = SG.playerLegacyParts || [];
         for (var i = 0; i < parts.length; i++) {
             if (parts[i]) parts[i].visible = false;
+        }
+    }
+
+    function showLegacyBodyParts() {
+        var parts = SG.playerLegacyParts || [];
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i]) parts[i].visible = true;
         }
     }
 
@@ -34,6 +116,7 @@
         box.getCenter(center);
         model.position.set(-center.x, -box.min.y, -center.z);
     }
+    SG.normalizePlayerModel = normalizeModel;
 
     function indexAnimationActions(gltf, model) {
         SG.playerMixer = null;
@@ -87,6 +170,11 @@
     SG.loadPlayerModel = function() {
         if (SG.playerModelRequested || !SG.player || !THREE || !THREE.GLTFLoader) return;
         SG.playerModelRequested = true;
+        var selected = SG.state.selectedCharacter || localStorage.getItem('subwaySelectedCharacter') || 'runner';
+        if (!SG.characterIsOwned(selected)) selected = 'runner';
+        var character = SG.getCharacterById(selected);
+        SG.state.selectedCharacter = character.id;
+        SG.playerModelPath = character.path;
 
         var loader = new THREE.GLTFLoader();
         loader.load(SG.playerModelPath, function(gltf) {
@@ -95,7 +183,7 @@
             var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
             if (!model) return;
 
-            model.name = 'PlayerGLB';
+            model.name = 'PlayerGLB-' + character.id;
             normalizeModel(model);
             model.traverse(function(node) {
                 if (node && node.isMesh) {
@@ -117,7 +205,24 @@
         }, undefined, function(err) {
             SG.playerModelError = err;
             SG.playerModelLoaded = false;
+            showLegacyBodyParts();
         });
+    };
+
+    SG.reloadPlayerModel = function() {
+        if (!SG.player || !THREE) return;
+        if (SG.playerModel && SG.playerModel.parent) {
+            SG.playerModel.parent.remove(SG.playerModel);
+            if (SG.disposeObject) SG.disposeObject(SG.playerModel);
+        }
+        SG.playerModel = null;
+        SG.playerModelLoaded = false;
+        SG.playerModelRequested = false;
+        SG.playerMixer = null;
+        SG.playerActions = {};
+        SG.playerAction = null;
+        showLegacyBodyParts();
+        SG.loadPlayerModel();
     };
 
     SG.createPlayer = function() {
@@ -128,6 +233,10 @@
         SG.playerModel = null;
         SG.playerModelLoaded = false;
         SG.playerModelRequested = false;
+        SG.state.ownedCharacters = parseOwnedCharacters();
+        SG.state.selectedCharacter = localStorage.getItem('subwaySelectedCharacter') || SG.state.selectedCharacter || 'runner';
+        if (!SG.characterIsOwned(SG.state.selectedCharacter)) SG.state.selectedCharacter = 'runner';
+        SG.playerModelPath = SG.getCharacterById(SG.state.selectedCharacter).path;
 
         var bodyMat = new THREE.MeshLambertMaterial({ color: 0x2255aa });
         SG.playerBody = rememberLegacyPart(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.4), bodyMat));

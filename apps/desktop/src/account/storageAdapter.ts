@@ -16,6 +16,8 @@ export interface GameSave {
   runCount: number
   ownedAbilities: number[]
   equippedAbility: number
+  ownedCharacters?: string[]
+  selectedCharacter?: string
   updatedAt: string // ISO 8601
 }
 
@@ -46,6 +48,8 @@ function defaultSave(): GameSave {
     runCount: 0,
     ownedAbilities: [0],
     equippedAbility: 0,
+    ownedCharacters: ['runner'],
+    selectedCharacter: 'runner',
     updatedAt: nowISO(),
   }
 }

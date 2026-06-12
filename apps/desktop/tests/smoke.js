@@ -19,6 +19,7 @@ const DESKTOP = path.resolve(__dirname, '..')
 const TMPDIR = path.join(app.getPath('temp'), 'subway-surfer-smoke-' + Date.now())
 const SETTINGS_FILE = path.join(TMPDIR, 'settings.json')
 const SAVE_FILE = path.join(TMPDIR, 'save.json')
+app.setPath('userData', TMPDIR)
 
 function readJSON(fp) {
   try {
@@ -159,6 +160,22 @@ app.whenReady().then(async () => {
       r.executeConsoleCommand = window.__SG ? typeof window.__SG.executeConsoleCommand === 'function' : false
       r.vehicleLoader = window.__SG ? typeof window.__SG.loadVehicleModels === 'function' : false
       r.vehicleTrainPath = window.__SG && window.__SG.vehicleModelPaths ? window.__SG.vehicleModelPaths.train : null
+      r.obstacleSpacing = window.__SG ? typeof window.__SG.canPlaceObstacle === 'function' && typeof window.__SG.trackObstacle === 'function' : false
+      r.characterCatalogCount = window.__SG && window.__SG.characterCatalog ? window.__SG.characterCatalog.length : 0
+      r.characterSelector = window.__SG ? typeof window.__SG.showCharacters === 'function' : false
+      r.characterBuy = window.__SG ? typeof window.__SG.buyCharacter === 'function' : false
+      r.characterPrice = window.__SG && window.__SG.getNextCharacterPrice ? window.__SG.getNextCharacterPrice() : null
+      r.ownedCharacterCount = window.__SG && window.__SG.getOwnedCharacters ? window.__SG.getOwnedCharacters().length : 0
+      r.expectedCharacterPrice = Math.max(0, (r.ownedCharacterCount || 1) - 1) * 10000
+      r.charactersButton = document.getElementById('characters-btn') !== null
+      if (window.__SG && typeof window.__SG.showCharacters === 'function') {
+        window.__SG.showCharacters()
+        r.characterOverlay = document.getElementById('characters-overlay') !== null
+        r.characterPreviewCanvas = document.getElementById('character-preview-canvas') !== null
+        r.characterCards = document.querySelectorAll('.character-card').length
+        const overlay = document.getElementById('characters-overlay')
+        if (overlay) overlay.style.display = 'none'
+      }
       if (window.__SG && window.__SG.restartGame && window.__SG.player) {
         window.__SG.restartGame()
         r.restartRotationY = window.__SG.player.rotation.y
@@ -181,11 +198,13 @@ app.whenReady().then(async () => {
   const playerModelPath = path.join(DESKTOP, 'dist/renderer/models/player.glb')
   const trainModelPath = path.join(DESKTOP, 'dist/renderer/models/vehicles/train.glb')
   const busModelPath = path.join(DESKTOP, 'dist/renderer/models/vehicles/bus.glb')
+  const adventurerPath = path.join(DESKTOP, 'dist/renderer/models/characters/Adventurer.gltf')
   check('3d. player.glb copied to renderer dist', fs.existsSync(playerModelPath), fs.existsSync(playerModelPath) ? `${fs.statSync(playerModelPath).size} bytes` : 'missing')
   check('3e. refined player.glb size', fs.existsSync(playerModelPath) && fs.statSync(playerModelPath).size > 100000, fs.existsSync(playerModelPath) ? `${fs.statSync(playerModelPath).size} bytes` : 'missing')
   check('3f. Jetpack tuning constants', state.jetpackFuelMax === 15 && state.jetpackCooldownMax === 30 && state.jetpackMaxHeight > 0, `fuel=${state.jetpackFuelMax}, cooldown=${state.jetpackCooldownMax}, maxHeight=${state.jetpackMaxHeight}`)
   check('3g. train.glb copied to renderer dist', fs.existsSync(trainModelPath), fs.existsSync(trainModelPath) ? `${fs.statSync(trainModelPath).size} bytes` : 'missing')
   check('3h. bus.glb copied to renderer dist', fs.existsSync(busModelPath), fs.existsSync(busModelPath) ? `${fs.statSync(busModelPath).size} bytes` : 'missing')
+  check('3i. Adventurer.gltf copied to renderer dist', fs.existsSync(adventurerPath), fs.existsSync(adventurerPath) ? `${fs.statSync(adventurerPath).size} bytes` : 'missing')
   check('4a. desktopAPI (preload bridge)', !!state.desktopAPI)
   check('4b. __SUBWAY_CONFIG__ exists', !!state.subwayConfig)
   check('4c. API_BASE_URL is non-empty', !!state.apiBaseUrl, state.apiBaseUrl || 'empty')
@@ -212,6 +231,11 @@ app.whenReady().then(async () => {
   check("14g. console command runner exists", !!state.executeConsoleCommand)
   check("14h. console includes Homelander easter egg", state.consoleCommands && state.consoleCommands.includes('homelander'), state.consoleCommands ? state.consoleCommands.join(', ') : 'none')
   check("14i. vehicle model loader exists", !!state.vehicleLoader, state.vehicleTrainPath || 'missing train path')
+  check("14j. obstacle spacing guard exists", !!state.obstacleSpacing)
+  check("14k. character catalog loaded", state.characterCatalogCount >= 12, String(state.characterCatalogCount))
+  check("14l. character selector menu exists", !!state.characterSelector && !!state.charactersButton)
+  check("14m. character price follows unlock count", state.characterBuy && state.characterPrice === state.expectedCharacterPrice, `price=${state.characterPrice}, owned=${state.ownedCharacterCount}`)
+  check("14n. character modal renders cards", !!state.characterOverlay && !!state.characterPreviewCanvas && state.characterCards >= 12, `cards=${state.characterCards || 0}`)
 
   // -- applyGameData runtime test --
   try {
@@ -226,6 +250,8 @@ app.whenReady().then(async () => {
           maxDistance: 100,
           ownedAbilities: [0, 1],
           equippedAbility: 1,
+          ownedCharacters: ['runner', 'adventurer'],
+          selectedCharacter: 'adventurer',
           runCount: 3
         })
         var s = window.__SG.state
@@ -234,7 +260,9 @@ app.whenReady().then(async () => {
           credits: s.credits,
           totalCoins: s.totalCoins,
           maxEasy: s.maxEasy,
-          canDoubleJump: s.canDoubleJump
+          canDoubleJump: s.canDoubleJump,
+          selectedCharacter: s.selectedCharacter,
+          ownedCharacters: s.ownedCharacters
         })
       } catch(e) {
         return JSON.stringify({ ok: false, error: e.message })
@@ -246,6 +274,8 @@ app.whenReady().then(async () => {
     check("17. state.totalCoins === 11", agd.totalCoins === 11, String(agd.totalCoins))
     check("18. state.maxEasy === 100", agd.maxEasy === 100, String(agd.maxEasy))
     check("19. state.canDoubleJump === true", agd.canDoubleJump === true, String(agd.canDoubleJump))
+    check("19b. selectedCharacter restored", agd.selectedCharacter === 'adventurer', String(agd.selectedCharacter))
+    check("19c. ownedCharacters restored", Array.isArray(agd.ownedCharacters) && agd.ownedCharacters.includes('adventurer'), Array.isArray(agd.ownedCharacters) ? agd.ownedCharacters.join(', ') : 'missing')
   } catch (err) {
     check("applyGameData runtime", false, err.message)
   }
