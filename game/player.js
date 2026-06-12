@@ -228,6 +228,7 @@
         SG.jetpackPack.add(SG.jetpackFlameInner);
 
         SG.jetpackPack.position.set(0, 0.8, -0.3);
+        SG.jetpackPack.visible = false;
         SG.player.add(SG.jetpackPack);
 
         SG.scene.add(SG.player);

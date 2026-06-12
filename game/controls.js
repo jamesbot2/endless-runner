@@ -6,6 +6,20 @@
 
     SG.keys = {};
 
+    SG.forceJetpackLanding = function() {
+        if (!(SG.state.equippedAbility === 2 && SG.state.canJetpack && SG.state.jetpackFuel > 0)) return false;
+        SG.state.jetpackFuel = 0;
+        SG.state.jetpackCooldown = SG.JETPACK_COOLDOWN_MAX;
+        SG.state.isJumping = false;
+        SG.state.hasDoubleJumped = false;
+        SG.state.jumpingFromRoof = false;
+        SG.state.jumpVelocity = 0;
+        SG.state.playerHeight = SG.PLAYER_Y;
+        SG.state.targetPlayerHeight = SG.PLAYER_Y;
+        if (SG.player) SG.player.position.y = SG.PLAYER_Y;
+        return true;
+    };
+
     SG.moveLeft = function() {
         if (SG.state.homelander && SG.homelanderGroup) {
             SG.homelanderGroup.position.x -= 0.35;
@@ -74,10 +88,11 @@
     };
 
     SG.roll = function() {
+        var landedFromJetpack = SG.forceJetpackLanding();
         if (SG.state.isRolling) return;
         SG.state.isRolling = true;
         SG.state.targetPlayerHeight = SG.ROLL_HEIGHT;
-        SG.state.rollEndTime = Date.now() + 400;
+        SG.state.rollEndTime = Date.now() + (landedFromJetpack ? 520 : 400);
         SG.playRollSound();
     };
 

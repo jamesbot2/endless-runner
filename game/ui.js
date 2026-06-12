@@ -53,7 +53,7 @@
         // showShop continues below...
         var prices = [0, 10000, 50000, 100000];
         var names = ['None', 'Double Jump', 'Jetpack', 'Roof Walk'];
-        var descs = ['No ability equipped', 'Double jump in mid-air', 'Fly for 30s every 15s cooldown', 'Walk on top of obstacles'];
+        var descs = ['No ability equipped', 'Double jump in mid-air', 'Fly for 15s, max altitude, 30s cooldown', 'Walk on top of obstacles'];
         var icons = ['🚫', '🦘', '🚀', '🏃'];
 
         var html = '<div class="menu-content" style="max-height:85vh;overflow-y:auto;">';

@@ -291,6 +291,8 @@
         // Update score display
         if (SG.scoreEl) SG.scoreEl.textContent = Math.floor(SG.state.score);
         if (SG.coinsEl) SG.coinsEl.textContent = SG.state.coins;
+        if (SG.updateAbilityVisuals) SG.updateAbilityVisuals();
+        if (SG.updateAbilityHUD) SG.updateAbilityHUD();
 
         // Speed indicator
         var speedEl = document.getElementById('speed-indicator');
@@ -400,7 +402,10 @@
         // Jetpack
         if (SG.state.isJumping && SG.state.equippedAbility === 2 && SG.state.canJetpack && SG.state.jetpackFuel > 0 && SG.state.jetpackCooldown <= 0) {
             SG.state.jumpVelocity = 0;
-            SG.state.playerHeight += SG.JETPACK_LIFT * delta * 60;
+            if (SG.state.playerHeight < SG.JETPACK_MAX_HEIGHT) {
+                SG.state.playerHeight += SG.JETPACK_LIFT * delta * 60;
+                if (SG.state.playerHeight > SG.JETPACK_MAX_HEIGHT) SG.state.playerHeight = SG.JETPACK_MAX_HEIGHT;
+            }
             SG.state.jetpackFuel -= delta;
             if (SG.state.jetpackFuel <= 0) {
                 SG.state.jetpackFuel = 0;
@@ -601,7 +606,78 @@
 
         if (SG.state.homelander) SG.updateHomelander(delta);
         SG.updateBgMusic(delta);
+        if (SG.updateAbilityHUD) SG.updateAbilityHUD();
         SG.updateCamera();
+    };
+
+    SG.updateAbilityHUD = function() {
+        var skillEl = document.getElementById('skill-indicator');
+        var jetEl = document.getElementById('jetpack-timer');
+        if (!skillEl || !jetEl) return;
+
+        if (!SG.state.started || SG.state.gameOver || SG.state.paused) {
+            skillEl.style.display = 'none';
+            jetEl.style.display = 'none';
+            return;
+        }
+
+        var abilityNames = ['None', 'Double Jump', 'Jetpack', 'Roof Walk'];
+        var abilityIcons = ['-', 'DJ', 'JET', 'ROOF'];
+        var ability = SG.state.equippedAbility || 0;
+        skillEl.style.display = 'block';
+        skillEl.textContent = 'SKILL: ' + (abilityIcons[ability] || '-') + ' ' + (abilityNames[ability] || 'None');
+
+        if (ability === 2 && SG.state.canJetpack) {
+            jetEl.style.display = 'block';
+            if (SG.state.jetpackFuel > 0) {
+                var fuel = Math.max(0, SG.state.jetpackFuel);
+                var capped = SG.state.playerHeight >= SG.JETPACK_MAX_HEIGHT - 0.01;
+                jetEl.textContent = 'JETPACK: ' + fuel.toFixed(1) + 's' + (capped ? ' | MAX ALT' : '');
+                jetEl.style.borderColor = 'rgba(100,200,255,0.45)';
+            } else if (SG.state.jetpackCooldown > 0) {
+                jetEl.textContent = 'JETPACK CD: ' + SG.state.jetpackCooldown.toFixed(1) + 's';
+                jetEl.style.borderColor = 'rgba(255,120,80,0.45)';
+            } else {
+                jetEl.textContent = 'JETPACK READY';
+                jetEl.style.borderColor = 'rgba(80,255,160,0.45)';
+            }
+        } else {
+            jetEl.style.display = 'none';
+        }
+    };
+
+    SG.updateAbilityVisuals = function() {
+        var showDJ = SG.state.equippedAbility === 1 && SG.state.canDoubleJump;
+        var showJetpack = SG.state.equippedAbility === 2 && SG.state.canJetpack;
+        var showRW = SG.state.equippedAbility === 3 && SG.state.canRoofWalk;
+
+        if (SG.shoesLeft) SG.shoesLeft.visible = false;
+        if (SG.shoesRight) SG.shoesRight.visible = false;
+        if (SG.shoesDJLeft) SG.shoesDJLeft.visible = showDJ;
+        if (SG.shoesDJRight) SG.shoesDJRight.visible = showDJ;
+        if (SG.shoesRWLeft) SG.shoesRWLeft.visible = showRW;
+        if (SG.shoesRWRight) SG.shoesRWRight.visible = showRW;
+
+        if (showRW && SG.shoesRWLeft && SG.shoesRWRight) {
+            var pulse = 0.45 + Math.sin(SG.state.gameTime * 8) * 0.25;
+            SG.shoesRWLeft.material.emissiveIntensity = pulse;
+            SG.shoesRWRight.material.emissiveIntensity = pulse;
+        }
+
+        if (SG.jetpackPack) {
+            SG.jetpackPack.visible = showJetpack;
+            SG.jetpackPack.position.set(0, 0.95, -0.34);
+        }
+
+        var flameOn = showJetpack && SG.state.jetpackFuel > 0 && SG.state.jetpackCooldown <= 0;
+        if (SG.jetpackFlame) {
+            SG.jetpackFlame.visible = flameOn;
+            SG.jetpackFlame.scale.setScalar(flameOn ? 0.85 + Math.sin(SG.state.gameTime * 18) * 0.15 : 1);
+        }
+        if (SG.jetpackFlameInner) {
+            SG.jetpackFlameInner.visible = flameOn;
+            SG.jetpackFlameInner.scale.setScalar(flameOn ? 0.9 + Math.sin(SG.state.gameTime * 22) * 0.12 : 1);
+        }
     };
 
     // ===== RENDER LOOP =====

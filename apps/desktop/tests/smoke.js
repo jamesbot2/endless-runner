@@ -150,6 +150,11 @@ app.whenReady().then(async () => {
       r.playerModelLoaded = window.__SG ? window.__SG.playerModelLoaded === true : false
       r.playerModelName = window.__SG && window.__SG.playerModel ? window.__SG.playerModel.name : null
       r.playerAnimations = window.__SG && window.__SG.playerActions ? Object.keys(window.__SG.playerActions) : []
+      r.jetpackFuelMax = window.__SG ? window.__SG.JETPACK_FUEL_MAX : null
+      r.jetpackCooldownMax = window.__SG ? window.__SG.JETPACK_COOLDOWN_MAX : null
+      r.jetpackMaxHeight = window.__SG ? window.__SG.JETPACK_MAX_HEIGHT : null
+      r.abilityHud = window.__SG ? typeof window.__SG.updateAbilityHUD === 'function' : false
+      r.abilityVisuals = window.__SG ? typeof window.__SG.updateAbilityVisuals === 'function' : false
       return r
     })()`)
   } catch (err) {
@@ -167,6 +172,8 @@ app.whenReady().then(async () => {
   check('3c. THREE.GLTFLoader exists', !!state.gltfLoader)
   const playerModelPath = path.join(DESKTOP, 'dist/renderer/models/player.glb')
   check('3d. player.glb copied to renderer dist', fs.existsSync(playerModelPath), fs.existsSync(playerModelPath) ? `${fs.statSync(playerModelPath).size} bytes` : 'missing')
+  check('3e. refined player.glb size', fs.existsSync(playerModelPath) && fs.statSync(playerModelPath).size > 100000, fs.existsSync(playerModelPath) ? `${fs.statSync(playerModelPath).size} bytes` : 'missing')
+  check('3f. Jetpack tuning constants', state.jetpackFuelMax === 15 && state.jetpackCooldownMax === 30 && state.jetpackMaxHeight > 0, `fuel=${state.jetpackFuelMax}, cooldown=${state.jetpackCooldownMax}, maxHeight=${state.jetpackMaxHeight}`)
   check('4a. desktopAPI (preload bridge)', !!state.desktopAPI)
   check('4b. __SUBWAY_CONFIG__ exists', !!state.subwayConfig)
   check('4c. API_BASE_URL is non-empty', !!state.apiBaseUrl, state.apiBaseUrl || 'empty')
@@ -187,6 +194,8 @@ app.whenReady().then(async () => {
   check("14. SG.applyGameData is function", !!state.applyGameData)
   check("14b. player GLB loaded", !!state.playerModelLoaded, state.playerModelName || 'not loaded')
   check("14c. player animations indexed", state.playerAnimations && state.playerAnimations.length >= 1, state.playerAnimations ? state.playerAnimations.join(', ') : 'none')
+  check("14d. ability HUD updater exists", !!state.abilityHud)
+  check("14e. ability visual updater exists", !!state.abilityVisuals)
 
   // -- applyGameData runtime test --
   try {
