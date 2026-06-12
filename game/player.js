@@ -7,8 +7,8 @@
     SG.playerModelPath = SG.playerModelPath || 'models/player.glb';
     SG.jetpackModelPath = SG.jetpackModelPath || 'models/jetpack.glb';
     SG.jetpackModelTuning = SG.jetpackModelTuning || {
-        targetHeight: 0.72,
-        rotationY: 0,
+        targetHeight: 0.58,
+        rotationY: Math.PI,
         yOffset: 0,
         zOffset: 0
     };
@@ -361,7 +361,7 @@
         function createJetpackFlame(side) {
             var flameGroup = new THREE.Group();
             flameGroup.name = side < 0 ? 'JetpackFlameLeft' : 'JetpackFlameRight';
-            flameGroup.position.set(side * 0.16, -0.38, 0.02);
+            flameGroup.position.set(side * 0.14, -0.32, 0.01);
             flameGroup.visible = false;
 
             var outer = new THREE.Mesh(
@@ -388,7 +388,7 @@
         SG.jetpackFlameInner = leftFlame.children[1];
         SG.jetpackFlameRight = rightFlame.children[0];
         SG.jetpackFlameRightInner = rightFlame.children[1];
-        SG.jetpackPack.position.set(0, 0.8, -0.3);
+        SG.jetpackPack.position.set(0, 0.72, -0.24);
         SG.jetpackPack.visible = false;
         SG.player.add(SG.jetpackPack);
         SG.loadJetpackModel();

@@ -158,6 +158,14 @@ app.whenReady().then(async () => {
       r.jetpackModelLoaded = window.__SG ? window.__SG.jetpackModelLoaded === true : false
       r.jetpackModelName = window.__SG && window.__SG.jetpackModel ? window.__SG.jetpackModel.name : null
       r.jetpackFlameGroups = window.__SG && window.__SG.jetpackFlameGroups ? window.__SG.jetpackFlameGroups.length : 0
+      r.jetpackTuning = window.__SG && window.__SG.jetpackModelTuning ? {
+        targetHeight: window.__SG.jetpackModelTuning.targetHeight,
+        rotationY: window.__SG.jetpackModelTuning.rotationY
+      } : null
+      r.jetpackMount = window.__SG && window.__SG.jetpackPack ? {
+        y: window.__SG.jetpackPack.position.y,
+        z: window.__SG.jetpackPack.position.z
+      } : null
       r.abilityHud = window.__SG ? typeof window.__SG.updateAbilityHUD === 'function' : false
       r.abilityVisuals = window.__SG ? typeof window.__SG.updateAbilityVisuals === 'function' : false
       r.defaultKeyBindings = window.__SG && window.__SG.getKeyBindings ? Object.assign({}, window.__SG.getKeyBindings()) : null
@@ -387,6 +395,17 @@ app.whenReady().then(async () => {
         window.__SG.state.theme = savedTheme
       }
       r.rollUnderSize = null
+      r.coinDetail = null
+      if (window.__SG && window.__SG.createCoin && window.__SG.disposeObject) {
+        var detailedCoin = window.__SG.createCoin(1, -12, 0.3)
+        r.coinDetail = {
+          children: detailedCoin.children.length,
+          marker: detailedCoin.userData.coinDetail,
+          hasTorus: detailedCoin.children.some(function(child) { return child.geometry && child.geometry.type === 'TorusGeometry' }),
+          hasShape: detailedCoin.children.some(function(child) { return child.geometry && child.geometry.type === 'ShapeGeometry' })
+        }
+        window.__SG.disposeObject(detailedCoin)
+      }
       r.fullBarrierGap = null
       r.fullBarrierCollisionGap = false
       if (window.__SG && window.__SG.createRollUnderTrain && window.__SG.disposeObject) {
@@ -560,6 +579,7 @@ app.whenReady().then(async () => {
   check("14d. ability HUD updater exists", !!state.abilityHud)
   check("14e. ability visual updater exists", !!state.abilityVisuals)
   check("14e-0a. Jetpack GLB loads with dual flames", state.jetpackModelPath === 'models/jetpack.glb' && !!state.jetpackModelLoaded && state.jetpackModelName === 'JetpackGLB' && state.jetpackFlameGroups === 2, `path=${state.jetpackModelPath}, model=${state.jetpackModelName}, flames=${state.jetpackFlameGroups}`)
+  check("14e-0b. Jetpack is lower, closer, and faces backward", !!state.jetpackTuning && Math.abs(state.jetpackTuning.rotationY - Math.PI) < 0.001 && state.jetpackTuning.targetHeight <= 0.6 && !!state.jetpackMount && state.jetpackMount.y <= 0.75 && state.jetpackMount.z >= -0.26, state.jetpackTuning && state.jetpackMount ? JSON.stringify({ tuning: state.jetpackTuning, mount: state.jetpackMount }) : 'missing')
   check("14e-1. default key bindings use arrow keys", !!state.defaultKeyBindings && state.defaultKeyBindings.up === 'ArrowUp' && state.defaultKeyBindings.down === 'ArrowDown' && state.defaultKeyBindings.left === 'ArrowLeft' && state.defaultKeyBindings.right === 'ArrowRight', state.defaultKeyBindings ? JSON.stringify(state.defaultKeyBindings) : 'missing')
   check("14e-2. key binding remap updates action lookup", state.keyBindingActionBefore === 'up' && state.keyBindingActionAfter === 'up' && !!state.keyBindingSaved, `before=${state.keyBindingActionBefore}, after=${state.keyBindingActionAfter}`)
   check("14e-3. settings exposes roll delay and key binding controls", state.rollReleaseDelaySetting === 350 && state.settingsBindingButtons === 4, `delay=${state.rollReleaseDelaySetting}, buttons=${state.settingsBindingButtons}`)
@@ -582,6 +602,7 @@ app.whenReady().then(async () => {
   check("14j. vehicle model loader exists", !!state.vehicleLoader, state.vehicleTrainPath || 'missing train path')
   check("14k. obstacle spacing guard exists", !!state.obstacleSpacing)
   check("14l. coin spacing guard exists", !!state.coinSpacing)
+  check("14l-1. coin model has rim, emblem, and highlight detail", !!state.coinDetail && state.coinDetail.children >= 6 && !!state.coinDetail.hasTorus && !!state.coinDetail.hasShape && state.coinDetail.marker === 'rim-star-highlight', state.coinDetail ? JSON.stringify(state.coinDetail) : 'missing')
   check("14m. scenery model loader exists", !!state.sceneryLoader, state.sceneryPathCounts ? `buildings=${state.sceneryPathCounts.buildings}, trees=${state.sceneryPathCounts.trees}` : 'missing paths')
   check("14m-0a. city scenery waits for GLB assets", !!state.cityScenerySkipsLegacyFallback)
   check("14m-0b. forest scenery waits for GLB assets", !!state.forestScenerySkipsLegacyFallback)

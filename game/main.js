@@ -695,7 +695,7 @@
 
         if (SG.jetpackPack) {
             SG.jetpackPack.visible = showJetpack;
-            SG.jetpackPack.position.set(0, 0.95, -0.34);
+            SG.jetpackPack.position.set(0, 0.72, -0.24);
         }
 
         var flameOn = showJetpack && SG.state.jetpackFuel > 0 && SG.state.jetpackCooldown <= 0;
