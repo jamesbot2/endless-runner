@@ -58,14 +58,14 @@
         if (!model) return null;
         var group = new THREE.Group();
         group.position.set(x, 0, z);
-        var scale = type === 'buildings' ? 1.32 + Math.random() * 0.24 : 0.86 + Math.random() * 0.34;
+        var scale = type === 'buildings' ? 1.28 + Math.random() * 0.16 : 0.86 + Math.random() * 0.34;
         model.scale.multiplyScalar(scale);
         model.rotation.y = type === 'buildings'
             ? (Math.random() < 0.5 ? 0 : Math.PI / 2)
             : Math.random() * Math.PI * 2;
         group.add(model);
         group.userData.sceneryType = type;
-        group.userData.depth = type === 'buildings' ? 4.6 * scale : 2.2 * scale;
+        group.userData.depth = type === 'buildings' ? 4.8 * scale : 2.2 * scale;
         SG.scene.add(group);
         return group;
     }
@@ -186,9 +186,15 @@
     };
 
     SG.getScenerySpacing = function(theme) {
-        if (theme === 0) return 7.4;
+        if (theme === 0) return 10.8;
         if (theme === 1) return 5.2;
         return 6.5;
+    };
+
+    SG.getSceneryRowCount = function(theme) {
+        if (theme === 0) return 1;
+        if (theme === 1 && Math.random() > 0.45) return 2;
+        return 1;
     };
 
     SG.spawnSceneryRow = function(z, side, row) {
@@ -219,7 +225,7 @@
         for (var z = farthestZ; z > -SG.SPAWN_AHEAD; z -= spacing) {
             if (z > farthestZ) continue;
             for (var side = -1; side <= 1; side += 2) {
-                var rows = theme === 0 ? (Math.random() < 0.25 ? 2 : 1) : (theme === 1 && Math.random() > 0.45 ? 2 : 1);
+                var rows = SG.getSceneryRowCount(theme);
                 for (var row = 0; row < rows; row++) {
                     if (theme !== 0 && Math.random() < 0.18) continue;
                     var scenery = SG.spawnSceneryRow(z - row * spacing * 0.5, side, row);
@@ -266,7 +272,7 @@
         var spacing = SG.getScenerySpacing(themeIndex);
         for (var z = 0; z > -spawnAhead; z -= spacing) {
             for (var side = -1; side <= 1; side += 2) {
-                var rows = themeIndex === 0 ? (Math.random() < 0.25 ? 2 : 1) : (themeIndex === 1 && Math.random() > 0.45 ? 2 : 1);
+                var rows = SG.getSceneryRowCount(themeIndex);
                 for (var row = 0; row < rows; row++) {
                     if (themeIndex !== 0 && Math.random() < 0.18) continue;
                     var sc = SG.spawnSceneryRow(z - row * spacing * 0.5, side, row);

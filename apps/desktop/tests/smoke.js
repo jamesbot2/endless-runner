@@ -108,7 +108,7 @@ app.whenReady().then(async () => {
   // ── Inject checks ───────────────────────────────────
   let state
   try {
-    state = await win.webContents.executeJavaScript(`(function() {
+    state = await win.webContents.executeJavaScript(`(async function() {
       const r = {}
       // 1. Page loaded
       r.bodyExists = !!document.body
@@ -160,6 +160,26 @@ app.whenReady().then(async () => {
       r.executeConsoleCommand = window.__SG ? typeof window.__SG.executeConsoleCommand === 'function' : false
       r.homelanderModelPath = window.__SG ? window.__SG.homelanderModelPath : null
       r.homelanderLoader = window.__SG ? typeof window.__SG.loadHomelanderModel === 'function' : false
+      r.homelanderTuning = window.__SG && window.__SG.homelanderModelTuning ? {
+        modelRotationY: window.__SG.homelanderModelTuning.modelRotationY,
+        eyeOffsetY: window.__SG.homelanderModelTuning.eyeOffsetY,
+        eyeOffsetZ: window.__SG.homelanderModelTuning.eyeOffsetZ
+      } : null
+      r.homelanderModelLoaded = false
+      r.homelanderModelHeight = 0
+      if (window.__SG && window.__SG.activateHomelander && window.__SG.deactivateHomelander && window.__SG.player && window.THREE) {
+        window.__SG.activateHomelander()
+        await new Promise(function(resolve) { setTimeout(resolve, 1800) })
+        r.homelanderModelLoaded = !!window.__SG.homelanderModel && window.__SG.homelanderModel.name === 'HomelanderGLB'
+        if (window.__SG.homelanderModel) {
+          window.__SG.homelanderModel.updateMatrixWorld(true)
+          var homelanderBox = new window.THREE.Box3().setFromObject(window.__SG.homelanderModel)
+          var homelanderSize = new window.THREE.Vector3()
+          homelanderBox.getSize(homelanderSize)
+          r.homelanderModelHeight = homelanderSize.y
+        }
+        window.__SG.deactivateHomelander()
+      }
       r.vehicleLoader = window.__SG ? typeof window.__SG.loadVehicleModels === 'function' : false
       r.vehicleTrainPath = window.__SG && window.__SG.vehicleModelPaths ? window.__SG.vehicleModelPaths.train : null
       r.obstacleSpacing = window.__SG ? typeof window.__SG.canPlaceObstacle === 'function' && typeof window.__SG.trackObstacle === 'function' : false
@@ -170,6 +190,7 @@ app.whenReady().then(async () => {
         trees: window.__SG.sceneryModelPaths.trees.length
       } : null
       r.cityScenerySpacing = window.__SG && window.__SG.getScenerySpacing ? window.__SG.getScenerySpacing(0) : null
+      r.citySceneryRows = window.__SG && window.__SG.getSceneryRowCount ? window.__SG.getSceneryRowCount(0) : null
       r.citySceneryAligned = false
       if (window.__SG && window.__SG.spawnSceneryRow && window.__SG.disposeObject && window.__SG.scene) {
         var previousTheme = window.__SG.state.theme
@@ -188,6 +209,29 @@ app.whenReady().then(async () => {
         window.__SG.disposeObject(nearCity)
         window.__SG.disposeObject(farCity)
         window.__SG.state.theme = previousTheme
+      }
+      r.rollUnderSize = null
+      if (window.__SG && window.__SG.createRollUnderTrain && window.__SG.disposeObject) {
+        var rollUnder = window.__SG.createRollUnderTrain(1, -32)
+        r.rollUnderSize = {
+          width: rollUnder.userData.width,
+          height: rollUnder.userData.height,
+          depth: rollUnder.userData.depth,
+          yOffset: rollUnder.userData.yOffset
+        }
+        window.__SG.disposeObject(rollUnder)
+      }
+      r.trainRampWidth = null
+      if (window.__SG && window.__SG.createTrain && window.__SG.disposeObject) {
+        var originalRandom = Math.random
+        try {
+          Math.random = function() { return 0.1 }
+          var rampTrain = window.__SG.createTrain(1, -42, false)
+          r.trainRampWidth = rampTrain.userData.rampWidth || null
+          window.__SG.disposeObject(rampTrain)
+        } finally {
+          Math.random = originalRandom
+        }
       }
       r.characterCatalogCount = window.__SG && window.__SG.characterCatalog ? window.__SG.characterCatalog.length : 0
       r.characterSelector = window.__SG ? typeof window.__SG.showCharacters === 'function' : false
@@ -292,12 +336,17 @@ app.whenReady().then(async () => {
   check("14g. console command runner exists", !!state.executeConsoleCommand)
   check("14h. console includes Homelander easter egg", state.consoleCommands && state.consoleCommands.includes('homelander'), state.consoleCommands ? state.consoleCommands.join(', ') : 'none')
   check("14i. Homelander GLB loader exists", !!state.homelanderLoader && state.homelanderModelPath === 'models/homelander.glb', state.homelanderModelPath || 'missing path')
+  check("14i-1. Homelander GLB tuning faces forward with eye lasers", !!state.homelanderTuning && Math.abs(state.homelanderTuning.modelRotationY + Math.PI / 2) < 0.001 && state.homelanderTuning.eyeOffsetY > 1.5 && state.homelanderTuning.eyeOffsetZ < 0, state.homelanderTuning ? JSON.stringify(state.homelanderTuning) : 'missing tuning')
+  check("14i-2. Homelander GLB loads into scene", !!state.homelanderModelLoaded && state.homelanderModelHeight > 1.7, `height=${state.homelanderModelHeight}`)
   check("14j. vehicle model loader exists", !!state.vehicleLoader, state.vehicleTrainPath || 'missing train path')
   check("14k. obstacle spacing guard exists", !!state.obstacleSpacing)
   check("14l. coin spacing guard exists", !!state.coinSpacing)
   check("14m. scenery model loader exists", !!state.sceneryLoader, state.sceneryPathCounts ? `buildings=${state.sceneryPathCounts.buildings}, trees=${state.sceneryPathCounts.trees}` : 'missing paths')
-  check("14m-1. city scenery spacing is performance tuned", state.cityScenerySpacing >= 7, `spacing=${state.cityScenerySpacing}`)
+  check("14m-1. city scenery spacing is performance tuned", state.cityScenerySpacing >= 10, `spacing=${state.cityScenerySpacing}`)
   check("14m-2. city scenery rows are grid aligned", !!state.citySceneryAligned)
+  check("14m-3. city scenery uses a single building row", state.citySceneryRows === 1, `rows=${state.citySceneryRows}`)
+  check("14m-4. roll-under obstacle is narrower and lower", !!state.rollUnderSize && state.rollUnderSize.width <= 1.8 && state.rollUnderSize.height <= 0.38 && state.rollUnderSize.yOffset <= 1.3, state.rollUnderSize ? JSON.stringify(state.rollUnderSize) : 'missing')
+  check("14m-5. train roof ramp matches train width", state.trainRampWidth !== null && state.trainRampWidth <= 2.05, `rampWidth=${state.trainRampWidth}`)
   check("14n. character catalog loaded", state.characterCatalogCount >= 12, String(state.characterCatalogCount))
   check("14o. character selector menu exists", !!state.characterSelector && !!state.charactersButton)
   check("14p. character price follows unlock count", state.characterBuy && state.characterPrice === state.expectedCharacterPrice, `price=${state.characterPrice}, owned=${state.ownedCharacterCount}`)

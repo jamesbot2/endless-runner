@@ -177,30 +177,31 @@
         var hasRamp = Math.random() < 0.3;
         if (hasRamp) {
             var rampMat = new THREE.MeshLambertMaterial({ color: 0xFF6600 });
-            var ramp = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.08, 3.0), rampMat);
+            var ramp = new THREE.Mesh(new THREE.BoxGeometry(2.02, 0.08, 2.8), rampMat);
             ramp.position.set(0, 0.9, 4.5);
             ramp.rotation.x = 0.65;
             group.add(ramp);
             var railMat = new THREE.MeshLambertMaterial({ color: 0xDD4400 });
             for (var side3 = -1; side3 <= 1; side3 += 2) {
-                var r = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 3.0), railMat);
-                r.position.set(side3 * 1.2, 1.2, 4.5);
+                var r = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.42, 2.8), railMat);
+                r.position.set(side3 * 1.01, 1.16, 4.5);
                 r.rotation.x = 0.65;
                 group.add(r);
             }
             var warnMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
             for (var i2 = -2; i2 <= 2; i2++) {
                 if (i2 === 0) continue;
-                var s = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.02, 0.06), warnMat);
+                var s = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.02, 0.05), warnMat);
                 s.position.set(0, 0.03, 4.5 + i2 * 0.5);
                 group.add(s);
             }
             var tipMat = new THREE.MeshBasicMaterial({ color: 0xFFFF00 });
-            var tip = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.15, 0.05), tipMat);
+            var tip = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.12, 0.05), tipMat);
             tip.position.set(0, 0.05, 5.8);
             group.add(tip);
 
             group.userData.hasRamp = true;
+            group.userData.rampWidth = 2.02;
         }
 
         group.position.set(laneX, 0, zPos);
@@ -355,23 +356,23 @@
         var laneX = SG.LANE_POSITIONS[lane];
 
         var top = new THREE.Mesh(
-            new THREE.BoxGeometry(2.6, 0.5, 5.0),
+            new THREE.BoxGeometry(2.0, 0.38, 4.6),
             new THREE.MeshLambertMaterial({ color: 0xFF6600 })
         );
-        top.position.set(0, 1.4, 0);
+        top.position.set(0, 1.28, 0);
         group.add(top);
 
         var stripe = new THREE.Mesh(
-            new THREE.BoxGeometry(2.4, 0.05, 4.8),
+            new THREE.BoxGeometry(1.82, 0.04, 4.35),
             new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
         );
-        stripe.position.set(0, 1.15, 0);
+        stripe.position.set(0, 1.06, 0);
         group.add(stripe);
 
         var supMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
         for (var side = -1; side <= 1; side += 2) {
-            var sup = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.8, 0.15), supMat);
-            sup.position.set(side * 1.2, 0.9, 0);
+            var sup = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.52, 0.12), supMat);
+            sup.position.set(side * 0.9, 0.76, 0);
             group.add(sup);
         }
 
@@ -379,7 +380,7 @@
         for (var side2 = -1; side2 <= 1; side2 += 2) {
             for (var end = -1; end <= 1; end += 2) {
                 var w = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.25, 0.08), warnMat);
-                w.position.set(side2 * 1.25, 1.2, end * 2.4);
+                w.position.set(side2 * 0.96, 1.05, end * 2.2);
                 group.add(w);
             }
         }
@@ -388,13 +389,13 @@
         for (var side3 = -1; side3 <= 1; side3 += 2) {
             for (var end2 = -1; end2 <= 1; end2 += 2) {
                 var m = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.12, 0.05), markerMat);
-                m.position.set(side3 * 1.0, 0.1, end2 * 2.8);
+                m.position.set(side3 * 0.82, 0.1, end2 * 2.55);
                 group.add(m);
             }
         }
 
         group.position.set(laneX, 0, zPos);
-        group.userData = { type: 'roll_under', lane: lane, width: 2.0, height: 0.5, depth: 5.0, visualDepth: 5.4 };
+        group.userData = { type: 'roll_under', lane: lane, width: 1.8, height: 0.38, depth: 4.6, visualDepth: 5.0, yOffset: 1.28 };
         return group;
     };
 

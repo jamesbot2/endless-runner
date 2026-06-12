@@ -10,6 +10,14 @@
     SG.laserRightBeam = null;
     SG.homelanderCape = null;
     SG.homelanderModelPath = SG.homelanderModelPath || 'models/homelander.glb';
+    SG.homelanderModelTuning = SG.homelanderModelTuning || {
+        targetHeight: 1.85,
+        modelRotationY: -Math.PI / 2,
+        modelYOffset: -0.02,
+        eyeOffsetX: 0.055,
+        eyeOffsetY: 1.56,
+        eyeOffsetZ: -0.34
+    };
 
     function normalizeHomelanderModel(model) {
         var box = new THREE.Box3().setFromObject(model);
@@ -17,13 +25,13 @@
         var center = new THREE.Vector3();
         box.getSize(size);
         box.getCenter(center);
-        var targetHeight = 1.75;
+        var targetHeight = SG.homelanderModelTuning.targetHeight;
         var scale = size.y > 0 ? targetHeight / size.y : 1;
         model.scale.setScalar(scale);
         model.updateMatrixWorld(true);
         box.setFromObject(model);
         box.getCenter(center);
-        model.position.set(-center.x, -box.min.y, -center.z);
+        model.position.set(-center.x, -box.min.y + SG.homelanderModelTuning.modelYOffset, -center.z);
     }
 
     SG.loadHomelanderModel = function(group, proceduralParts) {
@@ -35,7 +43,7 @@
             if (!model) return;
             model.name = 'HomelanderGLB';
             normalizeHomelanderModel(model);
-            model.rotation.y = 0;
+            model.rotation.y = SG.homelanderModelTuning.modelRotationY;
             model.traverse(function(node) {
                 if (node && node.isMesh) {
                     node.castShadow = true;
@@ -44,7 +52,7 @@
                         var mats = Array.isArray(node.material) ? node.material : [node.material];
                         for (var mi = 0; mi < mats.length; mi++) {
                             if (mats[mi]) {
-                                mats[mi].side = THREE.FrontSide;
+                                mats[mi].side = THREE.DoubleSide;
                                 mats[mi].needsUpdate = true;
                             }
                         }
@@ -392,12 +400,12 @@
         var laserBaseLength = 18;
         var laserLength = SG.state.firstPerson ? 18 : 12;
         SG.laserBeams.length = 0;
-        var eyeY = SG.homelanderGroup.position.y + 1.35;
+        var eyeY = SG.homelanderGroup.position.y + SG.homelanderModelTuning.eyeOffsetY;
 
         for (var side9 = -1; side9 <= 1; side9 += 2) {
-            var bx = SG.homelanderGroup.position.x + side9 * 0.08;
+            var bx = SG.homelanderGroup.position.x + side9 * SG.homelanderModelTuning.eyeOffsetX;
             var by = eyeY;
-            var bz = SG.homelanderGroup.position.z + 0.2;
+            var bz = SG.homelanderGroup.position.z + SG.homelanderModelTuning.eyeOffsetZ;
 
             var dirZ = -1.0;
             var dirY = -0.28;

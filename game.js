@@ -950,14 +950,14 @@
         if (!model) return null;
         var group = new THREE.Group();
         group.position.set(x, 0, z);
-        var scale = type === 'buildings' ? 1.32 + Math.random() * 0.24 : 0.86 + Math.random() * 0.34;
+        var scale = type === 'buildings' ? 1.28 + Math.random() * 0.16 : 0.86 + Math.random() * 0.34;
         model.scale.multiplyScalar(scale);
         model.rotation.y = type === 'buildings'
             ? (Math.random() < 0.5 ? 0 : Math.PI / 2)
             : Math.random() * Math.PI * 2;
         group.add(model);
         group.userData.sceneryType = type;
-        group.userData.depth = type === 'buildings' ? 4.6 * scale : 2.2 * scale;
+        group.userData.depth = type === 'buildings' ? 4.8 * scale : 2.2 * scale;
         SG.scene.add(group);
         return group;
     }
@@ -1078,9 +1078,15 @@
     };
 
     SG.getScenerySpacing = function(theme) {
-        if (theme === 0) return 7.4;
+        if (theme === 0) return 10.8;
         if (theme === 1) return 5.2;
         return 6.5;
+    };
+
+    SG.getSceneryRowCount = function(theme) {
+        if (theme === 0) return 1;
+        if (theme === 1 && Math.random() > 0.45) return 2;
+        return 1;
     };
 
     SG.spawnSceneryRow = function(z, side, row) {
@@ -1111,7 +1117,7 @@
         for (var z = farthestZ; z > -SG.SPAWN_AHEAD; z -= spacing) {
             if (z > farthestZ) continue;
             for (var side = -1; side <= 1; side += 2) {
-                var rows = theme === 0 ? (Math.random() < 0.25 ? 2 : 1) : (theme === 1 && Math.random() > 0.45 ? 2 : 1);
+                var rows = SG.getSceneryRowCount(theme);
                 for (var row = 0; row < rows; row++) {
                     if (theme !== 0 && Math.random() < 0.18) continue;
                     var scenery = SG.spawnSceneryRow(z - row * spacing * 0.5, side, row);
@@ -1158,7 +1164,7 @@
         var spacing = SG.getScenerySpacing(themeIndex);
         for (var z = 0; z > -spawnAhead; z -= spacing) {
             for (var side = -1; side <= 1; side += 2) {
-                var rows = themeIndex === 0 ? (Math.random() < 0.25 ? 2 : 1) : (themeIndex === 1 && Math.random() > 0.45 ? 2 : 1);
+                var rows = SG.getSceneryRowCount(themeIndex);
                 for (var row = 0; row < rows; row++) {
                     if (themeIndex !== 0 && Math.random() < 0.18) continue;
                     var sc = SG.spawnSceneryRow(z - row * spacing * 0.5, side, row);
@@ -1373,30 +1379,31 @@
         var hasRamp = Math.random() < 0.3;
         if (hasRamp) {
             var rampMat = new THREE.MeshLambertMaterial({ color: 0xFF6600 });
-            var ramp = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.08, 3.0), rampMat);
+            var ramp = new THREE.Mesh(new THREE.BoxGeometry(2.02, 0.08, 2.8), rampMat);
             ramp.position.set(0, 0.9, 4.5);
             ramp.rotation.x = 0.65;
             group.add(ramp);
             var railMat = new THREE.MeshLambertMaterial({ color: 0xDD4400 });
             for (var side3 = -1; side3 <= 1; side3 += 2) {
-                var r = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 3.0), railMat);
-                r.position.set(side3 * 1.2, 1.2, 4.5);
+                var r = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.42, 2.8), railMat);
+                r.position.set(side3 * 1.01, 1.16, 4.5);
                 r.rotation.x = 0.65;
                 group.add(r);
             }
             var warnMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
             for (var i2 = -2; i2 <= 2; i2++) {
                 if (i2 === 0) continue;
-                var s = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.02, 0.06), warnMat);
+                var s = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.02, 0.05), warnMat);
                 s.position.set(0, 0.03, 4.5 + i2 * 0.5);
                 group.add(s);
             }
             var tipMat = new THREE.MeshBasicMaterial({ color: 0xFFFF00 });
-            var tip = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.15, 0.05), tipMat);
+            var tip = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.12, 0.05), tipMat);
             tip.position.set(0, 0.05, 5.8);
             group.add(tip);
 
             group.userData.hasRamp = true;
+            group.userData.rampWidth = 2.02;
         }
 
         group.position.set(laneX, 0, zPos);
@@ -1551,23 +1558,23 @@
         var laneX = SG.LANE_POSITIONS[lane];
 
         var top = new THREE.Mesh(
-            new THREE.BoxGeometry(2.6, 0.5, 5.0),
+            new THREE.BoxGeometry(2.0, 0.38, 4.6),
             new THREE.MeshLambertMaterial({ color: 0xFF6600 })
         );
-        top.position.set(0, 1.4, 0);
+        top.position.set(0, 1.28, 0);
         group.add(top);
 
         var stripe = new THREE.Mesh(
-            new THREE.BoxGeometry(2.4, 0.05, 4.8),
+            new THREE.BoxGeometry(1.82, 0.04, 4.35),
             new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
         );
-        stripe.position.set(0, 1.15, 0);
+        stripe.position.set(0, 1.06, 0);
         group.add(stripe);
 
         var supMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
         for (var side = -1; side <= 1; side += 2) {
-            var sup = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.8, 0.15), supMat);
-            sup.position.set(side * 1.2, 0.9, 0);
+            var sup = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.52, 0.12), supMat);
+            sup.position.set(side * 0.9, 0.76, 0);
             group.add(sup);
         }
 
@@ -1575,7 +1582,7 @@
         for (var side2 = -1; side2 <= 1; side2 += 2) {
             for (var end = -1; end <= 1; end += 2) {
                 var w = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.25, 0.08), warnMat);
-                w.position.set(side2 * 1.25, 1.2, end * 2.4);
+                w.position.set(side2 * 0.96, 1.05, end * 2.2);
                 group.add(w);
             }
         }
@@ -1584,13 +1591,13 @@
         for (var side3 = -1; side3 <= 1; side3 += 2) {
             for (var end2 = -1; end2 <= 1; end2 += 2) {
                 var m = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.12, 0.05), markerMat);
-                m.position.set(side3 * 1.0, 0.1, end2 * 2.8);
+                m.position.set(side3 * 0.82, 0.1, end2 * 2.55);
                 group.add(m);
             }
         }
 
         group.position.set(laneX, 0, zPos);
-        group.userData = { type: 'roll_under', lane: lane, width: 2.0, height: 0.5, depth: 5.0, visualDepth: 5.4 };
+        group.userData = { type: 'roll_under', lane: lane, width: 1.8, height: 0.38, depth: 4.6, visualDepth: 5.0, yOffset: 1.28 };
         return group;
     };
 
@@ -1934,8 +1941,8 @@
 
             var obsY, obsH;
             if (od.type === 'roll_under') {
-                obsY = 1.65;
-                obsH = 0.5;
+                obsY = od.yOffset || 1.28;
+                obsH = od.height || 0.38;
             } else if (od.type === 'low_flying') {
                 obsY = 1.0;
                 obsH = 0.8;
@@ -3190,6 +3197,14 @@
     SG.laserRightBeam = null;
     SG.homelanderCape = null;
     SG.homelanderModelPath = SG.homelanderModelPath || 'models/homelander.glb';
+    SG.homelanderModelTuning = SG.homelanderModelTuning || {
+        targetHeight: 1.85,
+        modelRotationY: -Math.PI / 2,
+        modelYOffset: -0.02,
+        eyeOffsetX: 0.055,
+        eyeOffsetY: 1.56,
+        eyeOffsetZ: -0.34
+    };
 
     function normalizeHomelanderModel(model) {
         var box = new THREE.Box3().setFromObject(model);
@@ -3197,13 +3212,13 @@
         var center = new THREE.Vector3();
         box.getSize(size);
         box.getCenter(center);
-        var targetHeight = 1.75;
+        var targetHeight = SG.homelanderModelTuning.targetHeight;
         var scale = size.y > 0 ? targetHeight / size.y : 1;
         model.scale.setScalar(scale);
         model.updateMatrixWorld(true);
         box.setFromObject(model);
         box.getCenter(center);
-        model.position.set(-center.x, -box.min.y, -center.z);
+        model.position.set(-center.x, -box.min.y + SG.homelanderModelTuning.modelYOffset, -center.z);
     }
 
     SG.loadHomelanderModel = function(group, proceduralParts) {
@@ -3215,7 +3230,7 @@
             if (!model) return;
             model.name = 'HomelanderGLB';
             normalizeHomelanderModel(model);
-            model.rotation.y = 0;
+            model.rotation.y = SG.homelanderModelTuning.modelRotationY;
             model.traverse(function(node) {
                 if (node && node.isMesh) {
                     node.castShadow = true;
@@ -3224,7 +3239,7 @@
                         var mats = Array.isArray(node.material) ? node.material : [node.material];
                         for (var mi = 0; mi < mats.length; mi++) {
                             if (mats[mi]) {
-                                mats[mi].side = THREE.FrontSide;
+                                mats[mi].side = THREE.DoubleSide;
                                 mats[mi].needsUpdate = true;
                             }
                         }
@@ -3572,12 +3587,12 @@
         var laserBaseLength = 18;
         var laserLength = SG.state.firstPerson ? 18 : 12;
         SG.laserBeams.length = 0;
-        var eyeY = SG.homelanderGroup.position.y + 1.35;
+        var eyeY = SG.homelanderGroup.position.y + SG.homelanderModelTuning.eyeOffsetY;
 
         for (var side9 = -1; side9 <= 1; side9 += 2) {
-            var bx = SG.homelanderGroup.position.x + side9 * 0.08;
+            var bx = SG.homelanderGroup.position.x + side9 * SG.homelanderModelTuning.eyeOffsetX;
             var by = eyeY;
-            var bz = SG.homelanderGroup.position.z + 0.2;
+            var bz = SG.homelanderGroup.position.z + SG.homelanderModelTuning.eyeOffsetZ;
 
             var dirZ = -1.0;
             var dirY = -0.28;

@@ -28,8 +28,8 @@
 
             var obsY, obsH;
             if (od.type === 'roll_under') {
-                obsY = 1.65;
-                obsH = 0.5;
+                obsY = od.yOffset || 1.28;
+                obsH = od.height || 0.38;
             } else if (od.type === 'low_flying') {
                 obsY = 1.0;
                 obsH = 0.8;
