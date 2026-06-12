@@ -169,6 +169,26 @@ app.whenReady().then(async () => {
         buildings: window.__SG.sceneryModelPaths.buildings.length,
         trees: window.__SG.sceneryModelPaths.trees.length
       } : null
+      r.cityScenerySpacing = window.__SG && window.__SG.getScenerySpacing ? window.__SG.getScenerySpacing(0) : null
+      r.citySceneryAligned = false
+      if (window.__SG && window.__SG.spawnSceneryRow && window.__SG.disposeObject && window.__SG.scene) {
+        var previousTheme = window.__SG.state.theme
+        window.__SG.state.theme = 0
+        var nearCity = window.__SG.spawnSceneryRow(-24, 1, 0)
+        var farCity = window.__SG.spawnSceneryRow(-24, 1, 1)
+        var expectedNearX = window.__SG.GROUND_WIDTH / 2 + 2.25
+        var expectedFarX = expectedNearX + 3.9
+        r.citySceneryAligned =
+          Math.abs(nearCity.position.x - expectedNearX) < 0.001 &&
+          Math.abs(farCity.position.x - expectedFarX) < 0.001 &&
+          Math.abs(nearCity.position.z + 24) < 0.001 &&
+          Math.abs(farCity.position.z + 24) < 0.001
+        window.__SG.scene.remove(nearCity)
+        window.__SG.scene.remove(farCity)
+        window.__SG.disposeObject(nearCity)
+        window.__SG.disposeObject(farCity)
+        window.__SG.state.theme = previousTheme
+      }
       r.characterCatalogCount = window.__SG && window.__SG.characterCatalog ? window.__SG.characterCatalog.length : 0
       r.characterSelector = window.__SG ? typeof window.__SG.showCharacters === 'function' : false
       r.characterBuy = window.__SG ? typeof window.__SG.buyCharacter === 'function' : false
@@ -276,6 +296,8 @@ app.whenReady().then(async () => {
   check("14k. obstacle spacing guard exists", !!state.obstacleSpacing)
   check("14l. coin spacing guard exists", !!state.coinSpacing)
   check("14m. scenery model loader exists", !!state.sceneryLoader, state.sceneryPathCounts ? `buildings=${state.sceneryPathCounts.buildings}, trees=${state.sceneryPathCounts.trees}` : 'missing paths')
+  check("14m-1. city scenery spacing is performance tuned", state.cityScenerySpacing >= 7, `spacing=${state.cityScenerySpacing}`)
+  check("14m-2. city scenery rows are grid aligned", !!state.citySceneryAligned)
   check("14n. character catalog loaded", state.characterCatalogCount >= 12, String(state.characterCatalogCount))
   check("14o. character selector menu exists", !!state.characterSelector && !!state.charactersButton)
   check("14p. character price follows unlock count", state.characterBuy && state.characterPrice === state.expectedCharacterPrice, `price=${state.characterPrice}, owned=${state.ownedCharacterCount}`)

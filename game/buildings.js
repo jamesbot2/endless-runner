@@ -58,12 +58,14 @@
         if (!model) return null;
         var group = new THREE.Group();
         group.position.set(x, 0, z);
-        var scale = type === 'buildings' ? 0.9 + Math.random() * 0.28 : 0.86 + Math.random() * 0.34;
+        var scale = type === 'buildings' ? 1.32 + Math.random() * 0.24 : 0.86 + Math.random() * 0.34;
         model.scale.multiplyScalar(scale);
-        model.rotation.y = Math.random() * Math.PI * 2;
+        model.rotation.y = type === 'buildings'
+            ? (Math.random() < 0.5 ? 0 : Math.PI / 2)
+            : Math.random() * Math.PI * 2;
         group.add(model);
         group.userData.sceneryType = type;
-        group.userData.depth = type === 'buildings' ? 3.2 * scale : 2.2 * scale;
+        group.userData.depth = type === 'buildings' ? 4.6 * scale : 2.2 * scale;
         SG.scene.add(group);
         return group;
     }
@@ -96,9 +98,9 @@
             var cityAsset = createAssetScenery('buildings', x, z);
             if (cityAsset) return cityAsset;
             var colors = [0x8B7355, 0x6B8E8B, 0x9B8B6B, 0x7B6B5B, 0x5B7B6B, 0x8B7B5B];
-            var h = 3 + Math.random() * 6;
-            var w = 1.5 + Math.random();
-            var d = 1.5 + Math.random();
+            var h = 5 + Math.random() * 7;
+            var w = 2.2 + Math.random() * 1.2;
+            var d = 2.2 + Math.random() * 1.2;
             var mesh = new THREE.Mesh(
                 new THREE.BoxGeometry(w, h, d),
                 new THREE.MeshLambertMaterial({ color: colors[Math.floor(Math.random() * colors.length)] })
@@ -184,18 +186,18 @@
     };
 
     SG.getScenerySpacing = function(theme) {
-        if (theme === 0) return 4.4;
+        if (theme === 0) return 7.4;
         if (theme === 1) return 5.2;
         return 6.5;
     };
 
     SG.spawnSceneryRow = function(z, side, row) {
         var theme = SG.state.theme || 0;
-        var base = SG.GROUND_WIDTH / 2 + 1.7;
-        var laneOffset = theme === 0 ? row * 2.65 : row * 2.25;
-        var jitter = theme === 0 ? (Math.random() - 0.5) * 0.34 : (Math.random() - 0.5) * 0.7;
+        var base = SG.GROUND_WIDTH / 2 + (theme === 0 ? 2.25 : 1.7);
+        var laneOffset = theme === 0 ? row * 3.9 : row * 2.25;
+        var jitter = theme === 0 ? 0 : (Math.random() - 0.5) * 0.7;
         var x = side * (base + laneOffset + jitter);
-        var zJitter = (Math.random() - 0.5) * (theme === 0 ? 0.45 : 0.9);
+        var zJitter = theme === 0 ? 0 : (Math.random() - 0.5) * 0.9;
         return SG.createScenery(x, z + zJitter);
     };
 
@@ -217,7 +219,7 @@
         for (var z = farthestZ; z > -SG.SPAWN_AHEAD; z -= spacing) {
             if (z > farthestZ) continue;
             for (var side = -1; side <= 1; side += 2) {
-                var rows = theme === 0 ? 2 : (theme === 1 && Math.random() > 0.45 ? 2 : 1);
+                var rows = theme === 0 ? (Math.random() < 0.25 ? 2 : 1) : (theme === 1 && Math.random() > 0.45 ? 2 : 1);
                 for (var row = 0; row < rows; row++) {
                     if (theme !== 0 && Math.random() < 0.18) continue;
                     var scenery = SG.spawnSceneryRow(z - row * spacing * 0.5, side, row);
@@ -264,7 +266,7 @@
         var spacing = SG.getScenerySpacing(themeIndex);
         for (var z = 0; z > -spawnAhead; z -= spacing) {
             for (var side = -1; side <= 1; side += 2) {
-                var rows = themeIndex === 0 ? 2 : (themeIndex === 1 && Math.random() > 0.45 ? 2 : 1);
+                var rows = themeIndex === 0 ? (Math.random() < 0.25 ? 2 : 1) : (themeIndex === 1 && Math.random() > 0.45 ? 2 : 1);
                 for (var row = 0; row < rows; row++) {
                     if (themeIndex !== 0 && Math.random() < 0.18) continue;
                     var sc = SG.spawnSceneryRow(z - row * spacing * 0.5, side, row);
