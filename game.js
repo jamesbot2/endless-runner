@@ -19,10 +19,9 @@
     SG.ROLL_HEIGHT = 0;
     SG.COIN_RADIUS = 0.35;
     SG.GROUND_WIDTH = SG.LANE_WIDTH * SG.LANE_COUNT + 1;
-    SG.JETPACK_FUEL_MAX = 15;
-    SG.JETPACK_COOLDOWN_MAX = 30;
-    SG.JETPACK_LIFT = 0.08;
-    SG.JETPACK_MAX_HEIGHT = 2.8;
+    SG.JETPACK_FUEL_MAX = 30;
+    SG.JETPACK_COOLDOWN_MAX = 15;
+    SG.JETPACK_LIFT = 0.04;
     SG.ROOF_TOP_Y = 1.8;
 })();
 // ===== SUBWAY SURFER - Game State =====
@@ -484,39 +483,159 @@
     const SG = window.__SG = window.__SG || {};
     const THREE = window.THREE;
 
+    SG.playerModelPath = SG.playerModelPath || 'models/player.glb';
+
+    function rememberLegacyPart(part) {
+        SG.playerLegacyParts = SG.playerLegacyParts || [];
+        SG.playerLegacyParts.push(part);
+        return part;
+    }
+
+    function hideLegacyBodyParts() {
+        var parts = SG.playerLegacyParts || [];
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i]) parts[i].visible = false;
+        }
+    }
+
+    function normalizeModel(model) {
+        var box = new THREE.Box3().setFromObject(model);
+        var size = new THREE.Vector3();
+        var center = new THREE.Vector3();
+        box.getSize(size);
+        box.getCenter(center);
+
+        var targetHeight = 1.35;
+        var scale = size.y > 0 ? targetHeight / size.y : 1;
+        model.scale.setScalar(scale);
+
+        box.setFromObject(model);
+        box.getCenter(center);
+        model.position.set(-center.x, -box.min.y, -center.z);
+    }
+
+    function indexAnimationActions(gltf, model) {
+        SG.playerMixer = null;
+        SG.playerActions = {};
+        SG.playerAction = null;
+
+        if (!gltf.animations || !gltf.animations.length || !THREE.AnimationMixer) return;
+
+        SG.playerMixer = new THREE.AnimationMixer(model);
+        for (var i = 0; i < gltf.animations.length; i++) {
+            var clip = gltf.animations[i];
+            var key = String(clip.name || '').toLowerCase();
+            SG.playerActions[key] = SG.playerMixer.clipAction(clip);
+        }
+    }
+
+    SG.playPlayerAnimation = function(name) {
+        if (!SG.playerMixer || !SG.playerActions) return;
+        var next = SG.playerActions[String(name || '').toLowerCase()];
+        if (!next || SG.playerAction === next) return;
+
+        if (SG.playerAction) SG.playerAction.fadeOut(0.12);
+        next.reset().fadeIn(0.12).play();
+        SG.playerAction = next;
+    };
+
+    SG.updatePlayerModelAnimation = function(delta) {
+        if (!SG.playerModelLoaded || !SG.playerMixer) return;
+
+        var target = 'Idle';
+        if (SG.state) {
+            if (SG.state.gameOver) {
+                target = 'Death';
+            } else if (SG.state.started && !SG.state.paused) {
+                if (SG.state.isRolling) {
+                    target = 'Slide';
+                } else if (SG.state.isJumping) {
+                    target = SG.state.jumpVelocity < -0.15 ? 'Fall' : 'Jump';
+                } else if (SG.state.laneLerp < 1 && SG.state.targetLane !== SG.state.currentLane) {
+                    target = SG.state.targetLane < SG.state.currentLane ? 'StrafeLeft' : 'StrafeRight';
+                } else {
+                    target = 'Run';
+                }
+            }
+        }
+
+        SG.playPlayerAnimation(target);
+        SG.playerMixer.update(delta);
+    };
+
+    SG.loadPlayerModel = function() {
+        if (SG.playerModelRequested || !SG.player || !THREE || !THREE.GLTFLoader) return;
+        SG.playerModelRequested = true;
+
+        var loader = new THREE.GLTFLoader();
+        loader.load(SG.playerModelPath, function(gltf) {
+            if (!SG.player) return;
+
+            var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+            if (!model) return;
+
+            model.name = 'PlayerGLB';
+            normalizeModel(model);
+            model.traverse(function(node) {
+                if (node && node.isMesh) {
+                    node.castShadow = true;
+                    node.receiveShadow = true;
+                }
+            });
+
+            if (SG.playerModel && SG.playerModel.parent) {
+                SG.playerModel.parent.remove(SG.playerModel);
+            }
+
+            SG.playerModel = model;
+            SG.playerModelLoaded = true;
+            SG.player.add(model);
+            hideLegacyBodyParts();
+            indexAnimationActions(gltf, model);
+            SG.playPlayerAnimation('Idle');
+        }, undefined, function(err) {
+            SG.playerModelError = err;
+            SG.playerModelLoaded = false;
+        });
+    };
+
     SG.createPlayer = function() {
         SG.player = new THREE.Group();
         SG.player.position.set(0, 0, 0);
         SG.player.rotation.y = Math.PI;
+        SG.playerLegacyParts = [];
+        SG.playerModel = null;
+        SG.playerModelLoaded = false;
+        SG.playerModelRequested = false;
 
         var bodyMat = new THREE.MeshLambertMaterial({ color: 0x2255aa });
-        SG.playerBody = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.4), bodyMat);
+        SG.playerBody = rememberLegacyPart(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.4), bodyMat));
         SG.playerBody.position.y = 0.7;
         SG.player.add(SG.playerBody);
 
         var headMat = new THREE.MeshLambertMaterial({ color: 0xffccaa });
-        SG.playerHead = new THREE.Mesh(new THREE.SphereGeometry(0.2, 6, 6), headMat);
+        SG.playerHead = rememberLegacyPart(new THREE.Mesh(new THREE.SphereGeometry(0.2, 6, 6), headMat));
         SG.playerHead.position.set(0, 1.15, 0);
         SG.player.add(SG.playerHead);
 
         var capMat = new THREE.MeshLambertMaterial({ color: 0xcc3333 });
-        var cap = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, 0.1, 6), capMat);
+        var cap = rememberLegacyPart(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, 0.1, 6), capMat));
         cap.position.set(0, 1.3, 0);
         SG.player.add(cap);
 
         var armMat = new THREE.MeshLambertMaterial({ color: 0xffccaa });
-        SG.playerLeftArm = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.35, 0.12), armMat);
+        SG.playerLeftArm = rememberLegacyPart(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.35, 0.12), armMat));
         SG.playerLeftArm.position.set(-0.4, 0.85, 0);
         SG.player.add(SG.playerLeftArm);
-        SG.playerRightArm = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.35, 0.12), armMat);
+        SG.playerRightArm = rememberLegacyPart(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.35, 0.12), armMat));
         SG.playerRightArm.position.set(0.4, 0.85, 0);
         SG.player.add(SG.playerRightArm);
 
         var legMat = new THREE.MeshLambertMaterial({ color: 0x224488 });
-        SG.playerLeftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, 0.15), legMat);
+        SG.playerLeftLeg = rememberLegacyPart(new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, 0.15), legMat));
         SG.playerLeftLeg.position.set(-0.15, 0.2, 0);
         SG.player.add(SG.playerLeftLeg);
-        SG.playerRightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, 0.15), legMat);
+        SG.playerRightLeg = rememberLegacyPart(new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, 0.15), legMat));
         SG.playerRightLeg.position.set(0.15, 0.2, 0);
         SG.player.add(SG.playerRightLeg);
 
@@ -591,6 +710,7 @@
         SG.player.add(SG.jetpackPack);
 
         SG.scene.add(SG.player);
+        SG.loadPlayerModel();
         return SG.player;
     };
 })();
@@ -1620,7 +1740,7 @@
             SG.shopOverlay.id = 'shop-overlay';
             SG.shopOverlay.className = 'overlay';
             SG.shopOverlay.onclick = function(e) { if (e.target === SG.shopOverlay || e.target.closest('.modal-close-btn')) { SG.shopOverlay.style.display = 'none'; SG.updateMenuCredits(); } };
-        SG.shopOverlay.addEventListener('touchend', function(e) { if (e.target === SG.shopOverlay || e.target.closest('.modal-close-btn')) { e.preventDefault(); SG.shopOverlay.style.display = 'none'; SG.updateMenuCredits(); } });
+            SG.shopOverlay.addEventListener('touchend', function(e) { if (e.target === SG.shopOverlay || e.target.closest('.modal-close-btn')) { e.preventDefault(); SG.shopOverlay.style.display = 'none'; SG.updateMenuCredits(); } });
         }
         // showShop continues below...
         var prices = [0, 10000, 50000, 100000];
@@ -3146,20 +3266,6 @@
             if (el) el.style.display = 'none';
         });
 
-        // Force ability visuals to be correct after returning to menu
-        SG.state.firstPerson = false;
-        if (SG.player) {
-            SG.player.visible = true;
-            if (SG.jetpackPack && SG.jetpackPack.parent !== SG.player) {
-                SG.player.add(SG.jetpackPack);
-            }
-            [SG.shoesLeft, SG.shoesRight, SG.shoesDJLeft, SG.shoesDJRight,
-             SG.shoesRWLeft, SG.shoesRWRight].forEach(function(s) {
-                if (s && s.parent !== SG.player) SG.player.add(s);
-            });
-        }
-        SG.updateAbilityVisuals();
-
         SG.spawnInitialTrack();
         SG.spawnBuildings();
         SG.spawnObstacles();
@@ -3224,22 +3330,6 @@
         if (SG.state.theme !== 0) {
             SG.switchTheme(0);
         }
-
-        // Force ability visuals to be correct after returning to menu
-        SG.state.firstPerson = false;
-        if (SG.player) {
-            SG.player.visible = true;
-            // Re-ensure jetpack pack and shoes are children of player
-            // (in case any dispose logic detached them)
-            if (SG.jetpackPack && SG.jetpackPack.parent !== SG.player) {
-                SG.player.add(SG.jetpackPack);
-            }
-            [SG.shoesLeft, SG.shoesRight, SG.shoesDJLeft, SG.shoesDJRight,
-             SG.shoesRWLeft, SG.shoesRWRight].forEach(function(s) {
-                if (s && s.parent !== SG.player) SG.player.add(s);
-            });
-        }
-        SG.updateAbilityVisuals();
 
         SG.spawnInitialTrack();
         SG.spawnBuildings();
@@ -3309,44 +3399,8 @@
         if (muteGO) muteGO.style.display = 'none';
     };
 
-    // ===== UPDATE ABILITY VISUALS (shoes + jetpack pack visibility) =====
-    SG.updateAbilityVisuals = function() {
-        var ab = SG.state.equippedAbility;
-        var showDJ = (ab === 1 && SG.state.canDoubleJump);
-        var showRW = (ab === 3 && SG.state.canRoofWalk);
-
-        // Base shoes
-        if (SG.shoesLeft) SG.shoesLeft.visible = !showDJ && !showRW;
-        if (SG.shoesRight) SG.shoesRight.visible = !showDJ && !showRW;
-        // DJ shoes
-        if (SG.shoesDJLeft) SG.shoesDJLeft.visible = showDJ;
-        if (SG.shoesDJRight) SG.shoesDJRight.visible = showDJ;
-        // RW shoes with glow
-        if (SG.shoesRWLeft) SG.shoesRWLeft.visible = showRW;
-        if (SG.shoesRWRight) SG.shoesRWRight.visible = showRW;
-        if (showRW && SG.shoesRWLeft && SG.shoesRWRight) {
-            var pulse = 0.5 + Math.sin(Date.now() * 0.005) * 0.3;
-            SG.shoesRWLeft.material.emissiveIntensity = pulse;
-            SG.shoesRWRight.material.emissiveIntensity = pulse;
-        }
-
-        // Jetpack pack: show only when equipped and canJetpack
-        var showJetpack = (ab === 2 && SG.state.canJetpack);
-        if (SG.jetpackPack) {
-            SG.jetpackPack.visible = showJetpack;
-            // Debug check: console verify
-            if (!SG.jetpackPack.parent) {
-                console.warn('Jetpack pack detached from player! Re-adding.');
-                if (SG.player) SG.player.add(SG.jetpackPack);
-            }
-        }
-    };
-
     // ===== UPDATE LOOP =====
     SG.update = function() {
-        // Always update ability visuals (shoes/jetpack) regardless of game state
-        SG.updateAbilityVisuals();
-
         if (SG.state.gameOver) {
             if (SG.state.cameraShake > 0) {
                 SG.state.cameraShake *= 0.95;
@@ -3361,6 +3415,7 @@
 
         var delta = Math.min(SG.clock.getDelta(), 0.05);
         SG.state.gameTime += delta;
+        if (SG.updatePlayerModelAnimation) SG.updatePlayerModelAnimation(delta);
 
         // Speed increase
         if (SG.state.speed < SG.MAX_SPEED) {
@@ -3384,44 +3439,6 @@
             var speedLevel = Math.floor((SG.state.speed - SG.START_SPEED) / (SG.MAX_SPEED - SG.START_SPEED) * 49) + 1;
             speedEl.textContent = 'SPD: ' + Math.min(speedLevel, 50) + 'x';
             speedEl.style.color = speedLevel > 35 ? 'rgba(255,30,30,1)' : speedLevel > 15 ? 'rgba(255,100,50,0.9)' : 'rgba(255,255,255,0.5)';
-        }
-
-        // Update skill indicator (equipped ability)
-        var skillEl = document.getElementById('skill-indicator');
-        if (skillEl) {
-            var abNames = {0:'',1:'Double Jump',2:'Jetpack',3:'Roof Walk'};
-            var ab = SG.state.equippedAbility;
-            if (ab && ab > 0) {
-                skillEl.textContent = '⚡ ' + (abNames[ab] || 'Ability');
-                skillEl.style.display = 'block';
-            } else {
-                skillEl.style.display = 'none';
-            }
-        }
-
-        // Update jetpack fuel/cooldown timer
-        var jetEl = document.getElementById('jetpack-timer');
-        if (jetEl) {
-            if (SG.state.equippedAbility === 2 && SG.state.canJetpack) {
-                var fuel = Math.ceil(SG.state.jetpackFuel);
-                var cd = Math.ceil(SG.state.jetpackCooldown);
-                if (fuel > 0) {
-                    jetEl.textContent = '🔥 ' + fuel + 's';
-                    jetEl.style.display = 'block';
-                    jetEl.style.borderColor = 'rgba(255,200,50,0.5)';
-                    jetEl.style.color = '#FFD700';
-                } else if (cd > 0) {
-                    var cdLabel = (SG.state.isRolling && fuel <= 0) ? '⬇ PUNISH' : '⏳';
-                    jetEl.textContent = cdLabel + ' ' + cd + 's';
-                    jetEl.style.display = 'block';
-                    jetEl.style.borderColor = 'rgba(255,68,68,0.3)';
-                    jetEl.style.color = '#ff6666';
-                } else {
-                    jetEl.style.display = 'none';
-                }
-            } else {
-                jetEl.style.display = 'none';
-            }
         }
 
         // Update best score HUD
@@ -3522,46 +3539,17 @@
         }
 
         // Jetpack
-        var jetpackActive = false;
         if (SG.state.isJumping && SG.state.equippedAbility === 2 && SG.state.canJetpack && SG.state.jetpackFuel > 0 && SG.state.jetpackCooldown <= 0) {
-            jetpackActive = true;
             SG.state.jumpVelocity = 0;
-            // Height limit: cap at JETPACK_MAX_HEIGHT
-            if (SG.state.playerHeight < SG.JETPACK_MAX_HEIGHT) {
-                SG.state.playerHeight += SG.JETPACK_LIFT * delta * 60;
-                if (SG.state.playerHeight > SG.JETPACK_MAX_HEIGHT) {
-                    SG.state.playerHeight = SG.JETPACK_MAX_HEIGHT;
-                }
-            }
+            SG.state.playerHeight += SG.JETPACK_LIFT * delta * 60;
             SG.state.jetpackFuel -= delta;
             if (SG.state.jetpackFuel <= 0) {
                 SG.state.jetpackFuel = 0;
                 SG.state.jetpackCooldown = SG.JETPACK_COOLDOWN_MAX;
             }
-            // Cancel jetpack if rolling (pressing down)
-            if (SG.state.isRolling) {
-                SG.state.jetpackFuel = 0;
-                SG.state.jetpackCooldown = SG.JETPACK_COOLDOWN_MAX;
-                jetpackActive = false;
-            }
         } else if (SG.state.jetpackCooldown > 0) {
             SG.state.jetpackCooldown -= delta;
             if (SG.state.jetpackCooldown < 0) SG.state.jetpackCooldown = 0;
-        }
-
-        // Jetpack flame visibility
-        if (SG.jetpackFlame && SG.jetpackFlameInner) {
-            if (jetpackActive) {
-                SG.jetpackFlame.visible = true;
-                SG.jetpackFlameInner.visible = true;
-                var flicker = 0.8 + Math.random() * 0.4;
-                SG.jetpackFlame.scale.set(flicker, flicker, flicker);
-                SG.jetpackFlame.material.opacity = 0.6 + Math.random() * 0.4;
-                SG.jetpackFlameInner.scale.set(flicker * 0.6, flicker * 0.6, flicker * 0.6);
-            } else {
-                SG.jetpackFlame.visible = false;
-                SG.jetpackFlameInner.visible = false;
-            }
         }
 
         // Jump physics
@@ -4062,7 +4050,7 @@
             } catch(e) {
                 // Fallback: render anyway even if _renderProfile fails
                 overlay.innerHTML = '<div class="menu-content"><h1 class="menu-title">👤 PROFILE</h1>' +
-                    '<div style="color:#888;padding:20px;">' + SG.account.email + '</div>' +
+                    '<div style="color:#888;padding:20px;">' + SG.escapeHtml(SG.account.email || '') + '</div>' +
                     '<div class="menu-btn modal-close-btn" onclick="this.closest(\'.overlay\').style.display=\'none\'">CLOSE</div></div>';
             }
         });

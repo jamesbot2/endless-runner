@@ -119,6 +119,7 @@ app.whenReady().then(async () => {
       // 3. Three.js
       r.threeExists = typeof window.THREE !== 'undefined' && window.THREE !== null
       r.threeRevision = r.threeExists ? window.THREE.REVISION : null
+      r.gltfLoader = r.threeExists ? typeof window.THREE.GLTFLoader === 'function' : false
 
       // 4. Preload bridge
       r.desktopAPI = typeof window.desktopAPI !== 'undefined' && window.desktopAPI !== null
@@ -146,6 +147,9 @@ app.whenReady().then(async () => {
       r.authOfflineBtn = document.getElementById('dc-offline-btn') !== null
       r.__desktopAuth = window.__SG ? typeof window.__SG.__desktopAuth !== 'undefined' : false
       r.applyGameData = window.__SG ? typeof window.__SG.applyGameData === 'function' : false
+      r.playerModelLoaded = window.__SG ? window.__SG.playerModelLoaded === true : false
+      r.playerModelName = window.__SG && window.__SG.playerModel ? window.__SG.playerModel.name : null
+      r.playerAnimations = window.__SG && window.__SG.playerActions ? Object.keys(window.__SG.playerActions) : []
       return r
     })()`)
   } catch (err) {
@@ -160,6 +164,9 @@ app.whenReady().then(async () => {
   check('2. window.__SG exists', !!state.sgExists, state.sgExists ? `${state.sgKeys} keys` : undefined)
   check('3. window.THREE exists', !!state.threeExists, state.threeRevision ? `r${state.threeRevision}` : undefined)
   check('3b. THREE.REVISION === "128"', state.threeRevision === '128', state.threeRevision ? `got ${state.threeRevision}` : 'undefined')
+  check('3c. THREE.GLTFLoader exists', !!state.gltfLoader)
+  const playerModelPath = path.join(DESKTOP, 'dist/renderer/models/player.glb')
+  check('3d. player.glb copied to renderer dist', fs.existsSync(playerModelPath), fs.existsSync(playerModelPath) ? `${fs.statSync(playerModelPath).size} bytes` : 'missing')
   check('4a. desktopAPI (preload bridge)', !!state.desktopAPI)
   check('4b. __SUBWAY_CONFIG__ exists', !!state.subwayConfig)
   check('4c. API_BASE_URL is non-empty', !!state.apiBaseUrl, state.apiBaseUrl || 'empty')
@@ -178,6 +185,8 @@ app.whenReady().then(async () => {
   check("12. Offline play button exists", !!state.authOfflineBtn)
   check("13. SG.__desktopAuth module loaded", !!state.__desktopAuth)
   check("14. SG.applyGameData is function", !!state.applyGameData)
+  check("14b. player GLB loaded", !!state.playerModelLoaded, state.playerModelName || 'not loaded')
+  check("14c. player animations indexed", state.playerAnimations && state.playerAnimations.length >= 1, state.playerAnimations ? state.playerAnimations.join(', ') : 'none')
 
   // -- applyGameData runtime test --
   try {
