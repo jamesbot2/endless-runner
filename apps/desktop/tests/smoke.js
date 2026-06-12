@@ -155,6 +155,10 @@ app.whenReady().then(async () => {
       r.jetpackMaxHeight = window.__SG ? window.__SG.JETPACK_MAX_HEIGHT : null
       r.abilityHud = window.__SG ? typeof window.__SG.updateAbilityHUD === 'function' : false
       r.abilityVisuals = window.__SG ? typeof window.__SG.updateAbilityVisuals === 'function' : false
+      if (window.__SG && window.__SG.restartGame && window.__SG.player) {
+        window.__SG.restartGame()
+        r.restartRotationY = window.__SG.player.rotation.y
+      }
       return r
     })()`)
   } catch (err) {
@@ -196,6 +200,7 @@ app.whenReady().then(async () => {
   check("14c. player animations indexed", state.playerAnimations && state.playerAnimations.length >= 1, state.playerAnimations ? state.playerAnimations.join(', ') : 'none')
   check("14d. ability HUD updater exists", !!state.abilityHud)
   check("14e. ability visual updater exists", !!state.abilityVisuals)
+  check("14f. restart keeps player facing forward", Math.abs(state.restartRotationY - Math.PI) < 0.001, String(state.restartRotationY))
 
   // -- applyGameData runtime test --
   try {

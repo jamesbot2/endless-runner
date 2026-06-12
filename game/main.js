@@ -97,7 +97,7 @@
 
         if (SG.player) {
             SG.player.position.set(0, 0, 0);
-            SG.player.rotation.set(0, 0, 0);
+            SG.player.rotation.set(0, Math.PI, 0);
             SG.player.scale.set(1, 1, 1);
         }
         if (SG.camera) {
@@ -165,7 +165,7 @@
 
         if (SG.player) {
             SG.player.position.set(0, SG.PLAYER_Y, 0);
-            SG.player.rotation.set(0, 0, 0);
+            SG.player.rotation.set(0, Math.PI, 0);
             SG.player.scale.set(1, 1, 1);
         }
         if (SG.camera) {
