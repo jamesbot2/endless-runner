@@ -168,6 +168,22 @@ app.whenReady().then(async () => {
       r.ownedCharacterCount = window.__SG && window.__SG.getOwnedCharacters ? window.__SG.getOwnedCharacters().length : 0
       r.expectedCharacterPrice = Math.max(0, (r.ownedCharacterCount || 1) - 1) * 10000
       r.charactersButton = document.getElementById('characters-btn') !== null
+      r.speedIncrements = window.__SG && window.__SG.SPEED_INCREMENT_BY_DIFFICULTY ? window.__SG.SPEED_INCREMENT_BY_DIFFICULTY.slice() : []
+      r.speedLevels = window.__SG && window.__SG.speedForLevel && window.__SG.getSpeedLevel ? [1, 25, 50].map(function(level) {
+        var speed = window.__SG.speedForLevel(level)
+        return {
+          level: level,
+          speed: speed,
+          roundtrip: window.__SG.getSpeedLevel(speed),
+          distanceRate: window.__SG.getDistanceRate(speed)
+        }
+      }) : []
+      r.cyberReset = false
+      if (window.__SG && window.__SG.resetCyberMode) {
+        window.__SG.state.cyberMode = true
+        window.__SG.resetCyberMode()
+        r.cyberReset = window.__SG.state.cyberMode === false
+      }
       if (window.__SG && typeof window.__SG.showCharacters === 'function') {
         window.__SG.showCharacters()
         r.characterOverlay = document.getElementById('characters-overlay') !== null
@@ -179,6 +195,14 @@ app.whenReady().then(async () => {
       if (window.__SG && window.__SG.restartGame && window.__SG.player) {
         window.__SG.restartGame()
         r.restartRotationY = window.__SG.player.rotation.y
+      }
+      if (window.__SG && window.__SG.applyGameData && window.__SG.selectCharacter) {
+        window.__SG.applyGameData({ credits: 10000, ownedCharacters: ['runner', 'adventurer'], selectedCharacter: 'adventurer' })
+        window.__SG.selectCharacter('adventurer')
+        window.__SG.state.canDoubleJump = true
+        window.__SG.state.equippedAbility = 1
+        if (window.__SG.updateAbilityVisuals) window.__SG.updateAbilityVisuals()
+        r.nonRunnerShoeOverlayHidden = (!window.__SG.shoesDJLeft || window.__SG.shoesDJLeft.visible === false) && (!window.__SG.shoesDJRight || window.__SG.shoesDJRight.visible === false)
       }
       return r
     })()`)
@@ -236,6 +260,16 @@ app.whenReady().then(async () => {
   check("14l. character selector menu exists", !!state.characterSelector && !!state.charactersButton)
   check("14m. character price follows unlock count", state.characterBuy && state.characterPrice === state.expectedCharacterPrice, `price=${state.characterPrice}, owned=${state.ownedCharacterCount}`)
   check("14n. character modal renders cards", !!state.characterOverlay && !!state.characterPreviewCanvas && state.characterCards >= 12, `cards=${state.characterCards || 0}`)
+  check("14o. speed growth slowed per difficulty", Array.isArray(state.speedIncrements) && state.speedIncrements[0] < 0.0005 && state.speedIncrements[1] < 0.0005 && state.speedIncrements[2] < 0.0005, state.speedIncrements ? state.speedIncrements.join(', ') : 'missing')
+  const speedLevelsOk = state.speedLevels && state.speedLevels.length === 3 &&
+    state.speedLevels[0].roundtrip === 1 &&
+    state.speedLevels[1].roundtrip >= 25 &&
+    state.speedLevels[2].roundtrip === 50 &&
+    state.speedLevels[0].distanceRate < state.speedLevels[1].distanceRate &&
+    state.speedLevels[1].distanceRate < state.speedLevels[2].distanceRate
+  check("14p. distance rate scales with speed level", speedLevelsOk, state.speedLevels ? JSON.stringify(state.speedLevels) : 'missing')
+  check("14q. cyber mode reset restores normal mode", !!state.cyberReset)
+  check("14r. non-runner hides Neo shoe overlays", !!state.nonRunnerShoeOverlayHidden)
 
   // -- applyGameData runtime test --
   try {

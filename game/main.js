@@ -62,9 +62,23 @@
         SG.state.particles = [];
     };
 
+    SG.resetCyberMode = function() {
+        if (SG.applyCyberColors) SG.applyCyberColors(false);
+        SG.state.cyberMode = false;
+        if (SG.scene) {
+            if (SG.scene.background) SG.scene.background.setHex(0x87CEEB);
+            if (SG.scene.fog) {
+                SG.scene.fog.color.setHex(0x87CEEB);
+                SG.scene.fog.near = 60;
+                SG.scene.fog.far = 120;
+            }
+        }
+    };
+
     // ===== QUIT TO MENU =====
     SG.quitToMenu = function() {
         SG.stopPoliceChase();
+        SG.resetCyberMode();
         SG.resetAllGameObjects();
         SG.state.score = 0;
         SG.state.coins = 0;
@@ -133,6 +147,7 @@
     // ===== RESTART GAME =====
     SG.restartGame = function() {
         SG.stopPoliceChase();
+        SG.resetCyberMode();
         SG.resetAllGameObjects();
 
         SG.state.score = 0;
@@ -278,13 +293,12 @@
 
         // Speed increase
         if (SG.state.speed < SG.MAX_SPEED) {
-            SG.state.speed += SG.SPEED_INCREMENT * delta * 60;
+            SG.state.speed += SG.getDifficultySpeedIncrement() * delta * 60;
             if (SG.state.speed > SG.MAX_SPEED) SG.state.speed = SG.MAX_SPEED;
         }
 
-        // Score
-        // Score (distance) scales with speed - faster = more distance/sec
-        SG.state.score += SG.state.speed * delta * 10;
+        // Distance is meters; faster speeds cover more meters per second.
+        SG.state.score += SG.getDistanceRate(SG.state.speed) * delta;
 
         SG.state.policeTotalDistance += delta * SG.state.speed * 60;
 
@@ -297,8 +311,8 @@
         // Speed indicator
         var speedEl = document.getElementById('speed-indicator');
         if (speedEl) {
-            var speedLevel = Math.floor((SG.state.speed - SG.START_SPEED) / (SG.MAX_SPEED - SG.START_SPEED) * 49) + 1;
-            speedEl.textContent = 'SPD: ' + Math.min(speedLevel, 50) + 'x';
+            var speedLevel = SG.getSpeedLevel(SG.state.speed);
+            speedEl.textContent = 'SPD: ' + speedLevel + 'x';
             speedEl.style.color = speedLevel > 35 ? 'rgba(255,30,30,1)' : speedLevel > 15 ? 'rgba(255,100,50,0.9)' : 'rgba(255,255,255,0.5)';
         }
 
@@ -557,7 +571,7 @@
         SG.checkThemeChange();
 
         // Background color changes with speed
-        var speedLvl = Math.floor((SG.state.speed - SG.START_SPEED) / (SG.MAX_SPEED - SG.START_SPEED) * 49) + 1;
+        var speedLvl = SG.getSpeedLevel(SG.state.speed);
         var speedRatio = Math.min(SG.state.speed / SG.MAX_SPEED, 1.0);
         var inCyber = speedLvl >= 48;
         if (inCyber !== SG.state.cyberMode) {
@@ -653,10 +667,11 @@
 
         if (SG.shoesLeft) SG.shoesLeft.visible = false;
         if (SG.shoesRight) SG.shoesRight.visible = false;
-        if (SG.shoesDJLeft) SG.shoesDJLeft.visible = showDJ;
-        if (SG.shoesDJRight) SG.shoesDJRight.visible = showDJ;
-        if (SG.shoesRWLeft) SG.shoesRWLeft.visible = showRW;
-        if (SG.shoesRWRight) SG.shoesRWRight.visible = showRW;
+        var showNeoShoeOverlay = (SG.state.selectedCharacter || 'runner') === 'runner';
+        if (SG.shoesDJLeft) SG.shoesDJLeft.visible = showDJ && showNeoShoeOverlay;
+        if (SG.shoesDJRight) SG.shoesDJRight.visible = showDJ && showNeoShoeOverlay;
+        if (SG.shoesRWLeft) SG.shoesRWLeft.visible = showRW && showNeoShoeOverlay;
+        if (SG.shoesRWRight) SG.shoesRWRight.visible = showRW && showNeoShoeOverlay;
 
         if (showRW && SG.shoesRWLeft && SG.shoesRWRight) {
             var pulse = 0.45 + Math.sin(SG.state.gameTime * 8) * 0.25;

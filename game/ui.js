@@ -169,7 +169,8 @@
             });
             SG.characterPreview.model = model;
             SG.characterPreview.scene.add(model);
-            if (gltf.animations && gltf.animations.length && THREE.AnimationMixer) {
+            SG.characterPreview.previewTime = 0;
+            if (character.id !== 'runner' && gltf.animations && gltf.animations.length && THREE.AnimationMixer) {
                 SG.characterPreview.mixer = new THREE.AnimationMixer(model);
                 var clip = gltf.animations.filter(function(c) { return String(c.name).toLowerCase() === 'idle'; })[0] || gltf.animations[0];
                 SG.characterPreview.mixer.clipAction(clip).play();
@@ -192,7 +193,7 @@
             var key = new THREE.DirectionalLight(0xffffff, 1.8);
             key.position.set(2, 4, 3);
             scene.add(key);
-            SG.characterPreview = { renderer: renderer, scene: scene, camera: camera, model: null, mixer: null, clock: new THREE.Clock(), current: null, running: false };
+            SG.characterPreview = { renderer: renderer, scene: scene, camera: camera, model: null, mixer: null, clock: new THREE.Clock(), current: null, running: false, previewTime: 0 };
         } else if (SG.characterPreview.renderer.domElement !== canvas) {
             SG.characterPreview.renderer.dispose();
             SG.characterPreview.renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
@@ -210,9 +211,10 @@
             SG.characterPreview.renderer.setSize(w, h, false);
             SG.characterPreview.camera.aspect = w / h;
             SG.characterPreview.camera.updateProjectionMatrix();
-            var delta = SG.characterPreview.clock.getDelta();
+            var delta = Math.min(SG.characterPreview.clock.getDelta(), 0.033);
+            SG.characterPreview.previewTime += delta;
             if (SG.characterPreview.mixer) SG.characterPreview.mixer.update(delta);
-            if (SG.characterPreview.model) SG.characterPreview.model.rotation.y += delta * 0.75;
+            if (SG.characterPreview.model) SG.characterPreview.model.rotation.y = Math.sin(SG.characterPreview.previewTime * 0.7) * 0.35;
             SG.characterPreview.renderer.render(SG.characterPreview.scene, SG.characterPreview.camera);
             requestAnimationFrame(loop);
         }
@@ -706,12 +708,12 @@
             });
             SG.registerConsoleCommand('clear', 'Clear console output', function() { SG.clearConsole(); });
             SG.registerConsoleCommand('status', 'Show run state', function() {
-                var speedLevel = Math.floor((SG.state.speed - SG.START_SPEED) / (SG.MAX_SPEED - SG.START_SPEED) * 49) + 1;
-                SG.consoleLog('score=' + Math.floor(SG.state.score || 0) + 'm coins=' + (SG.state.coins || 0) + ' speed=' + Math.max(1, Math.min(speedLevel, 50)) + 'x ability=' + (SG.state.equippedAbility || 0), 'ok');
+                var speedLevel = SG.getSpeedLevel ? SG.getSpeedLevel(SG.state.speed) : 1;
+                SG.consoleLog('score=' + Math.floor(SG.state.score || 0) + 'm coins=' + (SG.state.coins || 0) + ' speed=' + speedLevel + 'x ability=' + (SG.state.equippedAbility || 0), 'ok');
             });
             SG.registerConsoleCommand('speed', 'Set speed level 1-50', function(args) {
                 var level = Math.max(1, Math.min(50, parseInt(args[0] || '1', 10) || 1));
-                SG.state.speed = SG.START_SPEED + (SG.MAX_SPEED - SG.START_SPEED) * ((level - 1) / 49);
+                SG.state.speed = SG.speedForLevel ? SG.speedForLevel(level) : SG.START_SPEED + (SG.MAX_SPEED - SG.START_SPEED) * ((level - 1) / 49);
                 SG.consoleLog('speed set to ' + level + 'x', 'ok');
             });
             SG.registerConsoleCommand('coins', 'Add credits/coins to this run', function(args) {

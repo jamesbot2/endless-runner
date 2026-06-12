@@ -114,16 +114,23 @@
                 if (!mat.color) continue;
                 var hex = mat.color.getHex();
                 if (on) {
-                    if (child.userData._origColor === undefined) {
-                        child.userData._origColor = hex;
+                    mat.userData = mat.userData || {};
+                    if (mat.userData._origColor === undefined) {
+                        mat.userData._origColor = hex;
                     }
                     var g = gray(hex);
                     mat.color.setHex(g);
-                } else if (child.userData._origColor !== undefined) {
-                    mat.color.setHex(child.userData._origColor);
-                    delete child.userData._origColor;
+                } else {
+                    mat.userData = mat.userData || {};
+                    if (mat.userData._origColor !== undefined) {
+                        mat.color.setHex(mat.userData._origColor);
+                        delete mat.userData._origColor;
+                    } else if (child.userData._origColor !== undefined) {
+                        mat.color.setHex(child.userData._origColor);
+                    }
                 }
             }
+            if (!on && child.userData._origColor !== undefined) delete child.userData._origColor;
         });
 
         if (SG.ambientLight) {
