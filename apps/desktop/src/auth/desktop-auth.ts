@@ -40,89 +40,55 @@ export function initDesktopAuth(
   function buildUI(): HTMLElement {
     const overlay = document.createElement('div')
     overlay.id = 'dc-auth-overlay'
-    overlay.style.cssText = [
-      'position:fixed', 'inset:0', 'z-index:99998',
-      'display:flex', 'align-items:center', 'justify-content:center',
-      'background:rgba(0,0,0,0.85)',
-      'font-family:Arial,sans-serif',
-    ].join(';')
+    overlay.className = 'dc-overlay'
 
     overlay.innerHTML = `
-      <div style="background:#16213e;padding:32px;border-radius:16px;text-align:center;max-width:380px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.5);color:#fff;">
-        <div style="font-size:48px;margin-bottom:4px;">🏃</div>
-        <div style="font-size:13px;color:#888;margin-bottom:16px;">Subway Surfer — Sign in to play</div>
+      <div class="dc-panel">
+        <div class="dc-logo">🏃</div>
+        <div class="dc-sub">Subway Surfer — Sign in to play</div>
 
         <!-- Tabs -->
-        <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.1);">
-          <div id="dc-tab-login" class="dc-tab dc-tab-active" data-tab="login"
-               style="flex:1;padding:8px;cursor:pointer;font-size:13px;font-weight:bold;color:#888;border-bottom:2px solid transparent;transition:all .2s;">
-            LOGIN
-          </div>
-          <div id="dc-tab-reg" class="dc-tab" data-tab="register"
-               style="flex:1;padding:8px;cursor:pointer;font-size:13px;font-weight:bold;color:#888;border-bottom:2px solid transparent;transition:all .2s;">
-            REGISTER
-          </div>
+        <div class="dc-tabs">
+          <div id="dc-tab-login" class="dc-tab dc-tab-active" data-tab="login">LOGIN</div>
+          <div id="dc-tab-reg" class="dc-tab" data-tab="register">REGISTER</div>
         </div>
 
         <!-- Login pane -->
         <div id="dc-pane-login">
-          <input id="dc-login-email" type="email" placeholder="Email"
-                 style="width:100%;padding:10px;margin:4px 0;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;outline:none;box-sizing:border-box;">
-          <input id="dc-login-pass" type="password" placeholder="Password"
-                 style="width:100%;padding:10px;margin:4px 0;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;outline:none;box-sizing:border-box;">
-          <div id="dc-login-msg" style="font-size:12px;margin:6px 0;min-height:16px;"></div>
-          <button id="dc-login-btn"
-                  style="width:100%;padding:10px;border-radius:8px;border:2px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.08);color:#fff;font-size:14px;font-weight:bold;cursor:pointer;margin:4px 0;">
-            LOGIN
-          </button>
+          <input id="dc-login-email" class="dc-input" type="email" placeholder="Email">
+          <input id="dc-login-pass" class="dc-input" type="password" placeholder="Password">
+          <div id="dc-login-msg" class="dc-msg"></div>
+          <button id="dc-login-btn" class="dc-btn">LOGIN</button>
         </div>
 
         <!-- Register pane -->
         <div id="dc-pane-register" style="display:none;">
-          <input id="dc-reg-name" type="text" placeholder="Username (2-16 chars)" maxlength="16"
-                 style="width:100%;padding:10px;margin:4px 0;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;outline:none;box-sizing:border-box;">
-          <input id="dc-reg-email" type="email" placeholder="Email"
-                 style="width:100%;padding:10px;margin:4px 0;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;outline:none;box-sizing:border-box;">
-          <input id="dc-reg-pass" type="password" placeholder="Password (6+ chars)"
-                 style="width:100%;padding:10px;margin:4px 0;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;outline:none;box-sizing:border-box;">
-          <input id="dc-reg-pass2" type="password" placeholder="Confirm password"
-                 style="width:100%;padding:10px;margin:4px 0;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;outline:none;box-sizing:border-box;">
+          <input id="dc-reg-name" class="dc-input" type="text" placeholder="Username (2-16 chars)" maxlength="16">
+          <input id="dc-reg-email" class="dc-input" type="email" placeholder="Email">
+          <input id="dc-reg-pass" class="dc-input" type="password" placeholder="Password (6+ chars)">
+          <input id="dc-reg-pass2" class="dc-input" type="password" placeholder="Confirm password">
           <!-- Captcha -->
-          <div id="dc-captcha-svg" style="margin:8px 0;display:flex;justify-content:center;min-height:60px;"></div>
+          <div id="dc-captcha-svg" class="dc-captcha"></div>
           <div style="text-align:center;margin-bottom:4px;">
-            <button id="dc-captcha-refresh"
-                    style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);color:#aaa;cursor:pointer;font-size:12px;border-radius:4px;padding:3px 10px;">
-              🔄 Refresh
-            </button>
+            <button id="dc-captcha-refresh" class="dc-link-btn">🔄 Refresh</button>
           </div>
-          <input id="dc-reg-captcha" type="text" maxlength="5" placeholder="Enter code from image"
-                 style="width:100%;padding:10px;margin:4px 0;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;outline:none;box-sizing:border-box;text-align:center;letter-spacing:4px;">
-          <div id="dc-reg-msg" style="font-size:12px;margin:6px 0;min-height:16px;"></div>
-          <button id="dc-reg-btn"
-                  style="width:100%;padding:10px;border-radius:8px;border:2px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.08);color:#fff;font-size:14px;font-weight:bold;cursor:pointer;margin:4px 0;">
-            REGISTER
-          </button>
+          <input id="dc-reg-captcha" class="dc-input" type="text" maxlength="5" placeholder="Enter code from image" style="text-align:center;letter-spacing:4px;">
+          <div id="dc-reg-msg" class="dc-msg"></div>
+          <button id="dc-reg-btn" class="dc-btn">REGISTER</button>
         </div>
 
         <!-- Verify pane -->
         <div id="dc-pane-verify" style="display:none;">
-          <p style="color:#aaa;font-size:13px;">Code sent to <span id="dc-verify-email" style="color:#fff;"></span></p>
-          <input id="dc-verify-code" type="text" maxlength="6" placeholder="000000"
-                 style="width:100%;padding:10px;margin:8px 0;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.4);color:#fff;font-size:22px;outline:none;box-sizing:border-box;text-align:center;letter-spacing:8px;font-weight:bold;">
-          <div id="dc-verify-msg" style="font-size:12px;margin:6px 0;min-height:16px;"></div>
-          <button id="dc-verify-btn"
-                  style="width:100%;padding:10px;border-radius:8px;border:2px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.08);color:#fff;font-size:14px;font-weight:bold;cursor:pointer;margin:4px 0;">
-            VERIFY
-          </button>
+          <p style="color:var(--text-mid);font-size:13px;">Code sent to <span id="dc-verify-email" style="color:var(--text-hi);"></span></p>
+          <input id="dc-verify-code" class="dc-input" type="text" maxlength="6" placeholder="000000" style="text-align:center;letter-spacing:8px;font-size:22px;font-weight:bold;">
+          <div id="dc-verify-msg" class="dc-msg"></div>
+          <button id="dc-verify-btn" class="dc-btn">VERIFY</button>
         </div>
 
         <!-- Offline -->
-        <div style="margin-top:12px;border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;">
-          <div style="font-size:11px;color:#666;margin-bottom:6px;">🌐 Server unreachable?</div>
-          <button id="dc-offline-btn"
-                  style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#888;cursor:pointer;font-size:12px;border-radius:6px;padding:6px 16px;">
-            Play Offline (local save only)
-          </button>
+        <div class="dc-footer">
+          <div class="dc-footer-hint">🌐 Server unreachable?</div>
+          <button id="dc-offline-btn" class="dc-link-btn">Play Offline (local save only)</button>
         </div>
       </div>
     `
@@ -152,8 +118,7 @@ export function initDesktopAuth(
       const tabEl = document.getElementById('dc-tab-' + (t === 'login' ? 'login' : t === 'register' ? 'reg' : 'verify'))
       const paneEl = document.getElementById('dc-pane-' + t)
       if (tabEl) {
-        tabEl.style.color = t === tab ? '#fff' : '#888'
-        tabEl.style.borderBottomColor = t === tab ? '#ff6600' : 'transparent'
+        tabEl.classList.toggle('dc-tab-active', t === tab)
       }
       if (paneEl) paneEl.style.display = t === tab ? '' : 'none'
     })

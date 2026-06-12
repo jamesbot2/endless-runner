@@ -270,21 +270,21 @@
 
         var html = '<div class="menu-content" style="max-width:380px;text-align:left;">';
         html += '<h1 class="menu-title" style="font-size:24px;text-align:center;margin-bottom:10px;">👤 PROFILE</h1>';
-        html += '<div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:15px;margin-bottom:10px;">';
-        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Name:</b> ' + SG.escapeHtml(SG.account.username || '-') + '</div>';
-        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Credits:</b> <span style="color:#FFD700;">' + (s.credits || 0) + '</span></div>';
-        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Total Coins:</b> <span style="color:#FFD700;">' + (s.totalCoins || 0) + '</span></div>';
-        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Equipped:</b> ' + ability + '</div>';
-        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Owned:</b> ' + (owned.length ? owned.join(', ') : 'None') + '</div>';
-        html += '<div style="margin:4px 0;"><b style="color:#aaa;">Runs:</b> ' + (s.runCount || 0) + '</div>';
+        html += '<div class="bento-grid">';
+        html += '<div class="bento-card"><div class="bento-label">Player</div><div class="bento-value">' + SG.escapeHtml(SG.account.username || '-') + '</div></div>';
+        html += '<div class="bento-card"><div class="bento-label">Credits</div><div class="bento-value gold">' + (s.credits || 0) + '</div></div>';
+        html += '<div class="bento-card"><div class="bento-label">Total Coins</div><div class="bento-value gold">' + (s.totalCoins || 0) + '</div></div>';
+        html += '<div class="bento-card"><div class="bento-label">Equipped</div><div class="bento-value cyan" style="font-size:16px;">' + ability + '</div></div>';
+        html += '<div class="bento-card"><div class="bento-label">Owned</div><div class="bento-value" style="font-size:14px;">' + (owned.length ? owned.join(', ') : 'None') + '</div></div>';
+        html += '<div class="bento-card"><div class="bento-label">Runs</div><div class="bento-value">' + (s.runCount || 0) + '</div></div>';
         html += '</div>';
 
-        html += '<div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:15px;">';
+        html += '<div class="bento-card span-2" style="margin-top:12px;">';
         var abNames = {0:'None',1:'Double Jump',2:'Jetpack',3:'Roof Walk'};
-        html += '<div style="font-weight:bold;margin-bottom:8px;">🏆 Best Distances</div>';
-        html += '<div style="margin:3px 0;"><span style="color:#4CAF50;">■</span> Easy: <b>' + (s.maxEasy || 0) + 'm</b> <span style="color:#888;font-size:11px;">[' + (abNames[s.maxEasyAbility] || 'None') + ']</span></div>';
-        html += '<div style="margin:3px 0;"><span style="color:#FFC107;">■</span> Medium: <b>' + (s.maxMedium || 0) + 'm</b> <span style="color:#888;font-size:11px;">[' + (abNames[s.maxMediumAbility] || 'None') + ']</span></div>';
-        html += '<div style="margin:3px 0;"><span style="color:#F44336;">■</span> Hard: <b>' + (s.maxHard || 0) + 'm</b> <span style="color:#888;font-size:11px;">[' + (abNames[s.maxHardAbility] || 'None') + ']</span></div>';
+        html += '<div class="bento-head">🏆 Best Distances</div>';
+        html += '<div class="row"><span><span class="dot-easy">■</span> Easy <span style="color:#888;font-size:11px;">[' + (abNames[s.maxEasyAbility] || 'None') + ']</span></span><span class="v">' + (s.maxEasy || 0) + 'm</span></div>';
+        html += '<div class="row"><span><span class="dot-med">■</span> Medium <span style="color:#888;font-size:11px;">[' + (abNames[s.maxMediumAbility] || 'None') + ']</span></span><span class="v">' + (s.maxMedium || 0) + 'm</span></div>';
+        html += '<div class="row"><span><span class="dot-hard">■</span> Hard <span style="color:#888;font-size:11px;">[' + (abNames[s.maxHardAbility] || 'None') + ']</span></span><span class="v">' + (s.maxHard || 0) + 'm</span></div>';
         html += '</div>';
 
         html += '<div class="menu-btn modal-close-btn" onclick="document.getElementById(\'profile-overlay\').style.display=\'none\'" style="margin-top:12px;text-align:center;">CLOSE</div>';
@@ -322,23 +322,23 @@
             if (entries.length === 0) {
                 html += '<div style="color:#888;padding:20px;">No entries yet. Play a game first!</div>';
             } else {
-                html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
-                html += '<tr style="color:#888;border-bottom:1px solid #333;">' +
-                    '<th style="padding:4px;text-align:left;">#</th>' +
-                    '<th style="padding:4px;text-align:left;">Player</th>' +
-                    '<th style="padding:4px;color:#4CAF50;">Easy</th>' +
-                    '<th style="padding:4px;color:#FFC107;">Med</th>' +
-                    '<th style="padding:4px;color:#F44336;">Hard</th>' +
+                html += '<table class="lb-table">';
+                html += '<tr>' +
+                    '<th>#</th>' +
+                    '<th>Player</th>' +
+                    '<th class="dot-easy">Easy</th>' +
+                    '<th class="dot-med">Med</th>' +
+                    '<th class="dot-hard">Hard</th>' +
                     '</tr>';
                 for (var i = 0; i < entries.length; i++) {
                     var e = entries[i];
                     var row = (i % 2 === 0) ? 'rgba(255,255,255,0.03)' : 'transparent';
-                    html += '<tr style="background:' + row + ';">' +
-                        '<td style="padding:3px 4px;color:#888;">' + (i+1) + '</td>' +
-                        '<td style="padding:3px 4px;">' + SG.escapeHtml(e.name || 'Player') + '</td>' +
-                        '<td style="padding:3px 4px;color:#4CAF50;">' + (e.maxEasy||0) + 'm <span style="color:#666;font-size:10px;">[' + (abNames[e.maxEasyAbility]||'-') + ']</span></td>' +
-                        '<td style="padding:3px 4px;color:#FFC107;">' + (e.maxMedium||0) + 'm <span style="color:#666;font-size:10px;">[' + (abNames[e.maxMediumAbility]||'-') + ']</span></td>' +
-                        '<td style="padding:3px 4px;color:#F44336;">' + (e.maxHard||0) + 'm <span style="color:#666;font-size:10px;">[' + (abNames[e.maxHardAbility]||'-') + ']</span></td>' +
+                    html += '<tr>' +
+                        '<td class="rank rank-' + (i+1) + '">' + (i+1) + '</td>' +
+                        '<td class="player">' + SG.escapeHtml(e.name || 'Player') + '</td>' +
+                        '<td class="dot-easy">' + (e.maxEasy||0) + 'm <span style="color:#666;font-size:10px;">[' + (abNames[e.maxEasyAbility]||'-') + ']</span></td>' +
+                        '<td class="dot-med">' + (e.maxMedium||0) + 'm <span style="color:#666;font-size:10px;">[' + (abNames[e.maxMediumAbility]||'-') + ']</span></td>' +
+                        '<td class="dot-hard">' + (e.maxHard||0) + 'm <span style="color:#666;font-size:10px;">[' + (abNames[e.maxHardAbility]||'-') + ']</span></td>' +
                         '</tr>';
                 }
                 html += '</table>';

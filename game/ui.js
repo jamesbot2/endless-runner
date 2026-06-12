@@ -54,6 +54,7 @@
         var prices = [0, 10000, 50000, 100000];
         var names = ['None', 'Double Jump', 'Jetpack', 'Roof Walk'];
         var descs = ['No ability equipped', 'Double jump in mid-air', 'Fly for 30s every 15s cooldown', 'Walk on top of obstacles'];
+        var icons = ['🚫', '🦘', '🚀', '🏃'];
 
         var html = '<div class="menu-content" style="max-height:85vh;overflow-y:auto;">';
         html += '<h1 class="menu-title" style="font-size:28px;margin-bottom:5px;">SHOP</h1>';
@@ -65,9 +66,9 @@
             var isOwned = i === 0 || owned[i];
             var btnClass = isEquipped ? 'diff-btn active' : 'diff-btn';
             var btnDisabled = !isOwned && SG.state.credits < prices[i] ? 'disabled' : '';
-            html += '<div style="margin:8px 0;padding:10px;background:rgba(0,0,0,0.3);border-radius:8px;">';
-            html += '<div style="font-size:16px;font-weight:bold;color:white;">' + names[i] + '</div>';
-            html += '<div style="font-size:12px;color:#aaa;margin:3px 0;">' + descs[i] + '</div>';
+            html += '<div class="shop-card' + (i > 0 && owned[i] ? ' owned' : '') + '">';
+            html += '<div class="shop-ico">' + icons[i] + '</div><div class="shop-body"><div class="shop-name">' + names[i] + '</div>';
+            html += '<div class="shop-desc">' + descs[i] + '</div></div>';
             if (i === 0) {
                 if (SG.state.equippedAbility === 0) {
                     html += '<button class="' + btnClass + '" disabled style="opacity:0.6;">EQUIPPED</button>';
@@ -149,15 +150,15 @@
         var html = '<div class="menu-content" style="max-width:360px;">';
         html += '<h1 class="menu-title" style="font-size:24px;">⚙ SETTINGS</h1>';
         html += '<div style="margin:12px 0;text-align:center;">';
-        html += '<span style="font-size:16px;">🔊 Master: </span>';
+        html += '<span class="s-label">🔊 Master</span>';
         html += '<button class="diff-btn" id="__mute-btn">' + (SG.state.muted ? 'OFF' : 'ON') + '</button>';
         html += '</div>';
         html += '<div style="margin:10px 0;">';
-        html += '<div style="font-size:14px;margin-bottom:4px;">🎵 Music</div>';
+        html += '<div class="s-label" style="margin-bottom:6px;">🎵 Music</div>';
         html += '<div style="display:flex;align-items:center;gap:8px;"><input type="range" min="0" max="1" step="0.1" value="' + music + '" class="__vol-slider" data-key="subwayMusicVol"><span class="vol-pct">' + Math.round(music * 100) + '%</span></div>';
         html += '</div>';
         html += '<div style="margin:10px 0;">';
-        html += '<div style="font-size:14px;margin-bottom:4px;">🔊 SFX</div>';
+        html += '<div class="s-label" style="margin-bottom:6px;">🔊 SFX</div>';
         html += '<div style="display:flex;align-items:center;gap:8px;"><input type="range" min="0" max="1" step="0.1" value="' + sfx + '" class="__vol-slider" data-key="subwaySfxVol"><span class="vol-pct">' + Math.round(sfx * 100) + '%</span></div>';
         html += '</div>';
         html += '<div style="color:#aaa;font-size:13px;margin:12px 0;">↑ Jump | ↓ Roll | ← → Move | 👁 FPV</div>';
@@ -206,30 +207,33 @@
         SG.menuOverlay.id = 'menu-overlay';
         SG.menuOverlay.className = 'overlay';
         SG.menuOverlay.innerHTML = '' +
-            '<div class="menu-content">' +
-                '<h1 class="menu-title">SUBWAY SURFER</h1>' +
-                '<p class="menu-subtitle">Neo Edition</p>' +
-                '<div class="tap-to-start pulse">TAP TO START</div>' +
-                '<div class="diff-select">' +
-                    '<button class="diff-btn" data-diff="0">EASY</button>' +
-                    '<button class="diff-btn" data-diff="1">MEDIUM</button>' +
-                    '<button class="diff-btn active" data-diff="2">HARD</button>' +
-                '</div>' +
-                '<div id="menu-credits" style="color:#FFD700;font-size:18px;margin:8px 0;">💰 TOTAL: 0</div>' +
-                '<div class="menu-controls">' +
-                    '<span class="key">←</span> <span class="key">→</span> Move &nbsp;|&nbsp;' +
-                    '<span class="key">↑</span> Jump &nbsp;|&nbsp;' +
-                    '<span class="key">↓</span> Roll' +
-                '</div>' +
-                '<div class="menu-keys">ESC / P = Pause &nbsp;|&nbsp; M = Menu &nbsp;|&nbsp; 👁 FPV</div>' +
-                '<div class="menu-mobile-hint">Swipe to play on mobile</div>' +
-                '<div class="menu-btn" id="shop-btn-menu" style="margin-top:10px;font-size:14px;padding:8px 16px;">🛒 SHOP</div>' +
-            '<div style="display:flex;gap:8px;justify-content:center;margin-top:6px;">' +
-            '<div class="menu-btn" id="profile-btn" style="font-size:12px;padding:6px 12px;">👤 PROFILE</div>' +
-            '<div class="menu-btn" id="leaderboard-btn" style="font-size:12px;padding:6px 12px;">🏆 LEADERBOARD</div>' +
-            '<div class="menu-btn" id="settings-btn-menu" style="font-size:12px;padding:6px 12px;">⚙ SETTINGS</div>' +
-            '<div class="menu-btn" id="signout-btn" style="font-size:12px;padding:6px 12px;border-color:#ff4444;color:#ff6666;">🚪 SIGN OUT</div>' +
-            '</div>' +
+            '<div class="menu-shell">' +
+                '<aside class="menu-sidebar">' +
+                    '<div class="menu-brand">SUBWAY SURFER<small>NEO EDITION</small></div>' +
+                    '<div class="menu-nav-btn" id="shop-btn-menu"><span class="nav-ico">🛒</span> Shop</div>' +
+                    '<div class="menu-nav-btn" id="profile-btn"><span class="nav-ico">👤</span> Profile</div>' +
+                    '<div class="menu-nav-btn" id="leaderboard-btn"><span class="nav-ico">🏆</span> Leaderboard</div>' +
+                    '<div class="menu-nav-btn" id="settings-btn-menu"><span class="nav-ico">⚙</span> Settings</div>' +
+                    '<div class="menu-nav-btn danger" id="signout-btn"><span class="nav-ico">🚪</span> Sign Out</div>' +
+                '</aside>' +
+                '<section class="menu-main">' +
+                    '<h1 class="menu-title">SUBWAY SURFER</h1>' +
+                    '<p class="menu-subtitle">Neo Edition</p>' +
+                    '<div class="tap-to-start pulse">TAP TO START</div>' +
+                    '<div class="diff-select">' +
+                        '<button class="diff-btn" data-diff="0">EASY</button>' +
+                        '<button class="diff-btn" data-diff="1">MEDIUM</button>' +
+                        '<button class="diff-btn active" data-diff="2">HARD</button>' +
+                    '</div>' +
+                    '<div id="menu-credits">💰 TOTAL: 0</div>' +
+                    '<div class="menu-controls">' +
+                        '<span class="key">←</span> <span class="key">→</span> Move &nbsp;|&nbsp;' +
+                        '<span class="key">↑</span> Jump &nbsp;|&nbsp;' +
+                        '<span class="key">↓</span> Roll' +
+                    '</div>' +
+                    '<div class="menu-keys">ESC / P = Pause &nbsp;|&nbsp; M = Menu &nbsp;|&nbsp; 👁 FPV</div>' +
+                    '<div class="menu-mobile-hint">Swipe to play on mobile</div>' +
+                '</section>' +
             '</div>';
         SG.uiOverlay.appendChild(SG.menuOverlay);
 
