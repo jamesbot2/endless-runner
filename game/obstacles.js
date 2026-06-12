@@ -4,46 +4,89 @@
     const SG = window.__SG = window.__SG || {};
     const THREE = window.THREE;
 
+    SG.vehicleModels = SG.vehicleModels || {};
+    SG.vehicleModelPaths = SG.vehicleModelPaths || {
+        train: 'models/vehicles/train.glb',
+        bus: 'models/vehicles/bus.glb'
+    };
+
+    SG.loadVehicleModels = function() {
+        if (!THREE || !THREE.GLTFLoader || SG.vehicleModelsLoading) return;
+        SG.vehicleModelsLoading = true;
+        var loader = new THREE.GLTFLoader();
+        Object.keys(SG.vehicleModelPaths).forEach(function(key) {
+            loader.load(SG.vehicleModelPaths[key], function(gltf) {
+                var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+                if (!model) return;
+                model.name = key + '-vehicle-model';
+                model.traverse(function(node) {
+                    if (node && node.isMesh) {
+                        node.castShadow = true;
+                        node.receiveShadow = true;
+                    }
+                });
+                SG.vehicleModels[key] = model;
+            }, undefined, function(err) {
+                SG.vehicleModelError = err;
+            });
+        });
+    };
+
+    SG.cloneVehicleModel = function(key) {
+        var source = SG.vehicleModels && SG.vehicleModels[key];
+        if (!source) return null;
+        var clone = source.clone(true);
+        clone.name = key + '-vehicle-obstacle';
+        return clone;
+    };
+
     SG.createTrain = function(lane, zPos, isMoving) {
         var group = new THREE.Group();
         var laneX = SG.LANE_POSITIONS[lane];
         var moving = (isMoving !== false) && Math.random() < 0.18;
         var colors = [0xE53935, 0x1E88E5, 0x43A047, 0xFB8C00, 0x8E24AA];
         var mainColor = colors[Math.floor(Math.random() * colors.length)];
+        var model = SG.cloneVehicleModel('train');
 
-        var body = new THREE.Mesh(
-            new THREE.BoxGeometry(2.4, 1.8, 6),
-            new THREE.MeshLambertMaterial({ color: mainColor })
-        );
-        body.position.set(0, 0.9, 0);
-        group.add(body);
+        if (model) {
+            model.rotation.y = Math.PI;
+            group.add(model);
+            group.userData.assetModel = 'train.glb';
+        } else {
+            var body = new THREE.Mesh(
+                new THREE.BoxGeometry(2.4, 1.8, 6),
+                new THREE.MeshLambertMaterial({ color: mainColor })
+            );
+            body.position.set(0, 0.9, 0);
+            group.add(body);
 
-        var winMat = new THREE.MeshBasicMaterial({ color: 0x88CCFF, transparent: true, opacity: 0.7 });
-        for (var i = -1; i <= 1; i++) {
-            for (var side = -1; side <= 1; side += 2) {
-                var win = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.05), winMat);
-                win.position.set(side * 1.21, 1.0, i * 1.5);
-                group.add(win);
+            var winMat = new THREE.MeshBasicMaterial({ color: 0x88CCFF, transparent: true, opacity: 0.7 });
+            for (var i = -1; i <= 1; i++) {
+                for (var side = -1; side <= 1; side += 2) {
+                    var win = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.05), winMat);
+                    win.position.set(side * 1.21, 1.0, i * 1.5);
+                    group.add(win);
+                }
             }
-        }
 
-        var roof = new THREE.Mesh(
-            new THREE.BoxGeometry(2.0, 0.1, 5.6),
-            new THREE.MeshLambertMaterial({ color: 0xDDDDDD })
-        );
-        roof.position.set(0, 1.85, 0);
-        group.add(roof);
+            var roof = new THREE.Mesh(
+                new THREE.BoxGeometry(2.0, 0.1, 5.6),
+                new THREE.MeshLambertMaterial({ color: 0xDDDDDD })
+            );
+            roof.position.set(0, 1.85, 0);
+            group.add(roof);
 
-        var doorMat = new THREE.MeshBasicMaterial({ color: 0xCCCCCC });
-        var door = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.9, 0.6), doorMat);
-        door.position.set(0, 0.8, 0);
-        group.add(door);
+            var doorMat = new THREE.MeshBasicMaterial({ color: 0xCCCCCC });
+            var door = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.9, 0.6), doorMat);
+            door.position.set(0, 0.8, 0);
+            group.add(door);
 
-        var lightMat = new THREE.MeshBasicMaterial({ color: 0xFFFFAA });
-        for (var side2 = -1; side2 <= 1; side2 += 2) {
-            var l = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.15, 0.05), lightMat);
-            l.position.set(side2 * 0.6, 0.5, 3.05);
-            group.add(l);
+            var lightMat = new THREE.MeshBasicMaterial({ color: 0xFFFFAA });
+            for (var side2 = -1; side2 <= 1; side2 += 2) {
+                var l = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.15, 0.05), lightMat);
+                l.position.set(side2 * 0.6, 0.5, 3.05);
+                group.add(l);
+            }
         }
 
         var hasRamp = Math.random() < 0.3;

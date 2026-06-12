@@ -254,7 +254,7 @@
         var consoleEl = document.createElement('div');
         consoleEl.id = 'dev-console';
         consoleEl.style.display = 'none';
-        consoleEl.innerHTML = '<input type="text" id="console-input" placeholder="enter command..." autofocus/>';
+        consoleEl.innerHTML = '<div id="console-output"></div><div class="console-row"><span class="console-prompt">&gt;</span><input type="text" id="console-input" placeholder="help" autofocus/></div>';
         SG.uiOverlay.appendChild(consoleEl);
 
         // ===== PAUSE BUTTON =====
@@ -518,23 +518,120 @@
 
         var conInput = document.getElementById('console-input');
         if (conInput) {
+            SG.consoleHistory = SG.consoleHistory || [];
+            SG.consoleHistoryIndex = SG.consoleHistory.length;
+            SG.consoleCommands = SG.consoleCommands || {};
+
+            SG.consoleLog = function(text, kind) {
+                var out = document.getElementById('console-output');
+                if (!out) return;
+                var line = document.createElement('div');
+                line.className = 'console-line' + (kind ? ' ' + kind : '');
+                line.textContent = String(text);
+                out.appendChild(line);
+                while (out.children.length > 80) out.removeChild(out.firstChild);
+                out.scrollTop = out.scrollHeight;
+            };
+
+            SG.clearConsole = function() {
+                var out = document.getElementById('console-output');
+                if (out) out.innerHTML = '';
+            };
+
+            SG.registerConsoleCommand = function(name, description, handler) {
+                SG.consoleCommands[name] = { description: description, handler: handler };
+            };
+
+            SG.registerConsoleCommand('help', 'List available commands', function() {
+                var names = Object.keys(SG.consoleCommands).sort();
+                SG.consoleLog('Commands: ' + names.join(', '), 'ok');
+                SG.consoleLog('Try: status, speed 20, coins 5000, ability jetpack, homelander, normal');
+            });
+            SG.registerConsoleCommand('clear', 'Clear console output', function() { SG.clearConsole(); });
+            SG.registerConsoleCommand('status', 'Show run state', function() {
+                var speedLevel = Math.floor((SG.state.speed - SG.START_SPEED) / (SG.MAX_SPEED - SG.START_SPEED) * 49) + 1;
+                SG.consoleLog('score=' + Math.floor(SG.state.score || 0) + 'm coins=' + (SG.state.coins || 0) + ' speed=' + Math.max(1, Math.min(speedLevel, 50)) + 'x ability=' + (SG.state.equippedAbility || 0), 'ok');
+            });
+            SG.registerConsoleCommand('speed', 'Set speed level 1-50', function(args) {
+                var level = Math.max(1, Math.min(50, parseInt(args[0] || '1', 10) || 1));
+                SG.state.speed = SG.START_SPEED + (SG.MAX_SPEED - SG.START_SPEED) * ((level - 1) / 49);
+                SG.consoleLog('speed set to ' + level + 'x', 'ok');
+            });
+            SG.registerConsoleCommand('coins', 'Add credits/coins to this run', function(args) {
+                var amount = Math.max(0, parseInt(args[0] || '0', 10) || 0);
+                SG.state.coins += amount;
+                SG.state.credits += amount;
+                if (SG.updateMenuCredits) SG.updateMenuCredits();
+                SG.consoleLog('added ' + amount + ' coins and credits', 'ok');
+            });
+            SG.registerConsoleCommand('ability', 'Equip ability: none/double/jetpack/roof', function(args) {
+                var key = String(args[0] || '').toLowerCase();
+                var map = { none: 0, double: 1, dj: 1, jetpack: 2, jet: 2, roof: 3 };
+                if (!(key in map)) { SG.consoleLog('usage: ability none|double|jetpack|roof', 'err'); return; }
+                SG.state.equippedAbility = map[key];
+                if (SG.state.equippedAbility === 1) SG.state.canDoubleJump = true;
+                if (SG.state.equippedAbility === 2) SG.state.canJetpack = true;
+                if (SG.state.equippedAbility === 3) SG.state.canRoofWalk = true;
+                if (SG.saveShopData) SG.saveShopData();
+                SG.consoleLog('equipped ability ' + key, 'ok');
+            });
+            SG.registerConsoleCommand('restart', 'Restart current run', function() {
+                if (SG.restartGame) SG.restartGame();
+                SG.consoleLog('run restarted', 'ok');
+            });
+            SG.registerConsoleCommand('homelander', 'Easter egg: enable Homelander mode', function() {
+                SG.state.homelander = true;
+                if (SG.activateHomelander) SG.activateHomelander();
+                SG.consoleLog('homelander mode enabled', 'ok');
+            });
+            SG.registerConsoleCommand('normal', 'Disable Homelander mode', function() {
+                if (SG.deactivateHomelander) SG.deactivateHomelander();
+                SG.consoleLog('homelander mode disabled', 'ok');
+            });
+            SG.registerConsoleCommand('quit', 'Alias for normal', function() {
+                if (SG.deactivateHomelander) SG.deactivateHomelander();
+                SG.consoleLog('homelander mode disabled', 'ok');
+            });
+
+            SG.executeConsoleCommand = function(raw) {
+                raw = String(raw || '').trim();
+                if (!raw) return;
+                SG.consoleLog('> ' + raw, 'cmd');
+                SG.consoleHistory.push(raw);
+                SG.consoleHistoryIndex = SG.consoleHistory.length;
+                var parts = raw.split(/\s+/);
+                var name = parts.shift().toLowerCase();
+                var cmd = SG.consoleCommands[name];
+                if (!cmd) {
+                    SG.consoleLog('unknown command: ' + name + ' (type help)', 'err');
+                    return;
+                }
+                try {
+                    cmd.handler(parts, raw);
+                } catch (err) {
+                    SG.consoleLog('error: ' + (err && err.message ? err.message : err), 'err');
+                }
+            };
+
             function submitConsoleCommand() {
-                var val = conInput.value.trim().toLowerCase();
+                var val = conInput.value.trim();
                 conInput.value = '';
-                document.getElementById('dev-console').style.display = 'none';
-                if (SG.state.paused) SG.state.paused = false;
-                if (val === 'homelander') {
-                    SG.state.homelander = true;
-                    SG.activateHomelander();
-                }
-                if (val === 'quit' && SG.state.homelander) {
-                    SG.deactivateHomelander();
-                }
+                SG.executeConsoleCommand(val);
             }
             conInput.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter' || e.keyCode === 13) {
                     e.preventDefault();
                     submitConsoleCommand();
+                }
+                if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    SG.consoleHistoryIndex = Math.max(0, SG.consoleHistoryIndex - 1);
+                    conInput.value = SG.consoleHistory[SG.consoleHistoryIndex] || '';
+                }
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    SG.consoleHistoryIndex = Math.min(SG.consoleHistory.length, SG.consoleHistoryIndex + 1);
+                    conInput.value = SG.consoleHistory[SG.consoleHistoryIndex] || '';
                 }
                 if (e.key === 'Escape') {
                     document.getElementById('dev-console').style.display = 'none';
@@ -548,7 +645,10 @@
                 }
             });
             conInput.addEventListener('blur', function() {
-                if (conInput.value.trim()) submitConsoleCommand();
+                setTimeout(function() {
+                    var con = document.getElementById('dev-console');
+                    if (con && con.style.display === 'flex') conInput.focus();
+                }, 0);
             });
         }
 

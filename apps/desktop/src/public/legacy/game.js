@@ -283,8 +283,10 @@
         if (SG.state.paused || !SG.state.started) return;
 
         var speedLevel = Math.floor((SG.state.speed - SG.START_SPEED) / (SG.MAX_SPEED - SG.START_SPEED) * 49) + 1;
-        var targetBpm = 100 + Math.min(speedLevel, 50) * 2;
-        SG.bgMusicState.tempo += (targetBpm - SG.bgMusicState.tempo) * 0.01;
+        speedLevel = Math.max(1, Math.min(speedLevel, 50));
+        var speedT = (speedLevel - 1) / 49;
+        var targetBpm = 96 + speedT * 144;
+        SG.bgMusicState.tempo += (targetBpm - SG.bgMusicState.tempo) * 0.035;
 
         var beatInterval = 60 / SG.bgMusicState.tempo;
         var now = SG.audioCtx.currentTime;
@@ -314,7 +316,7 @@
                     }, 300);
                 }
 
-                if (SG.state.speed > SG.START_SPEED * 2 || beat % 2 === 0) {
+                if (speedLevel > 12 || beat % 2 === 0) {
                     var hatGain = SG.audioCtx.createGain();
                     hatGain.connect(SG.audioCtx.destination);
                     var hat = SG.audioCtx.createOscillator();
@@ -332,7 +334,7 @@
                     }, 100);
                 }
 
-                if (beat % 4 === 0) {
+                if (beat % 4 === 0 || speedLevel > 35 && beat % 2 === 0) {
                     var bass = SG.audioCtx.createOscillator();
                     var bassGain = SG.audioCtx.createGain();
                     bass.connect(bassGain);
@@ -975,46 +977,89 @@
     const SG = window.__SG = window.__SG || {};
     const THREE = window.THREE;
 
+    SG.vehicleModels = SG.vehicleModels || {};
+    SG.vehicleModelPaths = SG.vehicleModelPaths || {
+        train: 'models/vehicles/train.glb',
+        bus: 'models/vehicles/bus.glb'
+    };
+
+    SG.loadVehicleModels = function() {
+        if (!THREE || !THREE.GLTFLoader || SG.vehicleModelsLoading) return;
+        SG.vehicleModelsLoading = true;
+        var loader = new THREE.GLTFLoader();
+        Object.keys(SG.vehicleModelPaths).forEach(function(key) {
+            loader.load(SG.vehicleModelPaths[key], function(gltf) {
+                var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+                if (!model) return;
+                model.name = key + '-vehicle-model';
+                model.traverse(function(node) {
+                    if (node && node.isMesh) {
+                        node.castShadow = true;
+                        node.receiveShadow = true;
+                    }
+                });
+                SG.vehicleModels[key] = model;
+            }, undefined, function(err) {
+                SG.vehicleModelError = err;
+            });
+        });
+    };
+
+    SG.cloneVehicleModel = function(key) {
+        var source = SG.vehicleModels && SG.vehicleModels[key];
+        if (!source) return null;
+        var clone = source.clone(true);
+        clone.name = key + '-vehicle-obstacle';
+        return clone;
+    };
+
     SG.createTrain = function(lane, zPos, isMoving) {
         var group = new THREE.Group();
         var laneX = SG.LANE_POSITIONS[lane];
         var moving = (isMoving !== false) && Math.random() < 0.18;
         var colors = [0xE53935, 0x1E88E5, 0x43A047, 0xFB8C00, 0x8E24AA];
         var mainColor = colors[Math.floor(Math.random() * colors.length)];
+        var model = SG.cloneVehicleModel('train');
 
-        var body = new THREE.Mesh(
-            new THREE.BoxGeometry(2.4, 1.8, 6),
-            new THREE.MeshLambertMaterial({ color: mainColor })
-        );
-        body.position.set(0, 0.9, 0);
-        group.add(body);
+        if (model) {
+            model.rotation.y = Math.PI;
+            group.add(model);
+            group.userData.assetModel = 'train.glb';
+        } else {
+            var body = new THREE.Mesh(
+                new THREE.BoxGeometry(2.4, 1.8, 6),
+                new THREE.MeshLambertMaterial({ color: mainColor })
+            );
+            body.position.set(0, 0.9, 0);
+            group.add(body);
 
-        var winMat = new THREE.MeshBasicMaterial({ color: 0x88CCFF, transparent: true, opacity: 0.7 });
-        for (var i = -1; i <= 1; i++) {
-            for (var side = -1; side <= 1; side += 2) {
-                var win = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.05), winMat);
-                win.position.set(side * 1.21, 1.0, i * 1.5);
-                group.add(win);
+            var winMat = new THREE.MeshBasicMaterial({ color: 0x88CCFF, transparent: true, opacity: 0.7 });
+            for (var i = -1; i <= 1; i++) {
+                for (var side = -1; side <= 1; side += 2) {
+                    var win = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.05), winMat);
+                    win.position.set(side * 1.21, 1.0, i * 1.5);
+                    group.add(win);
+                }
             }
-        }
 
-        var roof = new THREE.Mesh(
-            new THREE.BoxGeometry(2.0, 0.1, 5.6),
-            new THREE.MeshLambertMaterial({ color: 0xDDDDDD })
-        );
-        roof.position.set(0, 1.85, 0);
-        group.add(roof);
+            var roof = new THREE.Mesh(
+                new THREE.BoxGeometry(2.0, 0.1, 5.6),
+                new THREE.MeshLambertMaterial({ color: 0xDDDDDD })
+            );
+            roof.position.set(0, 1.85, 0);
+            group.add(roof);
 
-        var doorMat = new THREE.MeshBasicMaterial({ color: 0xCCCCCC });
-        var door = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.9, 0.6), doorMat);
-        door.position.set(0, 0.8, 0);
-        group.add(door);
+            var doorMat = new THREE.MeshBasicMaterial({ color: 0xCCCCCC });
+            var door = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.9, 0.6), doorMat);
+            door.position.set(0, 0.8, 0);
+            group.add(door);
 
-        var lightMat = new THREE.MeshBasicMaterial({ color: 0xFFFFAA });
-        for (var side2 = -1; side2 <= 1; side2 += 2) {
-            var l = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.15, 0.05), lightMat);
-            l.position.set(side2 * 0.6, 0.5, 3.05);
-            group.add(l);
+            var lightMat = new THREE.MeshBasicMaterial({ color: 0xFFFFAA });
+            for (var side2 = -1; side2 <= 1; side2 += 2) {
+                var l = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.15, 0.05), lightMat);
+                l.position.set(side2 * 0.6, 0.5, 3.05);
+                group.add(l);
+            }
         }
 
         var hasRamp = Math.random() < 0.3;
@@ -1948,7 +1993,7 @@
         var consoleEl = document.createElement('div');
         consoleEl.id = 'dev-console';
         consoleEl.style.display = 'none';
-        consoleEl.innerHTML = '<input type="text" id="console-input" placeholder="enter command..." autofocus/>';
+        consoleEl.innerHTML = '<div id="console-output"></div><div class="console-row"><span class="console-prompt">&gt;</span><input type="text" id="console-input" placeholder="help" autofocus/></div>';
         SG.uiOverlay.appendChild(consoleEl);
 
         // ===== PAUSE BUTTON =====
@@ -2212,23 +2257,120 @@
 
         var conInput = document.getElementById('console-input');
         if (conInput) {
+            SG.consoleHistory = SG.consoleHistory || [];
+            SG.consoleHistoryIndex = SG.consoleHistory.length;
+            SG.consoleCommands = SG.consoleCommands || {};
+
+            SG.consoleLog = function(text, kind) {
+                var out = document.getElementById('console-output');
+                if (!out) return;
+                var line = document.createElement('div');
+                line.className = 'console-line' + (kind ? ' ' + kind : '');
+                line.textContent = String(text);
+                out.appendChild(line);
+                while (out.children.length > 80) out.removeChild(out.firstChild);
+                out.scrollTop = out.scrollHeight;
+            };
+
+            SG.clearConsole = function() {
+                var out = document.getElementById('console-output');
+                if (out) out.innerHTML = '';
+            };
+
+            SG.registerConsoleCommand = function(name, description, handler) {
+                SG.consoleCommands[name] = { description: description, handler: handler };
+            };
+
+            SG.registerConsoleCommand('help', 'List available commands', function() {
+                var names = Object.keys(SG.consoleCommands).sort();
+                SG.consoleLog('Commands: ' + names.join(', '), 'ok');
+                SG.consoleLog('Try: status, speed 20, coins 5000, ability jetpack, homelander, normal');
+            });
+            SG.registerConsoleCommand('clear', 'Clear console output', function() { SG.clearConsole(); });
+            SG.registerConsoleCommand('status', 'Show run state', function() {
+                var speedLevel = Math.floor((SG.state.speed - SG.START_SPEED) / (SG.MAX_SPEED - SG.START_SPEED) * 49) + 1;
+                SG.consoleLog('score=' + Math.floor(SG.state.score || 0) + 'm coins=' + (SG.state.coins || 0) + ' speed=' + Math.max(1, Math.min(speedLevel, 50)) + 'x ability=' + (SG.state.equippedAbility || 0), 'ok');
+            });
+            SG.registerConsoleCommand('speed', 'Set speed level 1-50', function(args) {
+                var level = Math.max(1, Math.min(50, parseInt(args[0] || '1', 10) || 1));
+                SG.state.speed = SG.START_SPEED + (SG.MAX_SPEED - SG.START_SPEED) * ((level - 1) / 49);
+                SG.consoleLog('speed set to ' + level + 'x', 'ok');
+            });
+            SG.registerConsoleCommand('coins', 'Add credits/coins to this run', function(args) {
+                var amount = Math.max(0, parseInt(args[0] || '0', 10) || 0);
+                SG.state.coins += amount;
+                SG.state.credits += amount;
+                if (SG.updateMenuCredits) SG.updateMenuCredits();
+                SG.consoleLog('added ' + amount + ' coins and credits', 'ok');
+            });
+            SG.registerConsoleCommand('ability', 'Equip ability: none/double/jetpack/roof', function(args) {
+                var key = String(args[0] || '').toLowerCase();
+                var map = { none: 0, double: 1, dj: 1, jetpack: 2, jet: 2, roof: 3 };
+                if (!(key in map)) { SG.consoleLog('usage: ability none|double|jetpack|roof', 'err'); return; }
+                SG.state.equippedAbility = map[key];
+                if (SG.state.equippedAbility === 1) SG.state.canDoubleJump = true;
+                if (SG.state.equippedAbility === 2) SG.state.canJetpack = true;
+                if (SG.state.equippedAbility === 3) SG.state.canRoofWalk = true;
+                if (SG.saveShopData) SG.saveShopData();
+                SG.consoleLog('equipped ability ' + key, 'ok');
+            });
+            SG.registerConsoleCommand('restart', 'Restart current run', function() {
+                if (SG.restartGame) SG.restartGame();
+                SG.consoleLog('run restarted', 'ok');
+            });
+            SG.registerConsoleCommand('homelander', 'Easter egg: enable Homelander mode', function() {
+                SG.state.homelander = true;
+                if (SG.activateHomelander) SG.activateHomelander();
+                SG.consoleLog('homelander mode enabled', 'ok');
+            });
+            SG.registerConsoleCommand('normal', 'Disable Homelander mode', function() {
+                if (SG.deactivateHomelander) SG.deactivateHomelander();
+                SG.consoleLog('homelander mode disabled', 'ok');
+            });
+            SG.registerConsoleCommand('quit', 'Alias for normal', function() {
+                if (SG.deactivateHomelander) SG.deactivateHomelander();
+                SG.consoleLog('homelander mode disabled', 'ok');
+            });
+
+            SG.executeConsoleCommand = function(raw) {
+                raw = String(raw || '').trim();
+                if (!raw) return;
+                SG.consoleLog('> ' + raw, 'cmd');
+                SG.consoleHistory.push(raw);
+                SG.consoleHistoryIndex = SG.consoleHistory.length;
+                var parts = raw.split(/\s+/);
+                var name = parts.shift().toLowerCase();
+                var cmd = SG.consoleCommands[name];
+                if (!cmd) {
+                    SG.consoleLog('unknown command: ' + name + ' (type help)', 'err');
+                    return;
+                }
+                try {
+                    cmd.handler(parts, raw);
+                } catch (err) {
+                    SG.consoleLog('error: ' + (err && err.message ? err.message : err), 'err');
+                }
+            };
+
             function submitConsoleCommand() {
-                var val = conInput.value.trim().toLowerCase();
+                var val = conInput.value.trim();
                 conInput.value = '';
-                document.getElementById('dev-console').style.display = 'none';
-                if (SG.state.paused) SG.state.paused = false;
-                if (val === 'homelander') {
-                    SG.state.homelander = true;
-                    SG.activateHomelander();
-                }
-                if (val === 'quit' && SG.state.homelander) {
-                    SG.deactivateHomelander();
-                }
+                SG.executeConsoleCommand(val);
             }
             conInput.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter' || e.keyCode === 13) {
                     e.preventDefault();
                     submitConsoleCommand();
+                }
+                if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    SG.consoleHistoryIndex = Math.max(0, SG.consoleHistoryIndex - 1);
+                    conInput.value = SG.consoleHistory[SG.consoleHistoryIndex] || '';
+                }
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    SG.consoleHistoryIndex = Math.min(SG.consoleHistory.length, SG.consoleHistoryIndex + 1);
+                    conInput.value = SG.consoleHistory[SG.consoleHistoryIndex] || '';
                 }
                 if (e.key === 'Escape') {
                     document.getElementById('dev-console').style.display = 'none';
@@ -2242,7 +2384,10 @@
                 }
             });
             conInput.addEventListener('blur', function() {
-                if (conInput.value.trim()) submitConsoleCommand();
+                setTimeout(function() {
+                    var con = document.getElementById('dev-console');
+                    if (con && con.style.display === 'flex') conInput.focus();
+                }, 0);
             });
         }
 
@@ -2589,6 +2734,7 @@
 
         var suitMat = new THREE.MeshLambertMaterial({ color: 0x1A237E });
         var suitMatDark = new THREE.MeshLambertMaterial({ color: 0x15205A });
+        var jointMat = new THREE.MeshLambertMaterial({ color: 0x23358A });
 
         var neck = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.10, 8), suitMat);
         neck.position.set(0, 1.08, 0);
@@ -2741,6 +2887,12 @@
         var emblem = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.12, 0.02), emblemMat);
         emblem.position.set(0, 0.75, 0.18);
         SG.homelanderGroup.add(emblem);
+        var emblemGlow = new THREE.Mesh(
+            new THREE.CircleGeometry(0.16, 18),
+            new THREE.MeshBasicMaterial({ color: 0xFFD700, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending })
+        );
+        emblemGlow.position.set(0, 0.75, 0.191);
+        SG.homelanderGroup.add(emblemGlow);
         for (var side6 = -1; side6 <= 1; side6 += 2) {
             var wing = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.02), emblemMat);
             wing.position.set(side6 * 0.15, 0.78, 0.18);
@@ -2751,9 +2903,16 @@
         var armMat = new THREE.MeshLambertMaterial({ color: 0x1A237E });
         var gloveMat = new THREE.MeshLambertMaterial({ color: 0xCC0000 });
         for (var side7 = -1; side7 <= 1; side7 += 2) {
+            var shoulderJoint = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), jointMat);
+            shoulderJoint.position.set(side7 * 0.34, 0.92, 0);
+            shoulderJoint.scale.set(1.05, 0.9, 1);
+            SG.homelanderGroup.add(shoulderJoint);
             var upper = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.20, 0.10), armMat);
             upper.position.set(side7 * 0.34, 0.75, 0);
             SG.homelanderGroup.add(upper);
+            var elbow = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 8), jointMat);
+            elbow.position.set(side7 * 0.34, 0.61, 0);
+            SG.homelanderGroup.add(elbow);
             var fore = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.18, 0.08), armMat);
             fore.position.set(side7 * 0.34, 0.48, 0);
             SG.homelanderGroup.add(fore);
@@ -2764,16 +2923,26 @@
 
         var legMat = new THREE.MeshLambertMaterial({ color: 0x1A237E });
         var bootMat = new THREE.MeshLambertMaterial({ color: 0xCC0000 });
+        var soleMat = new THREE.MeshLambertMaterial({ color: 0x661111 });
         for (var side8 = -1; side8 <= 1; side8 += 2) {
+            var hip = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), suitMatDark);
+            hip.position.set(side8 * 0.14, 0.43, 0);
+            SG.homelanderGroup.add(hip);
             var thigh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.20, 0.14), legMat);
             thigh.position.set(side8 * 0.14, 0.32, 0);
             SG.homelanderGroup.add(thigh);
+            var knee = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 8), jointMat);
+            knee.position.set(side8 * 0.14, 0.23, 0);
+            SG.homelanderGroup.add(knee);
             var calf = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 0.12), legMat);
             calf.position.set(side8 * 0.14, 0.14, 0);
             SG.homelanderGroup.add(calf);
             var boot = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.10, 0.22), bootMat);
             boot.position.set(side8 * 0.14, 0.05, 0.03);
             SG.homelanderGroup.add(boot);
+            var sole = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.035, 0.25), soleMat);
+            sole.position.set(side8 * 0.14, -0.02, 0.045);
+            SG.homelanderGroup.add(sole);
         }
 
         var belt = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.05, 0.18), new THREE.MeshLambertMaterial({ color: 0x222222 }));
@@ -2782,6 +2951,14 @@
         var buckle = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.02), new THREE.MeshBasicMaterial({ color: 0xFFD700 }));
         buckle.position.set(0, 0.36, 0.22);
         SG.homelanderGroup.add(buckle);
+
+        SG.homelanderAura = new THREE.Mesh(
+            new THREE.RingGeometry(0.42, 0.7, 32),
+            new THREE.MeshBasicMaterial({ color: 0x88CCFF, transparent: true, opacity: 0.12, side: THREE.DoubleSide, blending: THREE.AdditiveBlending })
+        );
+        SG.homelanderAura.position.set(0, 0.75, -0.42);
+        SG.homelanderAura.rotation.x = Math.PI / 2;
+        SG.homelanderGroup.add(SG.homelanderAura);
 
         SG.scene.add(SG.homelanderGroup);
         if (window.__neoGame) window.__neoGame.homelanderGroup = SG.homelanderGroup;
@@ -2825,6 +3002,7 @@
         SG.laserRightBeam = null;
         SG.laserBeams = [];
         SG.homelanderCape = null;
+        SG.homelanderAura = null;
         if (SG.player) SG.player.visible = true;
     };
 
@@ -2859,6 +3037,11 @@
                     break;
                 }
             }
+        }
+        if (SG.homelanderAura) {
+            var auraPulse = 1 + Math.sin(SG.state.gameTime * 4) * 0.08;
+            SG.homelanderAura.scale.set(auraPulse, auraPulse, auraPulse);
+            SG.homelanderAura.material.opacity = 0.10 + Math.sin(SG.state.gameTime * 5) * 0.04;
         }
 
         var laserLength = 12;
@@ -3861,6 +4044,7 @@
         }
 
         SG.initScene();
+        if (SG.loadVehicleModels) SG.loadVehicleModels();
         SG.loadShopData();
         if (typeof SG.setupUI !== 'function') { SG.setupUI = function() { console.warn('setupUI missing - ui.js may not have loaded'); }; }
         SG.setupUI();

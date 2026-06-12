@@ -155,6 +155,10 @@ app.whenReady().then(async () => {
       r.jetpackMaxHeight = window.__SG ? window.__SG.JETPACK_MAX_HEIGHT : null
       r.abilityHud = window.__SG ? typeof window.__SG.updateAbilityHUD === 'function' : false
       r.abilityVisuals = window.__SG ? typeof window.__SG.updateAbilityVisuals === 'function' : false
+      r.consoleCommands = window.__SG && window.__SG.consoleCommands ? Object.keys(window.__SG.consoleCommands).sort() : []
+      r.executeConsoleCommand = window.__SG ? typeof window.__SG.executeConsoleCommand === 'function' : false
+      r.vehicleLoader = window.__SG ? typeof window.__SG.loadVehicleModels === 'function' : false
+      r.vehicleTrainPath = window.__SG && window.__SG.vehicleModelPaths ? window.__SG.vehicleModelPaths.train : null
       if (window.__SG && window.__SG.restartGame && window.__SG.player) {
         window.__SG.restartGame()
         r.restartRotationY = window.__SG.player.rotation.y
@@ -175,9 +179,13 @@ app.whenReady().then(async () => {
   check('3b. THREE.REVISION === "128"', state.threeRevision === '128', state.threeRevision ? `got ${state.threeRevision}` : 'undefined')
   check('3c. THREE.GLTFLoader exists', !!state.gltfLoader)
   const playerModelPath = path.join(DESKTOP, 'dist/renderer/models/player.glb')
+  const trainModelPath = path.join(DESKTOP, 'dist/renderer/models/vehicles/train.glb')
+  const busModelPath = path.join(DESKTOP, 'dist/renderer/models/vehicles/bus.glb')
   check('3d. player.glb copied to renderer dist', fs.existsSync(playerModelPath), fs.existsSync(playerModelPath) ? `${fs.statSync(playerModelPath).size} bytes` : 'missing')
   check('3e. refined player.glb size', fs.existsSync(playerModelPath) && fs.statSync(playerModelPath).size > 100000, fs.existsSync(playerModelPath) ? `${fs.statSync(playerModelPath).size} bytes` : 'missing')
   check('3f. Jetpack tuning constants', state.jetpackFuelMax === 15 && state.jetpackCooldownMax === 30 && state.jetpackMaxHeight > 0, `fuel=${state.jetpackFuelMax}, cooldown=${state.jetpackCooldownMax}, maxHeight=${state.jetpackMaxHeight}`)
+  check('3g. train.glb copied to renderer dist', fs.existsSync(trainModelPath), fs.existsSync(trainModelPath) ? `${fs.statSync(trainModelPath).size} bytes` : 'missing')
+  check('3h. bus.glb copied to renderer dist', fs.existsSync(busModelPath), fs.existsSync(busModelPath) ? `${fs.statSync(busModelPath).size} bytes` : 'missing')
   check('4a. desktopAPI (preload bridge)', !!state.desktopAPI)
   check('4b. __SUBWAY_CONFIG__ exists', !!state.subwayConfig)
   check('4c. API_BASE_URL is non-empty', !!state.apiBaseUrl, state.apiBaseUrl || 'empty')
@@ -201,6 +209,9 @@ app.whenReady().then(async () => {
   check("14d. ability HUD updater exists", !!state.abilityHud)
   check("14e. ability visual updater exists", !!state.abilityVisuals)
   check("14f. restart keeps player facing forward", Math.abs(state.restartRotationY - Math.PI) < 0.001, String(state.restartRotationY))
+  check("14g. console command runner exists", !!state.executeConsoleCommand)
+  check("14h. console includes Homelander easter egg", state.consoleCommands && state.consoleCommands.includes('homelander'), state.consoleCommands ? state.consoleCommands.join(', ') : 'none')
+  check("14i. vehicle model loader exists", !!state.vehicleLoader, state.vehicleTrainPath || 'missing train path')
 
   // -- applyGameData runtime test --
   try {

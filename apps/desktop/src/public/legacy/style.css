@@ -286,18 +286,48 @@ canvas {
     border: 1px solid var(--glass-border-hi);
     border-radius: var(--r-md);
     padding: 12px;
-    width: 320px;
+    width: min(560px, calc(100vw - 32px));
     pointer-events: auto;
     box-shadow: var(--shadow);
     backdrop-filter: blur(var(--glass-blur));
     -webkit-backdrop-filter: blur(var(--glass-blur));
+    flex-direction: column;
+    gap: 8px;
+}
+#console-output {
+    max-height: 180px;
+    overflow-y: auto;
+    color: var(--text-mid);
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    padding-right: 4px;
+}
+#console-output::-webkit-scrollbar { width: 6px; }
+#console-output::-webkit-scrollbar-thumb { background: var(--glass-border-hi); border-radius: 8px; }
+.console-line { white-space: pre-wrap; overflow-wrap: anywhere; }
+.console-line.cmd { color: var(--cyan-soft); }
+.console-line.ok { color: #86efac; }
+.console-line.err { color: #fb7185; }
+.console-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-top: 1px solid var(--glass-border);
+    padding-top: 8px;
+}
+.console-prompt {
+    color: var(--cyan);
+    font-family: Consolas, 'Courier New', monospace;
+    font-weight: 800;
 }
 #dev-console input {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     background: transparent;
     border: none;
     color: var(--cyan);
-    font-family: monospace;
+    font-family: Consolas, 'Courier New', monospace;
     font-size: 16px;
     outline: none;
     padding: 4px;

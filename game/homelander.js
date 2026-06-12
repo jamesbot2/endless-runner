@@ -21,6 +21,7 @@
 
         var suitMat = new THREE.MeshLambertMaterial({ color: 0x1A237E });
         var suitMatDark = new THREE.MeshLambertMaterial({ color: 0x15205A });
+        var jointMat = new THREE.MeshLambertMaterial({ color: 0x23358A });
 
         var neck = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.10, 8), suitMat);
         neck.position.set(0, 1.08, 0);
@@ -173,6 +174,12 @@
         var emblem = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.12, 0.02), emblemMat);
         emblem.position.set(0, 0.75, 0.18);
         SG.homelanderGroup.add(emblem);
+        var emblemGlow = new THREE.Mesh(
+            new THREE.CircleGeometry(0.16, 18),
+            new THREE.MeshBasicMaterial({ color: 0xFFD700, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending })
+        );
+        emblemGlow.position.set(0, 0.75, 0.191);
+        SG.homelanderGroup.add(emblemGlow);
         for (var side6 = -1; side6 <= 1; side6 += 2) {
             var wing = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.02), emblemMat);
             wing.position.set(side6 * 0.15, 0.78, 0.18);
@@ -183,9 +190,16 @@
         var armMat = new THREE.MeshLambertMaterial({ color: 0x1A237E });
         var gloveMat = new THREE.MeshLambertMaterial({ color: 0xCC0000 });
         for (var side7 = -1; side7 <= 1; side7 += 2) {
+            var shoulderJoint = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), jointMat);
+            shoulderJoint.position.set(side7 * 0.34, 0.92, 0);
+            shoulderJoint.scale.set(1.05, 0.9, 1);
+            SG.homelanderGroup.add(shoulderJoint);
             var upper = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.20, 0.10), armMat);
             upper.position.set(side7 * 0.34, 0.75, 0);
             SG.homelanderGroup.add(upper);
+            var elbow = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 8), jointMat);
+            elbow.position.set(side7 * 0.34, 0.61, 0);
+            SG.homelanderGroup.add(elbow);
             var fore = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.18, 0.08), armMat);
             fore.position.set(side7 * 0.34, 0.48, 0);
             SG.homelanderGroup.add(fore);
@@ -196,16 +210,26 @@
 
         var legMat = new THREE.MeshLambertMaterial({ color: 0x1A237E });
         var bootMat = new THREE.MeshLambertMaterial({ color: 0xCC0000 });
+        var soleMat = new THREE.MeshLambertMaterial({ color: 0x661111 });
         for (var side8 = -1; side8 <= 1; side8 += 2) {
+            var hip = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), suitMatDark);
+            hip.position.set(side8 * 0.14, 0.43, 0);
+            SG.homelanderGroup.add(hip);
             var thigh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.20, 0.14), legMat);
             thigh.position.set(side8 * 0.14, 0.32, 0);
             SG.homelanderGroup.add(thigh);
+            var knee = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 8), jointMat);
+            knee.position.set(side8 * 0.14, 0.23, 0);
+            SG.homelanderGroup.add(knee);
             var calf = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 0.12), legMat);
             calf.position.set(side8 * 0.14, 0.14, 0);
             SG.homelanderGroup.add(calf);
             var boot = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.10, 0.22), bootMat);
             boot.position.set(side8 * 0.14, 0.05, 0.03);
             SG.homelanderGroup.add(boot);
+            var sole = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.035, 0.25), soleMat);
+            sole.position.set(side8 * 0.14, -0.02, 0.045);
+            SG.homelanderGroup.add(sole);
         }
 
         var belt = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.05, 0.18), new THREE.MeshLambertMaterial({ color: 0x222222 }));
@@ -214,6 +238,14 @@
         var buckle = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.02), new THREE.MeshBasicMaterial({ color: 0xFFD700 }));
         buckle.position.set(0, 0.36, 0.22);
         SG.homelanderGroup.add(buckle);
+
+        SG.homelanderAura = new THREE.Mesh(
+            new THREE.RingGeometry(0.42, 0.7, 32),
+            new THREE.MeshBasicMaterial({ color: 0x88CCFF, transparent: true, opacity: 0.12, side: THREE.DoubleSide, blending: THREE.AdditiveBlending })
+        );
+        SG.homelanderAura.position.set(0, 0.75, -0.42);
+        SG.homelanderAura.rotation.x = Math.PI / 2;
+        SG.homelanderGroup.add(SG.homelanderAura);
 
         SG.scene.add(SG.homelanderGroup);
         if (window.__neoGame) window.__neoGame.homelanderGroup = SG.homelanderGroup;
@@ -257,6 +289,7 @@
         SG.laserRightBeam = null;
         SG.laserBeams = [];
         SG.homelanderCape = null;
+        SG.homelanderAura = null;
         if (SG.player) SG.player.visible = true;
     };
 
@@ -291,6 +324,11 @@
                     break;
                 }
             }
+        }
+        if (SG.homelanderAura) {
+            var auraPulse = 1 + Math.sin(SG.state.gameTime * 4) * 0.08;
+            SG.homelanderAura.scale.set(auraPulse, auraPulse, auraPulse);
+            SG.homelanderAura.material.opacity = 0.10 + Math.sin(SG.state.gameTime * 5) * 0.04;
         }
 
         var laserLength = 12;

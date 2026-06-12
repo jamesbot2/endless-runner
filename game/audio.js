@@ -179,8 +179,10 @@
         if (SG.state.paused || !SG.state.started) return;
 
         var speedLevel = Math.floor((SG.state.speed - SG.START_SPEED) / (SG.MAX_SPEED - SG.START_SPEED) * 49) + 1;
-        var targetBpm = 100 + Math.min(speedLevel, 50) * 2;
-        SG.bgMusicState.tempo += (targetBpm - SG.bgMusicState.tempo) * 0.01;
+        speedLevel = Math.max(1, Math.min(speedLevel, 50));
+        var speedT = (speedLevel - 1) / 49;
+        var targetBpm = 96 + speedT * 144;
+        SG.bgMusicState.tempo += (targetBpm - SG.bgMusicState.tempo) * 0.035;
 
         var beatInterval = 60 / SG.bgMusicState.tempo;
         var now = SG.audioCtx.currentTime;
@@ -210,7 +212,7 @@
                     }, 300);
                 }
 
-                if (SG.state.speed > SG.START_SPEED * 2 || beat % 2 === 0) {
+                if (speedLevel > 12 || beat % 2 === 0) {
                     var hatGain = SG.audioCtx.createGain();
                     hatGain.connect(SG.audioCtx.destination);
                     var hat = SG.audioCtx.createOscillator();
@@ -228,7 +230,7 @@
                     }, 100);
                 }
 
-                if (beat % 4 === 0) {
+                if (beat % 4 === 0 || speedLevel > 35 && beat % 2 === 0) {
                     var bass = SG.audioCtx.createOscillator();
                     var bassGain = SG.audioCtx.createGain();
                     bass.connect(bassGain);
