@@ -22,6 +22,22 @@
     };
     SG.sceneryModels = SG.sceneryModels || { buildings: [], trees: [] };
 
+    function tintSceneryModel(type, model) {
+        if (type !== 'trees') return;
+        model.traverse(function(node) {
+            if (!node || !node.isMesh || !node.material) return;
+            var mats = Array.isArray(node.material) ? node.material : [node.material];
+            var name = ((node.name || '') + ' ' + (node.material.name || '')).toLowerCase();
+            var isWood = name.indexOf('trunk') >= 0 || name.indexOf('bark') >= 0 || name.indexOf('wood') >= 0 || name.indexOf('stem') >= 0;
+            for (var mi = 0; mi < mats.length; mi++) {
+                var mat = mats[mi];
+                if (!mat || !mat.color) continue;
+                mat.color.setHex(isWood ? 0x6B4A2D : 0x2E7D32);
+                mat.needsUpdate = true;
+            }
+        });
+    }
+
     SG.loadSceneryModels = function() {
         if (!THREE || !THREE.GLTFLoader || SG.sceneryModelsLoading) return;
         SG.sceneryModelsLoading = true;
@@ -38,6 +54,7 @@
                             node.receiveShadow = true;
                         }
                     });
+                    tintSceneryModel(type, model);
                     SG.sceneryModels[type].push(model);
                 }, undefined, function(err) {
                     SG.sceneryModelError = err;
@@ -97,6 +114,7 @@
         if (theme === 0) {
             var cityAsset = createAssetScenery('buildings', x, z);
             if (cityAsset) return cityAsset;
+            if (SG.sceneryModelPaths.buildings && SG.sceneryModelPaths.buildings.length) return null;
             var colors = [0x8B7355, 0x6B8E8B, 0x9B8B6B, 0x7B6B5B, 0x5B7B6B, 0x8B7B5B];
             var h = 5 + Math.random() * 7;
             var w = 2.2 + Math.random() * 1.2;
@@ -110,6 +128,7 @@
         } else if (theme === 1) {
             var treeAsset = createAssetScenery('trees', x, z);
             if (treeAsset) return treeAsset;
+            if (SG.sceneryModelPaths.trees && SG.sceneryModelPaths.trees.length) return null;
             var trunkH = 2 + Math.random() * 3;
             var trunk = new THREE.Mesh(
                 new THREE.CylinderGeometry(0.15, 0.2, trunkH, 6),
@@ -228,6 +247,7 @@
         var expectedDepth = theme === 0 ? 7.0 : 3.5;
         if (!SG.canPlaceScenery(x, z, expectedDepth)) return null;
         var scenery = SG.spawnSceneryRow(z, side, row);
+        if (!scenery) return null;
         SG.state.buildings.push(scenery);
         return scenery;
     };

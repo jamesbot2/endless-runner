@@ -190,6 +190,44 @@ app.whenReady().then(async () => {
         buildings: window.__SG.sceneryModelPaths.buildings.length,
         trees: window.__SG.sceneryModelPaths.trees.length
       } : null
+      r.cityScenerySkipsLegacyFallback = false
+      r.forestScenerySkipsLegacyFallback = false
+      r.treeMaterialsTinted = false
+      if (window.__SG && window.__SG.createScenery && window.__SG.sceneryModels && window.__SG.disposeObject) {
+        var savedThemeForFallback = window.__SG.state.theme
+        var savedBuildingModels = window.__SG.sceneryModels.buildings
+        var savedTreeModels = window.__SG.sceneryModels.trees
+        window.__SG.sceneryModels.buildings = []
+        window.__SG.state.theme = 0
+        var legacyCity = window.__SG.createScenery(123, -123)
+        r.cityScenerySkipsLegacyFallback = legacyCity === null
+        if (legacyCity) {
+          window.__SG.scene.remove(legacyCity)
+          window.__SG.disposeObject(legacyCity)
+        }
+        window.__SG.sceneryModels.trees = []
+        window.__SG.state.theme = 1
+        var legacyForest = window.__SG.createScenery(123, -133)
+        r.forestScenerySkipsLegacyFallback = legacyForest === null
+        if (legacyForest) {
+          window.__SG.scene.remove(legacyForest)
+          window.__SG.disposeObject(legacyForest)
+        }
+        window.__SG.sceneryModels.buildings = savedBuildingModels
+        window.__SG.sceneryModels.trees = savedTreeModels
+        window.__SG.state.theme = savedThemeForFallback
+      }
+      if (window.__SG && window.__SG.sceneryModels && window.__SG.sceneryModels.trees && window.__SG.sceneryModels.trees[0]) {
+        window.__SG.sceneryModels.trees[0].traverse(function(node) {
+          if (r.treeMaterialsTinted || !node || !node.isMesh || !node.material) return
+          var mats = Array.isArray(node.material) ? node.material : [node.material]
+          for (var tmi = 0; tmi < mats.length; tmi++) {
+            var mat = mats[tmi]
+            if (!mat || !mat.color) continue
+            if (mat.color.g > mat.color.r && mat.color.g > mat.color.b) r.treeMaterialsTinted = true
+          }
+        })
+      }
       r.cityScenerySpacing = window.__SG && window.__SG.getScenerySpacing ? window.__SG.getScenerySpacing(0) : null
       r.citySceneryRows = window.__SG && window.__SG.getSceneryRowCount ? window.__SG.getSceneryRowCount(0) : null
       r.citySceneryAligned = false
@@ -251,16 +289,23 @@ app.whenReady().then(async () => {
         window.__SG.disposeObject(rollUnder)
       }
       r.trainRampWidth = null
+      r.vehicleSkipsLegacyFallback = false
       if (window.__SG && window.__SG.createTrain && window.__SG.disposeObject) {
         var originalRandom = Math.random
         try {
           Math.random = function() { return 0.1 }
           var rampTrain = window.__SG.createTrain(1, -42, false)
-          r.trainRampWidth = rampTrain.userData.rampWidth || null
-          window.__SG.disposeObject(rampTrain)
+          r.trainRampWidth = rampTrain ? rampTrain.userData.rampWidth || null : null
+          if (rampTrain) window.__SG.disposeObject(rampTrain)
         } finally {
           Math.random = originalRandom
         }
+        var savedTrainModel = window.__SG.vehicleModels ? window.__SG.vehicleModels.train : null
+        if (window.__SG.vehicleModels) delete window.__SG.vehicleModels.train
+        var legacyTrain = window.__SG.createTrain(1, -52, false)
+        r.vehicleSkipsLegacyFallback = legacyTrain === null
+        if (legacyTrain) window.__SG.disposeObject(legacyTrain)
+        if (window.__SG.vehicleModels && savedTrainModel) window.__SG.vehicleModels.train = savedTrainModel
       }
       r.characterCatalogCount = window.__SG && window.__SG.characterCatalog ? window.__SG.characterCatalog.length : 0
       r.characterSelector = window.__SG ? typeof window.__SG.showCharacters === 'function' : false
@@ -371,12 +416,16 @@ app.whenReady().then(async () => {
   check("14k. obstacle spacing guard exists", !!state.obstacleSpacing)
   check("14l. coin spacing guard exists", !!state.coinSpacing)
   check("14m. scenery model loader exists", !!state.sceneryLoader, state.sceneryPathCounts ? `buildings=${state.sceneryPathCounts.buildings}, trees=${state.sceneryPathCounts.trees}` : 'missing paths')
+  check("14m-0a. city scenery waits for GLB assets", !!state.cityScenerySkipsLegacyFallback)
+  check("14m-0b. forest scenery waits for GLB assets", !!state.forestScenerySkipsLegacyFallback)
+  check("14m-0c. tree scenery materials are tinted green", !!state.treeMaterialsTinted)
   check("14m-1. city scenery spacing is performance tuned", state.cityScenerySpacing >= 10, `spacing=${state.cityScenerySpacing}`)
   check("14m-2. city scenery rows are grid aligned", !!state.citySceneryAligned)
   check("14m-3. city scenery uses a single building row", state.citySceneryRows === 1, `rows=${state.citySceneryRows}`)
   check("14m-4. city scenery spawn avoids duplicate overlap", !!state.citySceneryNoDuplicateSpawn)
   check("14m-5. roll-under obstacle is narrower and lower", !!state.rollUnderSize && state.rollUnderSize.width <= 1.35 && state.rollUnderSize.height <= 0.28 && state.rollUnderSize.yOffset <= 1.2, state.rollUnderSize ? JSON.stringify(state.rollUnderSize) : 'missing')
   check("14m-6. train roof ramp matches train width", state.trainRampWidth !== null && state.trainRampWidth <= 1.6, `rampWidth=${state.trainRampWidth}`)
+  check("14m-7. train obstacles wait for GLB assets", !!state.vehicleSkipsLegacyFallback)
   check("14n. character catalog loaded", state.characterCatalogCount >= 12, String(state.characterCatalogCount))
   check("14o. character selector menu exists", !!state.characterSelector && !!state.charactersButton)
   check("14p. character price follows unlock count", state.characterBuy && state.characterPrice === state.expectedCharacterPrice, `price=${state.characterPrice}, owned=${state.ownedCharacterCount}`)

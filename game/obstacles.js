@@ -138,6 +138,7 @@
             group.add(model);
             group.userData.assetModel = 'train.glb';
         } else {
+            if (SG.vehicleModelPaths.train) return null;
             var body = new THREE.Mesh(
                 new THREE.BoxGeometry(2.4, 1.8, 6),
                 new THREE.MeshLambertMaterial({ color: mainColor })
