@@ -1,4 +1,4 @@
-﻿// ===== SUBWAY SURFER - Constants =====
+// ===== SUBWAY SURFER - Constants =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -46,6 +46,7 @@
         return s * 10;
     };
 })();
+
 
 // ===== SUBWAY SURFER - Game State =====
 (function() {
@@ -128,6 +129,7 @@
         ownedCharacters: ['runner']
     };
 })();
+
 
 // ===== SUBWAY SURFER - Audio System =====
 (function() {
@@ -385,6 +387,7 @@
     };
 })();
 
+
 // ===== SUBWAY SURFER - Textures =====
 (function() {
     'use strict';
@@ -450,6 +453,7 @@
     };
 })();
 
+
 // ===== SUBWAY SURFER - Scene Setup =====
 (function() {
     'use strict';
@@ -509,6 +513,7 @@
         }
     };
 })();
+
 
 // ===== SUBWAY SURFER - Player =====
 (function() {
@@ -858,6 +863,7 @@
     };
 })();
 
+
 // ===== SUBWAY SURFER - Track System =====
 (function() {
     'use strict';
@@ -898,6 +904,7 @@
         }
     };
 })();
+
 
 // ===== SUBWAY SURFER - Buildings & Scenery =====
 (function() {
@@ -1252,6 +1259,7 @@
         }
     };
 })();
+
 
 // ===== SUBWAY SURFER - Obstacles =====
 (function() {
@@ -1808,6 +1816,7 @@
     };
 })();
 
+
 // ===== SUBWAY SURFER - Coins =====
 (function() {
     'use strict';
@@ -1883,6 +1892,7 @@
         return coins;
     };
 })();
+
 
 // ===== SUBWAY SURFER - Particles =====
 (function() {
@@ -1967,6 +1977,7 @@
         }
     };
 })();
+
 
 // ===== SUBWAY SURFER - Collision Detection =====
 (function() {
@@ -2111,6 +2122,7 @@
     };
 })();
 
+
 // ===== SUBWAY SURFER - UI System =====
 (function() {
     'use strict';
@@ -2173,11 +2185,11 @@
         var prices = [0, 10000, 50000, 100000];
         var names = ['None', 'Double Jump', 'Jetpack', 'Roof Walk'];
         var descs = ['No ability equipped', 'Double jump in mid-air', 'Fly for 15s, max altitude, 30s cooldown', 'Walk on top of obstacles'];
-        var icons = ['馃毇', '馃', '馃殌', '馃弮'];
+        var icons = ['🚫', '🦘', '🚀', '🏃'];
 
         var html = '<div class="menu-content" style="max-height:85vh;overflow-y:auto;">';
         html += '<h1 class="menu-title" style="font-size:28px;margin-bottom:5px;">SHOP</h1>';
-        html += '<div style="color:#FFD700;font-size:20px;margin-bottom:15px;">馃挵 ' + SG.state.credits + ' credits</div>';
+        html += '<div style="color:#FFD700;font-size:20px;margin-bottom:15px;">💰 ' + SG.state.credits + ' credits</div>';
 
         var owned = [false, SG.state.canDoubleJump, SG.state.canJetpack, SG.state.canRoofWalk];
         for (var i = 0; i < 4; i++) {
@@ -2211,7 +2223,7 @@
         }
 
         html += '<hr style="border-color:rgba(255,255,255,0.05);margin:8px 0;">';
-        html += '<div style="color:#aaa;font-size:13px;margin-top:5px;">Controls: 鈫?Jump | 鈫?Roll | 鈫?鈫?Move | 馃憗 FPV | ` Console | M Menu</div>';
+        html += '<div style="color:#aaa;font-size:13px;margin-top:5px;">Controls: ↑ Jump | ↓ Roll | ← → Move | 👁 FPV | ` Console | M Menu</div>';
         html += '<div class="menu-btn modal-close-btn" onclick="__neoCloseShop()">CLOSE</div>';
         html += '</div>';
 
@@ -2394,7 +2406,7 @@
 
     SG.updateMenuCredits = function() {
         var el = document.getElementById('menu-credits');
-        if (el) el.textContent = '馃挵 TOTAL: ' + SG.state.credits;
+        if (el) el.textContent = '💰 TOTAL: ' + SG.state.credits;
     };
 
     SG.getSpeedKmh = function() {
@@ -2454,23 +2466,23 @@
             { key: 'near', label: 'Closest', desc: 'Most immersive third-person view' }
         ];
         var html = '<div class="menu-content" style="max-width:640px;width:min(94vw,640px);max-height:88vh;overflow:auto;">';
-        html += '<h1 class="menu-title" style="font-size:24px;">鈿?SETTINGS</h1>';
+        html += '<h1 class="menu-title" style="font-size:24px;">⚙ SETTINGS</h1>';
         html += '<div style="margin:12px 0;text-align:center;">';
-        html += '<span class="s-label">馃攰 Master</span>';
+        html += '<span class="s-label">🔊 Master</span>';
         html += '<button class="diff-btn" id="__mute-btn">' + (SG.state.muted ? 'OFF' : 'ON') + '</button>';
         html += '</div>';
         html += '<div style="margin:10px 0;">';
         html += '<div style="display:grid;grid-template-columns:30px 76px 1fr 44px;align-items:center;gap:8px;">';
-        html += '<span style="justify-self:start;font-size:18px;">馃幍</span><span class="s-label">Music</span><input type="range" min="0" max="1" step="0.1" value="' + music + '" class="__vol-slider" data-key="subwayMusicVol"><span class="vol-pct">' + Math.round(music * 100) + '%</span>';
+        html += '<span style="justify-self:start;font-size:18px;">🎵</span><span class="s-label">Music</span><input type="range" min="0" max="1" step="0.1" value="' + music + '" class="__vol-slider" data-key="subwayMusicVol"><span class="vol-pct">' + Math.round(music * 100) + '%</span>';
         html += '</div>';
         html += '</div>';
         html += '<div style="margin:10px 0;">';
         html += '<div style="display:grid;grid-template-columns:30px 76px 1fr 44px;align-items:center;gap:8px;">';
-        html += '<span style="justify-self:start;font-size:18px;">馃攰</span><span class="s-label">SFX</span><input type="range" min="0" max="1" step="0.1" value="' + sfx + '" class="__vol-slider" data-key="subwaySfxVol"><span class="vol-pct">' + Math.round(sfx * 100) + '%</span>';
+        html += '<span style="justify-self:start;font-size:18px;">🔊</span><span class="s-label">SFX</span><input type="range" min="0" max="1" step="0.1" value="' + sfx + '" class="__vol-slider" data-key="subwaySfxVol"><span class="vol-pct">' + Math.round(sfx * 100) + '%</span>';
         html += '</div>';
         html += '</div>';
         html += '<div style="margin:14px 0 10px;">';
-        html += '<div style="display:flex;justify-content:space-between;align-items:end;gap:10px;margin-bottom:6px;"><div><div class="s-label">Crouch Release Delay / 韫茶捣寤惰繜</div><div style="color:#aaa;font-size:12px;text-align:left;">How long the character stays crouched after releasing Down</div></div><span id="__roll-delay-val" class="vol-pct">' + rollDelay + 'ms</span></div>';
+        html += '<div style="display:flex;justify-content:space-between;align-items:end;gap:10px;margin-bottom:6px;"><div><div class="s-label">Crouch Release Delay / 蹲起延迟</div><div style="color:#aaa;font-size:12px;text-align:left;">How long the character stays crouched after releasing Down</div></div><span id="__roll-delay-val" class="vol-pct">' + rollDelay + 'ms</span></div>';
         html += '<input type="range" min="0" max="1000" step="50" value="' + rollDelay + '" id="__roll-delay" style="width:100%;">';
         html += '</div>';
         html += '<div style="margin:14px 0 10px;">';
@@ -2619,12 +2631,12 @@
             '<div class="menu-shell">' +
                 '<aside class="menu-sidebar">' +
                     '<div class="menu-brand">SUBWAY SURFER<small>NEO EDITION</small></div>' +
-                    '<div class="menu-nav-btn" id="shop-btn-menu"><span class="nav-ico">馃洅</span> Shop</div>' +
-                    '<div class="menu-nav-btn" id="characters-btn"><span class="nav-ico">鈼?/span> Characters</div>' +
-                    '<div class="menu-nav-btn" id="profile-btn"><span class="nav-ico">馃懁</span> Profile</div>' +
-                    '<div class="menu-nav-btn" id="leaderboard-btn"><span class="nav-ico">馃弳</span> Leaderboard</div>' +
-                    '<div class="menu-nav-btn" id="settings-btn-menu"><span class="nav-ico">鈿?/span> Settings</div>' +
-                    '<div class="menu-nav-btn danger" id="signout-btn"><span class="nav-ico">馃毆</span> Sign Out</div>' +
+                    '<div class="menu-nav-btn" id="shop-btn-menu"><span class="nav-ico">🛒</span> Shop</div>' +
+                    '<div class="menu-nav-btn" id="characters-btn"><span class="nav-ico">◆</span> Characters</div>' +
+                    '<div class="menu-nav-btn" id="profile-btn"><span class="nav-ico">👤</span> Profile</div>' +
+                    '<div class="menu-nav-btn" id="leaderboard-btn"><span class="nav-ico">🏆</span> Leaderboard</div>' +
+                    '<div class="menu-nav-btn" id="settings-btn-menu"><span class="nav-ico">⚙</span> Settings</div>' +
+                    '<div class="menu-nav-btn danger" id="signout-btn"><span class="nav-ico">🚪</span> Sign Out</div>' +
                 '</aside>' +
                 '<section class="menu-main">' +
                     '<h1 class="menu-title">SUBWAY SURFER</h1>' +
@@ -2635,13 +2647,13 @@
                         '<button class="diff-btn" data-diff="1">MEDIUM</button>' +
                         '<button class="diff-btn active" data-diff="2">HARD</button>' +
                     '</div>' +
-                    '<div id="menu-credits">馃挵 TOTAL: 0</div>' +
+                    '<div id="menu-credits">💰 TOTAL: 0</div>' +
                     '<div class="menu-controls">' +
-                        '<span class="key">鈫?/span> <span class="key">鈫?/span> Move &nbsp;|&nbsp;' +
-                        '<span class="key">鈫?/span> Jump &nbsp;|&nbsp;' +
-                        '<span class="key">鈫?/span> Roll' +
+                        '<span class="key">←</span> <span class="key">→</span> Move &nbsp;|&nbsp;' +
+                        '<span class="key">↑</span> Jump &nbsp;|&nbsp;' +
+                        '<span class="key">↓</span> Roll' +
                     '</div>' +
-                    '<div class="menu-keys">ESC / P = Pause &nbsp;|&nbsp; M = Menu &nbsp;|&nbsp; 馃憗 FPV</div>' +
+                    '<div class="menu-keys">ESC / P = Pause &nbsp;|&nbsp; M = Menu &nbsp;|&nbsp; 👁 FPV</div>' +
                     '<div class="menu-mobile-hint">Swipe to play on mobile</div>' +
                 '</section>' +
             '</div>';
@@ -2722,12 +2734,12 @@
         mobileCtrl.id = 'mobile-controls';
         mobileCtrl.innerHTML = '' +
             '<div class="m-row">' +
-                '<button class="m-btn" id="m-jump">鈻?/button>' +
+                '<button class="m-btn" id="m-jump">▲</button>' +
             '</div>' +
             '<div class="m-row">' +
-                '<button class="m-btn" id="m-left">鈼€</button>' +
-                '<button class="m-btn" id="m-roll">鈻?/button>' +
-                '<button class="m-btn" id="m-right">鈻?/button>' +
+                '<button class="m-btn" id="m-left">◀</button>' +
+                '<button class="m-btn" id="m-roll">▼</button>' +
+                '<button class="m-btn" id="m-right">▶</button>' +
             '</div>';
         SG.uiOverlay.appendChild(mobileCtrl);
 
@@ -2846,9 +2858,9 @@
         var instrDiv = document.createElement('div');
         instrDiv.id = 'instructions';
         instrDiv.innerHTML = '' +
-            '<span class="key">鈫?/span> <span class="key">鈫?/span> Move &nbsp;|&nbsp;' +
-            '<span class="key">鈫?/span> Jump &nbsp;|&nbsp;' +
-            '<span class="key">鈫?/span> Roll<br>' +
+            '<span class="key">←</span> <span class="key">→</span> Move &nbsp;|&nbsp;' +
+            '<span class="key">↑</span> Jump &nbsp;|&nbsp;' +
+            '<span class="key">↓</span> Roll<br>' +
             'Swipe on mobile';
         SG.uiOverlay.appendChild(instrDiv);
         SG.instructionsEl = instrDiv;
@@ -3169,6 +3181,7 @@
     };
 })();
 
+
 // ===== SUBWAY SURFER - Controls =====
 (function() {
     'use strict';
@@ -3465,6 +3478,7 @@
         }, { passive: false });
     };
 })();
+
 
 // ===== SUBWAY SURFER - Homelander Easter Egg =====
 (function() {
@@ -3958,6 +3972,7 @@
     };
 })();
 
+
 // ===== SUBWAY SURFER - Police Chase System =====
 (function() {
     'use strict';
@@ -4163,6 +4178,7 @@
         SG.state.policeDistance = Math.min(12, SG.state.policeDistance + 1.0);
     };
 })();
+
 
 // ===== SUBWAY SURFER - Main Game Loop & Init =====
 (function() {
@@ -4931,6 +4947,7 @@
     // Init triggered by account.js after override
 })();
 
+
 // ===== SUBWAY SURFER - Account System v2 =====
 (function() {
     'use strict';
@@ -4963,7 +4980,7 @@
             html += '<button class="diff-btn" onclick="SG.doLogin()" style="margin:5px;padding:10px 30px;font-size:16px;">LOGIN</button>';
             html += '<button class="diff-btn" onclick="__neoShowReg()" style="margin:5px;padding:10px 20px;">REGISTER</button>';
             html += '<div id="login-msg" style="color:#ffaa00;font-size:12px;margin:8px 0;"></div>';
-            html += '<div style="color:#555;font-size:11px;margin-top:10px;">Play anywhere 鈥?Cloud saves 鈥?Leaderboard</div>';
+            html += '<div style="color:#555;font-size:11px;margin-top:10px;">Play anywhere • Cloud saves • Leaderboard</div>';
             html += '</div>';
 
             overlay.innerHTML = html;
@@ -4980,7 +4997,7 @@
                 if (nameEl) nameEl.style.display = 'block';
                 var btn = document.querySelector('[onclick="__neoShowReg()"]');
                 if (btn) {
-                    btn.textContent = '鉁?REGISTER';
+                    btn.textContent = '✓ REGISTER';
                     btn.onclick = function() { SG.doRegister(); };
                 }
             };
@@ -4996,7 +5013,7 @@
         if (overlay) overlay.style.display = 'none';
     };
 
-    // 鈹€鈹€ Unified game data applier 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    // ── Unified game data applier ────────────────────────
     SG.applyGameData = function(g) {
         if (!g) return;
         var best = Math.max(g.maxDistance || 0, g.highScore || 0, g.maxEasy || 0, g.maxMedium || 0, g.maxHard || 0);
@@ -5062,7 +5079,7 @@
 
             // Update button text
             var btn = document.getElementById('account-btn-menu');
-            if (btn) btn.textContent = '馃懁 ' + SG.account.username;
+            if (btn) btn.textContent = '👤 ' + SG.account.username;
 
             // Show main menu
             if (SG.menuOverlay) SG.menuOverlay.style.display = 'flex';
@@ -5194,7 +5211,7 @@
                 SG._renderProfile(overlay);
             } catch(e) {
                 // Fallback: render anyway even if _renderProfile fails
-                overlay.innerHTML = '<div class="menu-content"><h1 class="menu-title">馃懁 PROFILE</h1>' +
+                overlay.innerHTML = '<div class="menu-content"><h1 class="menu-title">👤 PROFILE</h1>' +
                     '<div style="color:#888;padding:20px;">' + SG.escapeHtml(SG.account.email || '') + '</div>' +
                     '<div class="menu-btn modal-close-btn" onclick="this.closest(\'.overlay\').style.display=\'none\'">CLOSE</div></div>';
             }
@@ -5213,7 +5230,7 @@
         if (s.canRoofWalk) owned.push('Roof Walk');
 
         var html = '<div class="menu-content" style="max-width:380px;text-align:left;">';
-        html += '<h1 class="menu-title" style="font-size:24px;text-align:center;margin-bottom:10px;">馃懁 PROFILE</h1>';
+        html += '<h1 class="menu-title" style="font-size:24px;text-align:center;margin-bottom:10px;">👤 PROFILE</h1>';
         html += '<div class="bento-grid">';
         html += '<div class="bento-card"><div class="bento-label">Player</div><div class="bento-value">' + SG.escapeHtml(SG.account.username || '-') + '</div></div>';
         html += '<div class="bento-card"><div class="bento-label">Credits</div><div class="bento-value gold">' + (s.credits || 0) + '</div></div>';
@@ -5225,10 +5242,10 @@
 
         html += '<div class="bento-card span-2" style="margin-top:12px;">';
         var abNames = {0:'None',1:'Double Jump',2:'Jetpack',3:'Roof Walk'};
-        html += '<div class="bento-head">馃弳 Best Distances</div>';
-        html += '<div class="row"><span><span class="dot-easy">鈻?/span> Easy <span style="color:#888;font-size:11px;">[' + (abNames[s.maxEasyAbility] || 'None') + ']</span></span><span class="v">' + (s.maxEasy || 0) + 'm</span></div>';
-        html += '<div class="row"><span><span class="dot-med">鈻?/span> Medium <span style="color:#888;font-size:11px;">[' + (abNames[s.maxMediumAbility] || 'None') + ']</span></span><span class="v">' + (s.maxMedium || 0) + 'm</span></div>';
-        html += '<div class="row"><span><span class="dot-hard">鈻?/span> Hard <span style="color:#888;font-size:11px;">[' + (abNames[s.maxHardAbility] || 'None') + ']</span></span><span class="v">' + (s.maxHard || 0) + 'm</span></div>';
+        html += '<div class="bento-head">🏆 Best Distances</div>';
+        html += '<div class="row"><span><span class="dot-easy">■</span> Easy <span style="color:#888;font-size:11px;">[' + (abNames[s.maxEasyAbility] || 'None') + ']</span></span><span class="v">' + (s.maxEasy || 0) + 'm</span></div>';
+        html += '<div class="row"><span><span class="dot-med">■</span> Medium <span style="color:#888;font-size:11px;">[' + (abNames[s.maxMediumAbility] || 'None') + ']</span></span><span class="v">' + (s.maxMedium || 0) + 'm</span></div>';
+        html += '<div class="row"><span><span class="dot-hard">■</span> Hard <span style="color:#888;font-size:11px;">[' + (abNames[s.maxHardAbility] || 'None') + ']</span></span><span class="v">' + (s.maxHard || 0) + 'm</span></div>';
         html += '</div>';
 
         html += '<div class="menu-btn modal-close-btn" onclick="document.getElementById(\'profile-overlay\').style.display=\'none\'" style="margin-top:12px;text-align:center;">CLOSE</div>';
@@ -5250,7 +5267,7 @@
         }
         overlay.style.display = 'flex';
         overlay.innerHTML = '<div class="menu-content" style="max-width:420px;max-height:80vh;overflow-y:auto;">' +
-            '<h1 class="menu-title" style="font-size:24px;margin-bottom:10px;">馃弳 LEADERBOARD</h1>' +
+            '<h1 class="menu-title" style="font-size:24px;margin-bottom:10px;">🏆 LEADERBOARD</h1>' +
             '<div style="color:#aaa;font-size:13px;margin-bottom:10px;">Loading...</div>' +
             '</div>';
 
@@ -5261,7 +5278,7 @@
             var entries = data.leaderboard || [];
             var abNames = {0:'None',1:'Double',2:'Jetpack',3:'Roof'};
             var html = '<div class="menu-content" style="max-width:420px;max-height:80vh;overflow-y:auto;">';
-            html += '<h1 class="menu-title" style="font-size:24px;margin-bottom:5px;">馃弳 LEADERBOARD</h1>';
+            html += '<h1 class="menu-title" style="font-size:24px;margin-bottom:5px;">🏆 LEADERBOARD</h1>';
             html += '<div style="font-size:11px;color:#666;margin-bottom:10px;">Per-difficulty best distances</div>';
             if (entries.length === 0) {
                 html += '<div style="color:#888;padding:20px;">No entries yet. Play a game first!</div>';
@@ -5292,7 +5309,7 @@
             overlay.innerHTML = html;
         })
         .catch(function() {
-            overlay.innerHTML = '<div class="menu-content"><h1 class="menu-title">馃弳 LEADERBOARD</h1><div style="color:#ff4444;padding:20px;">Failed to load. Server offline?</div><div class="menu-btn modal-close-btn" onclick="document.getElementById(\'lb-overlay\').style.display=\'none\'">CLOSE</div></div>';
+            overlay.innerHTML = '<div class="menu-content"><h1 class="menu-title">🏆 LEADERBOARD</h1><div style="color:#ff4444;padding:20px;">Failed to load. Server offline?</div><div class="menu-btn modal-close-btn" onclick="document.getElementById(\'lb-overlay\').style.display=\'none\'">CLOSE</div></div>';
         });
     };
 
