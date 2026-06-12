@@ -154,6 +154,10 @@ app.whenReady().then(async () => {
       r.jetpackFuelMax = window.__SG ? window.__SG.JETPACK_FUEL_MAX : null
       r.jetpackCooldownMax = window.__SG ? window.__SG.JETPACK_COOLDOWN_MAX : null
       r.jetpackMaxHeight = window.__SG ? window.__SG.JETPACK_MAX_HEIGHT : null
+      r.jetpackModelPath = window.__SG ? window.__SG.jetpackModelPath : null
+      r.jetpackModelLoaded = window.__SG ? window.__SG.jetpackModelLoaded === true : false
+      r.jetpackModelName = window.__SG && window.__SG.jetpackModel ? window.__SG.jetpackModel.name : null
+      r.jetpackFlameGroups = window.__SG && window.__SG.jetpackFlameGroups ? window.__SG.jetpackFlameGroups.length : 0
       r.abilityHud = window.__SG ? typeof window.__SG.updateAbilityHUD === 'function' : false
       r.abilityVisuals = window.__SG ? typeof window.__SG.updateAbilityVisuals === 'function' : false
       r.defaultKeyBindings = window.__SG && window.__SG.getKeyBindings ? Object.assign({}, window.__SG.getKeyBindings()) : null
@@ -383,6 +387,8 @@ app.whenReady().then(async () => {
         window.__SG.state.theme = savedTheme
       }
       r.rollUnderSize = null
+      r.fullBarrierGap = null
+      r.fullBarrierCollisionGap = false
       if (window.__SG && window.__SG.createRollUnderTrain && window.__SG.disposeObject) {
         var rollUnder = window.__SG.createRollUnderTrain(1, -32)
         r.rollUnderSize = {
@@ -392,6 +398,46 @@ app.whenReady().then(async () => {
           yOffset: rollUnder.userData.yOffset
         }
         window.__SG.disposeObject(rollUnder)
+      }
+      if (window.__SG && window.__SG.createFullLaneBarrier && window.__SG.getObstacleLanes && window.__SG.checkCollisions && window.__SG.player) {
+        var gapBarrier = window.__SG.createFullLaneBarrier(0, 1)
+        var savedObstacles = window.__SG.state.obstacles
+        var savedPlayerPos = window.__SG.player.position.clone()
+        var savedCurrentLane = window.__SG.state.currentLane
+        var savedTargetLane = window.__SG.state.targetLane
+        var savedOnRoof = window.__SG.state.onRoof
+        var savedJumping = window.__SG.state.isJumping
+        var savedRolling = window.__SG.state.isRolling
+        var savedHomelander = window.__SG.state.homelander
+        window.__SG.state.obstacles = [gapBarrier]
+        window.__SG.state.onRoof = false
+        window.__SG.state.isJumping = false
+        window.__SG.state.isRolling = false
+        window.__SG.state.homelander = false
+        window.__SG.player.position.set(window.__SG.LANE_POSITIONS[1], 0.15, 0)
+        window.__SG.state.currentLane = 1
+        var gapLaneHit = window.__SG.checkCollisions()
+        window.__SG.player.position.set(window.__SG.LANE_POSITIONS[0], 0.15, 0)
+        window.__SG.state.currentLane = 0
+        var blockedLaneHit = window.__SG.checkCollisions()
+        r.fullBarrierGap = {
+          openLane: gapBarrier.userData.openLane,
+          blockedLanes: window.__SG.getObstacleLanes(gapBarrier)
+        }
+        r.fullBarrierCollisionGap = gapBarrier.userData.openLane === 1 &&
+          r.fullBarrierGap.blockedLanes.length === 2 &&
+          r.fullBarrierGap.blockedLanes.indexOf(1) < 0 &&
+          gapLaneHit === false &&
+          blockedLaneHit === true
+        window.__SG.state.obstacles = savedObstacles
+        window.__SG.player.position.copy(savedPlayerPos)
+        window.__SG.state.currentLane = savedCurrentLane
+        window.__SG.state.targetLane = savedTargetLane
+        window.__SG.state.onRoof = savedOnRoof
+        window.__SG.state.isJumping = savedJumping
+        window.__SG.state.isRolling = savedRolling
+        window.__SG.state.homelander = savedHomelander
+        window.__SG.disposeObject(gapBarrier)
       }
       r.trainRampWidth = null
       r.vehicleSkipsLegacyFallback = false
@@ -474,6 +520,7 @@ app.whenReady().then(async () => {
   check('3b. THREE.REVISION === "128"', state.threeRevision === '128', state.threeRevision ? `got ${state.threeRevision}` : 'undefined')
   check('3c. THREE.GLTFLoader exists', !!state.gltfLoader)
   const playerModelPath = path.join(DESKTOP, 'dist/renderer/models/player.glb')
+  const jetpackModelPath = path.join(DESKTOP, 'dist/renderer/models/jetpack.glb')
   const homelanderModelPath = path.join(DESKTOP, 'dist/renderer/models/homelander.glb')
   const trainModelPath = path.join(DESKTOP, 'dist/renderer/models/vehicles/train.glb')
   const busModelPath = path.join(DESKTOP, 'dist/renderer/models/vehicles/bus.glb')
@@ -483,6 +530,7 @@ app.whenReady().then(async () => {
   check('3d. player.glb copied to renderer dist', fs.existsSync(playerModelPath), fs.existsSync(playerModelPath) ? `${fs.statSync(playerModelPath).size} bytes` : 'missing')
   check('3e. refined player.glb size', fs.existsSync(playerModelPath) && fs.statSync(playerModelPath).size > 100000, fs.existsSync(playerModelPath) ? `${fs.statSync(playerModelPath).size} bytes` : 'missing')
   check('3f. Jetpack tuning constants', state.jetpackFuelMax === 15 && state.jetpackCooldownMax === 30 && state.jetpackMaxHeight > 0, `fuel=${state.jetpackFuelMax}, cooldown=${state.jetpackCooldownMax}, maxHeight=${state.jetpackMaxHeight}`)
+  check('3f-1. jetpack.glb copied to renderer dist', fs.existsSync(jetpackModelPath) && fs.statSync(jetpackModelPath).size > 1000000, fs.existsSync(jetpackModelPath) ? `${fs.statSync(jetpackModelPath).size} bytes` : 'missing')
   check('3g. homelander.glb copied to renderer dist', fs.existsSync(homelanderModelPath), fs.existsSync(homelanderModelPath) ? `${fs.statSync(homelanderModelPath).size} bytes` : 'missing')
   check('3h. train.glb copied to renderer dist', fs.existsSync(trainModelPath), fs.existsSync(trainModelPath) ? `${fs.statSync(trainModelPath).size} bytes` : 'missing')
   check('3i. bus.glb copied to renderer dist', fs.existsSync(busModelPath), fs.existsSync(busModelPath) ? `${fs.statSync(busModelPath).size} bytes` : 'missing')
@@ -511,6 +559,7 @@ app.whenReady().then(async () => {
   check("14c. player animations indexed", state.playerAnimations && state.playerAnimations.length >= 1, state.playerAnimations ? state.playerAnimations.join(', ') : 'none')
   check("14d. ability HUD updater exists", !!state.abilityHud)
   check("14e. ability visual updater exists", !!state.abilityVisuals)
+  check("14e-0a. Jetpack GLB loads with dual flames", state.jetpackModelPath === 'models/jetpack.glb' && !!state.jetpackModelLoaded && state.jetpackModelName === 'JetpackGLB' && state.jetpackFlameGroups === 2, `path=${state.jetpackModelPath}, model=${state.jetpackModelName}, flames=${state.jetpackFlameGroups}`)
   check("14e-1. default key bindings use arrow keys", !!state.defaultKeyBindings && state.defaultKeyBindings.up === 'ArrowUp' && state.defaultKeyBindings.down === 'ArrowDown' && state.defaultKeyBindings.left === 'ArrowLeft' && state.defaultKeyBindings.right === 'ArrowRight', state.defaultKeyBindings ? JSON.stringify(state.defaultKeyBindings) : 'missing')
   check("14e-2. key binding remap updates action lookup", state.keyBindingActionBefore === 'up' && state.keyBindingActionAfter === 'up' && !!state.keyBindingSaved, `before=${state.keyBindingActionBefore}, after=${state.keyBindingActionAfter}`)
   check("14e-3. settings exposes roll delay and key binding controls", state.rollReleaseDelaySetting === 350 && state.settingsBindingButtons === 4, `delay=${state.rollReleaseDelaySetting}, buttons=${state.settingsBindingButtons}`)
@@ -542,6 +591,7 @@ app.whenReady().then(async () => {
   check("14m-3. city scenery uses a single building row", state.citySceneryRows === 1, `rows=${state.citySceneryRows}`)
   check("14m-4. city scenery spawn avoids duplicate overlap", !!state.citySceneryNoDuplicateSpawn)
   check("14m-5. roll-under obstacle is narrower and lower", !!state.rollUnderSize && state.rollUnderSize.width <= 1.35 && state.rollUnderSize.height <= 0.28 && state.rollUnderSize.yOffset <= 1.2, state.rollUnderSize ? JSON.stringify(state.rollUnderSize) : 'missing')
+  check("14m-5a. full-width barrier leaves one lane gap", !!state.fullBarrierCollisionGap, state.fullBarrierGap ? JSON.stringify(state.fullBarrierGap) : 'missing')
   check("14m-6. train roof ramp matches train width", state.trainRampWidth !== null && state.trainRampWidth <= 1.6, `rampWidth=${state.trainRampWidth}`)
   check("14m-7. train obstacles wait for GLB assets", !!state.vehicleSkipsLegacyFallback)
   check("14n. character catalog loaded", state.characterCatalogCount >= 12, String(state.characterCatalogCount))

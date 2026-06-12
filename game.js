@@ -522,6 +522,13 @@
     const THREE = window.THREE;
 
     SG.playerModelPath = SG.playerModelPath || 'models/player.glb';
+    SG.jetpackModelPath = SG.jetpackModelPath || 'models/jetpack.glb';
+    SG.jetpackModelTuning = SG.jetpackModelTuning || {
+        targetHeight: 0.72,
+        rotationY: 0,
+        yOffset: 0,
+        zOffset: 0
+    };
     SG.characterCatalog = SG.characterCatalog || [
         { id: 'runner', name: 'Neo Runner', path: 'models/player.glb', desc: 'Original subway runner' },
         { id: 'adventurer', name: 'Adventurer', path: 'models/characters/Adventurer.gltf', desc: 'Backpack and field gear' },
@@ -742,6 +749,51 @@
         SG.loadPlayerModel();
     };
 
+    SG.normalizeJetpackModel = function(model) {
+        if (!model || !THREE) return;
+        model.updateMatrixWorld(true);
+        var box = new THREE.Box3().setFromObject(model);
+        var size = new THREE.Vector3();
+        var center = new THREE.Vector3();
+        box.getSize(size);
+        box.getCenter(center);
+        var maxDim = Math.max(size.x, size.y, size.z) || 1;
+        var scale = (SG.jetpackModelTuning.targetHeight || 0.72) / maxDim;
+        model.scale.setScalar(scale);
+        model.rotation.y = SG.jetpackModelTuning.rotationY || 0;
+        model.position.set(
+            -center.x * scale,
+            -center.y * scale + (SG.jetpackModelTuning.yOffset || 0),
+            -center.z * scale + (SG.jetpackModelTuning.zOffset || 0)
+        );
+        model.updateMatrixWorld(true);
+    };
+
+    SG.loadJetpackModel = function() {
+        if (!SG.jetpackPack || SG.jetpackModelRequested || !THREE || !THREE.GLTFLoader) return;
+        SG.jetpackModelRequested = true;
+        var loader = new THREE.GLTFLoader();
+        loader.load(SG.jetpackModelPath, function(gltf) {
+            if (!SG.jetpackPack) return;
+            var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+            if (!model) return;
+            model.name = 'JetpackGLB';
+            model.traverse(function(node) {
+                if (node && node.isMesh) {
+                    node.castShadow = true;
+                    node.receiveShadow = true;
+                }
+            });
+            SG.normalizeJetpackModel(model);
+            SG.jetpackModel = model;
+            SG.jetpackModelLoaded = true;
+            SG.jetpackPack.add(model);
+        }, undefined, function(err) {
+            SG.jetpackModelError = err;
+            SG.jetpackModelLoaded = false;
+        });
+    };
+
     SG.createPlayer = function() {
         SG.player = new THREE.Group();
         SG.player.position.set(0, 0, 0);
@@ -819,43 +871,44 @@
         SG.shoesRWRight.visible = false;
         SG.player.add(SG.shoesRWRight);
 
-        // Jetpack pack (backpack)
+        // Jetpack pack: GLB model plus two flame emitters.
         SG.jetpackPack = new THREE.Group();
-        var packBox = new THREE.Mesh(
-            new THREE.BoxGeometry(0.4, 0.45, 0.2),
-            new THREE.MeshLambertMaterial({ color: 0xcc6622 })
-        );
-        packBox.position.set(0, 0, 0);
-        SG.jetpackPack.add(packBox);
+        SG.jetpackPack.name = 'JetpackPack';
+        SG.jetpackFlameGroups = [];
+        function createJetpackFlame(side) {
+            var flameGroup = new THREE.Group();
+            flameGroup.name = side < 0 ? 'JetpackFlameLeft' : 'JetpackFlameRight';
+            flameGroup.position.set(side * 0.16, -0.38, 0.02);
+            flameGroup.visible = false;
 
-        // Jetpack thruster nozzle (cone pointing down)
-        var nozzleMat = new THREE.MeshLambertMaterial({ color: 0x884422 });
-        var nozzle = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.12, 6), nozzleMat);
-        nozzle.rotation.x = Math.PI;
-        nozzle.position.set(0, -0.25, 0);
-        SG.jetpackPack.add(nozzle);
+            var outer = new THREE.Mesh(
+                new THREE.ConeGeometry(0.075, 0.36, 10),
+                new THREE.MeshBasicMaterial({ color: 0xff5a00, transparent: true, opacity: 0.88 })
+            );
+            outer.position.y = -0.06;
+            flameGroup.add(outer);
 
-        // Jetpack flame (initially invisible, shown during jetpack use)
-        SG.jetpackFlame = new THREE.Mesh(
-            new THREE.ConeGeometry(0.1, 0.3, 6),
-            new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.9 })
-        );
-        SG.jetpackFlame.position.set(0, -0.35, 0);
-        SG.jetpackFlame.visible = false;
-        SG.jetpackPack.add(SG.jetpackFlame);
+            var inner = new THREE.Mesh(
+                new THREE.ConeGeometry(0.038, 0.23, 10),
+                new THREE.MeshBasicMaterial({ color: 0xfff0a0, transparent: true, opacity: 0.95 })
+            );
+            inner.position.y = -0.02;
+            flameGroup.add(inner);
 
-        // Inner bright flame
-        SG.jetpackFlameInner = new THREE.Mesh(
-            new THREE.ConeGeometry(0.05, 0.18, 6),
-            new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.9 })
-        );
-        SG.jetpackFlameInner.position.set(0, -0.32, 0);
-        SG.jetpackFlameInner.visible = false;
-        SG.jetpackPack.add(SG.jetpackFlameInner);
-
+            SG.jetpackPack.add(flameGroup);
+            SG.jetpackFlameGroups.push(flameGroup);
+            return flameGroup;
+        }
+        var leftFlame = createJetpackFlame(-1);
+        var rightFlame = createJetpackFlame(1);
+        SG.jetpackFlame = leftFlame.children[0];
+        SG.jetpackFlameInner = leftFlame.children[1];
+        SG.jetpackFlameRight = rightFlame.children[0];
+        SG.jetpackFlameRightInner = rightFlame.children[1];
         SG.jetpackPack.position.set(0, 0.8, -0.3);
         SG.jetpackPack.visible = false;
         SG.player.add(SG.jetpackPack);
+        SG.loadJetpackModel();
 
         SG.scene.add(SG.player);
         SG.loadPlayerModel();
@@ -1305,6 +1358,7 @@
 
     SG.getObstacleLanes = function(obstacle) {
         if (!obstacle || !obstacle.userData) return [];
+        if (Array.isArray(obstacle.userData.blockedLanes)) return obstacle.userData.blockedLanes.slice();
         if (obstacle.userData.type === 'full_barrier' || obstacle.userData.moving) return [0, 1, 2];
         if (typeof obstacle.userData.lane === 'number') return [obstacle.userData.lane];
         return [0, 1, 2];
@@ -1532,39 +1586,56 @@
         return group;
     };
 
-    SG.createFullLaneBarrier = function(zPos) {
+    SG.createFullLaneBarrier = function(zPos, openLane) {
         var group = new THREE.Group();
+        openLane = (typeof openLane === 'number' && openLane >= 0 && openLane <= 2) ? openLane : Math.floor(Math.random() * 3);
+        var blockedLanes = [0, 1, 2].filter(function(lane) { return lane !== openLane; });
 
         var beamMat = new THREE.MeshLambertMaterial({ color: 0xFF4444 });
-        var beam = new THREE.Mesh(new THREE.BoxGeometry(SG.GROUND_WIDTH + 1.5, 0.5, 1.2), beamMat);
-        beam.position.set(0, 0.25, 0);
-        group.add(beam);
+        var stripeMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+        var laneBeamWidth = Math.min(SG.LANE_WIDTH * 0.78, 1.7);
+        for (var bi = 0; bi < blockedLanes.length; bi++) {
+            var lane = blockedLanes[bi];
+            var laneX = SG.LANE_POSITIONS[lane];
+            var beam = new THREE.Mesh(new THREE.BoxGeometry(laneBeamWidth, 0.5, 1.2), beamMat);
+            beam.position.set(laneX, 0.25, 0);
+            group.add(beam);
 
-        var stripe = new THREE.Mesh(
-            new THREE.BoxGeometry(SG.GROUND_WIDTH + 1.0, 0.05, 0.05),
-            new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
-        );
-        stripe.position.set(0, 0.5, 0.6);
-        group.add(stripe);
-        var stripe2 = stripe.clone();
-        stripe2.position.z = -0.6;
-        group.add(stripe2);
+            var stripe = new THREE.Mesh(new THREE.BoxGeometry(laneBeamWidth * 0.9, 0.05, 0.05), stripeMat);
+            stripe.position.set(laneX, 0.5, 0.6);
+            group.add(stripe);
+            var stripe2 = stripe.clone();
+            stripe2.position.z = -0.6;
+            group.add(stripe2);
+        }
 
         var postMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
-        for (var side = -1; side <= 1; side += 2) {
+        var postXs = [
+            SG.LANE_POSITIONS[0] - laneBeamWidth / 2 - 0.12,
+            SG.LANE_POSITIONS[2] + laneBeamWidth / 2 + 0.12
+        ];
+        for (var side = 0; side < postXs.length; side++) {
             var post = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.7, 0.15), postMat);
-            post.position.set(side * (SG.GROUND_WIDTH / 2 + 0.8), 0.35, 0);
+            post.position.set(postXs[side], 0.35, 0);
             group.add(post);
             var light = new THREE.Mesh(
                 new THREE.SphereGeometry(0.08, 4, 4),
                 new THREE.MeshBasicMaterial({ color: 0xFF0000 })
             );
-            light.position.set(side * (SG.GROUND_WIDTH / 2 + 0.8), 0.75, 0);
+            light.position.set(postXs[side], 0.75, 0);
             group.add(light);
         }
 
         group.position.set(0, 0, zPos);
-        group.userData = { type: 'full_barrier', width: SG.GROUND_WIDTH + 1.5, height: 0.5, depth: 1.2, visualDepth: 1.6 };
+        group.userData = {
+            type: 'full_barrier',
+            openLane: openLane,
+            blockedLanes: blockedLanes,
+            width: laneBeamWidth,
+            height: 0.5,
+            depth: 1.2,
+            visualDepth: 1.6
+        };
         return group;
     };
 
@@ -2036,6 +2107,20 @@
             }
 
             if (od.type === 'full_barrier') {
+                if (Array.isArray(od.blockedLanes)) {
+                    var playerLane = state.currentLane;
+                    var nearestDist = Infinity;
+                    for (var li = 0; li < SG.LANE_POSITIONS.length; li++) {
+                        var laneDist = Math.abs(playerPos.x - SG.LANE_POSITIONS[li]);
+                        if (laneDist < nearestDist) {
+                            nearestDist = laneDist;
+                            playerLane = li;
+                        }
+                    }
+                    if (od.blockedLanes.indexOf(playerLane) < 0) continue;
+                    obsBox.x = SG.LANE_POSITIONS[playerLane];
+                    obsBox.w = od.width || 1.6;
+                }
                 if (state.isJumping && state.playerHeight > 0.9) continue;
             }
 
@@ -2423,8 +2508,8 @@
         }
 
         var pos = SG.player.position.clone();
-        pos.x += 0.42;
-        pos.y += 1.7;
+        pos.x += 0.26;
+        pos.y += 1.45;
         pos.project(SG.camera);
 
         if (pos.z < -1 || pos.z > 1) {
@@ -2681,7 +2766,7 @@
 
         SG.speedHudEl = document.createElement('div');
         SG.speedHudEl.id = 'third-person-speed-hud';
-        SG.speedHudEl.style.cssText = 'position:fixed;left:50%;top:50%;z-index:18;display:none;pointer-events:none;transform:translate(8px,-12px);padding:3px 7px;border-radius:5px;background:rgba(0,0,0,0.16);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.94);font:700 12px/1.25 Arial,sans-serif;text-shadow:0 1px 6px rgba(0,0,0,0.85);letter-spacing:0;';
+        SG.speedHudEl.style.cssText = 'position:fixed;left:50%;top:50%;z-index:18;display:none;pointer-events:none;transform:translate(-8px,2px);padding:3px 7px;border-radius:5px;background:rgba(0,0,0,0.16);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.94);font:700 12px/1.25 Arial,sans-serif;text-shadow:0 1px 6px rgba(0,0,0,0.85);letter-spacing:0;';
         SG.uiOverlay.appendChild(SG.speedHudEl);
 
         // ===== PAUSE BUTTON =====
@@ -4881,6 +4966,19 @@
         }
 
         var flameOn = showJetpack && SG.state.jetpackFuel > 0 && SG.state.jetpackCooldown <= 0;
+        if (SG.jetpackFlameGroups && SG.jetpackFlameGroups.length) {
+            for (var jf = 0; jf < SG.jetpackFlameGroups.length; jf++) {
+                var flameGroup = SG.jetpackFlameGroups[jf];
+                flameGroup.visible = flameOn;
+                if (flameOn) {
+                    var pulse = 0.85 + Math.sin(SG.state.gameTime * (18 + jf * 3)) * 0.15;
+                    flameGroup.scale.set(pulse, 0.95 + Math.sin(SG.state.gameTime * 22 + jf) * 0.12, pulse);
+                } else {
+                    flameGroup.scale.set(1, 1, 1);
+                }
+            }
+            return;
+        }
         if (SG.jetpackFlame) {
             SG.jetpackFlame.visible = flameOn;
             SG.jetpackFlame.scale.setScalar(flameOn ? 0.85 + Math.sin(SG.state.gameTime * 18) * 0.15 : 1);

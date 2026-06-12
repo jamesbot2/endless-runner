@@ -298,8 +298,8 @@
         }
 
         var pos = SG.player.position.clone();
-        pos.x += 0.42;
-        pos.y += 1.7;
+        pos.x += 0.26;
+        pos.y += 1.45;
         pos.project(SG.camera);
 
         if (pos.z < -1 || pos.z > 1) {
@@ -556,7 +556,7 @@
 
         SG.speedHudEl = document.createElement('div');
         SG.speedHudEl.id = 'third-person-speed-hud';
-        SG.speedHudEl.style.cssText = 'position:fixed;left:50%;top:50%;z-index:18;display:none;pointer-events:none;transform:translate(8px,-12px);padding:3px 7px;border-radius:5px;background:rgba(0,0,0,0.16);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.94);font:700 12px/1.25 Arial,sans-serif;text-shadow:0 1px 6px rgba(0,0,0,0.85);letter-spacing:0;';
+        SG.speedHudEl.style.cssText = 'position:fixed;left:50%;top:50%;z-index:18;display:none;pointer-events:none;transform:translate(-8px,2px);padding:3px 7px;border-radius:5px;background:rgba(0,0,0,0.16);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.94);font:700 12px/1.25 Arial,sans-serif;text-shadow:0 1px 6px rgba(0,0,0,0.85);letter-spacing:0;';
         SG.uiOverlay.appendChild(SG.speedHudEl);
 
         // ===== PAUSE BUTTON =====

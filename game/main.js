@@ -699,6 +699,19 @@
         }
 
         var flameOn = showJetpack && SG.state.jetpackFuel > 0 && SG.state.jetpackCooldown <= 0;
+        if (SG.jetpackFlameGroups && SG.jetpackFlameGroups.length) {
+            for (var jf = 0; jf < SG.jetpackFlameGroups.length; jf++) {
+                var flameGroup = SG.jetpackFlameGroups[jf];
+                flameGroup.visible = flameOn;
+                if (flameOn) {
+                    var pulse = 0.85 + Math.sin(SG.state.gameTime * (18 + jf * 3)) * 0.15;
+                    flameGroup.scale.set(pulse, 0.95 + Math.sin(SG.state.gameTime * 22 + jf) * 0.12, pulse);
+                } else {
+                    flameGroup.scale.set(1, 1, 1);
+                }
+            }
+            return;
+        }
         if (SG.jetpackFlame) {
             SG.jetpackFlame.visible = flameOn;
             SG.jetpackFlame.scale.setScalar(flameOn ? 0.85 + Math.sin(SG.state.gameTime * 18) * 0.15 : 1);

@@ -5,6 +5,13 @@
     const THREE = window.THREE;
 
     SG.playerModelPath = SG.playerModelPath || 'models/player.glb';
+    SG.jetpackModelPath = SG.jetpackModelPath || 'models/jetpack.glb';
+    SG.jetpackModelTuning = SG.jetpackModelTuning || {
+        targetHeight: 0.72,
+        rotationY: 0,
+        yOffset: 0,
+        zOffset: 0
+    };
     SG.characterCatalog = SG.characterCatalog || [
         { id: 'runner', name: 'Neo Runner', path: 'models/player.glb', desc: 'Original subway runner' },
         { id: 'adventurer', name: 'Adventurer', path: 'models/characters/Adventurer.gltf', desc: 'Backpack and field gear' },
@@ -225,6 +232,51 @@
         SG.loadPlayerModel();
     };
 
+    SG.normalizeJetpackModel = function(model) {
+        if (!model || !THREE) return;
+        model.updateMatrixWorld(true);
+        var box = new THREE.Box3().setFromObject(model);
+        var size = new THREE.Vector3();
+        var center = new THREE.Vector3();
+        box.getSize(size);
+        box.getCenter(center);
+        var maxDim = Math.max(size.x, size.y, size.z) || 1;
+        var scale = (SG.jetpackModelTuning.targetHeight || 0.72) / maxDim;
+        model.scale.setScalar(scale);
+        model.rotation.y = SG.jetpackModelTuning.rotationY || 0;
+        model.position.set(
+            -center.x * scale,
+            -center.y * scale + (SG.jetpackModelTuning.yOffset || 0),
+            -center.z * scale + (SG.jetpackModelTuning.zOffset || 0)
+        );
+        model.updateMatrixWorld(true);
+    };
+
+    SG.loadJetpackModel = function() {
+        if (!SG.jetpackPack || SG.jetpackModelRequested || !THREE || !THREE.GLTFLoader) return;
+        SG.jetpackModelRequested = true;
+        var loader = new THREE.GLTFLoader();
+        loader.load(SG.jetpackModelPath, function(gltf) {
+            if (!SG.jetpackPack) return;
+            var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+            if (!model) return;
+            model.name = 'JetpackGLB';
+            model.traverse(function(node) {
+                if (node && node.isMesh) {
+                    node.castShadow = true;
+                    node.receiveShadow = true;
+                }
+            });
+            SG.normalizeJetpackModel(model);
+            SG.jetpackModel = model;
+            SG.jetpackModelLoaded = true;
+            SG.jetpackPack.add(model);
+        }, undefined, function(err) {
+            SG.jetpackModelError = err;
+            SG.jetpackModelLoaded = false;
+        });
+    };
+
     SG.createPlayer = function() {
         SG.player = new THREE.Group();
         SG.player.position.set(0, 0, 0);
@@ -302,43 +354,44 @@
         SG.shoesRWRight.visible = false;
         SG.player.add(SG.shoesRWRight);
 
-        // Jetpack pack (backpack)
+        // Jetpack pack: GLB model plus two flame emitters.
         SG.jetpackPack = new THREE.Group();
-        var packBox = new THREE.Mesh(
-            new THREE.BoxGeometry(0.4, 0.45, 0.2),
-            new THREE.MeshLambertMaterial({ color: 0xcc6622 })
-        );
-        packBox.position.set(0, 0, 0);
-        SG.jetpackPack.add(packBox);
+        SG.jetpackPack.name = 'JetpackPack';
+        SG.jetpackFlameGroups = [];
+        function createJetpackFlame(side) {
+            var flameGroup = new THREE.Group();
+            flameGroup.name = side < 0 ? 'JetpackFlameLeft' : 'JetpackFlameRight';
+            flameGroup.position.set(side * 0.16, -0.38, 0.02);
+            flameGroup.visible = false;
 
-        // Jetpack thruster nozzle (cone pointing down)
-        var nozzleMat = new THREE.MeshLambertMaterial({ color: 0x884422 });
-        var nozzle = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.12, 6), nozzleMat);
-        nozzle.rotation.x = Math.PI;
-        nozzle.position.set(0, -0.25, 0);
-        SG.jetpackPack.add(nozzle);
+            var outer = new THREE.Mesh(
+                new THREE.ConeGeometry(0.075, 0.36, 10),
+                new THREE.MeshBasicMaterial({ color: 0xff5a00, transparent: true, opacity: 0.88 })
+            );
+            outer.position.y = -0.06;
+            flameGroup.add(outer);
 
-        // Jetpack flame (initially invisible, shown during jetpack use)
-        SG.jetpackFlame = new THREE.Mesh(
-            new THREE.ConeGeometry(0.1, 0.3, 6),
-            new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.9 })
-        );
-        SG.jetpackFlame.position.set(0, -0.35, 0);
-        SG.jetpackFlame.visible = false;
-        SG.jetpackPack.add(SG.jetpackFlame);
+            var inner = new THREE.Mesh(
+                new THREE.ConeGeometry(0.038, 0.23, 10),
+                new THREE.MeshBasicMaterial({ color: 0xfff0a0, transparent: true, opacity: 0.95 })
+            );
+            inner.position.y = -0.02;
+            flameGroup.add(inner);
 
-        // Inner bright flame
-        SG.jetpackFlameInner = new THREE.Mesh(
-            new THREE.ConeGeometry(0.05, 0.18, 6),
-            new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.9 })
-        );
-        SG.jetpackFlameInner.position.set(0, -0.32, 0);
-        SG.jetpackFlameInner.visible = false;
-        SG.jetpackPack.add(SG.jetpackFlameInner);
-
+            SG.jetpackPack.add(flameGroup);
+            SG.jetpackFlameGroups.push(flameGroup);
+            return flameGroup;
+        }
+        var leftFlame = createJetpackFlame(-1);
+        var rightFlame = createJetpackFlame(1);
+        SG.jetpackFlame = leftFlame.children[0];
+        SG.jetpackFlameInner = leftFlame.children[1];
+        SG.jetpackFlameRight = rightFlame.children[0];
+        SG.jetpackFlameRightInner = rightFlame.children[1];
         SG.jetpackPack.position.set(0, 0.8, -0.3);
         SG.jetpackPack.visible = false;
         SG.player.add(SG.jetpackPack);
+        SG.loadJetpackModel();
 
         SG.scene.add(SG.player);
         SG.loadPlayerModel();

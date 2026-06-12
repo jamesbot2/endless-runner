@@ -42,6 +42,7 @@
 
     SG.getObstacleLanes = function(obstacle) {
         if (!obstacle || !obstacle.userData) return [];
+        if (Array.isArray(obstacle.userData.blockedLanes)) return obstacle.userData.blockedLanes.slice();
         if (obstacle.userData.type === 'full_barrier' || obstacle.userData.moving) return [0, 1, 2];
         if (typeof obstacle.userData.lane === 'number') return [obstacle.userData.lane];
         return [0, 1, 2];
@@ -269,39 +270,56 @@
         return group;
     };
 
-    SG.createFullLaneBarrier = function(zPos) {
+    SG.createFullLaneBarrier = function(zPos, openLane) {
         var group = new THREE.Group();
+        openLane = (typeof openLane === 'number' && openLane >= 0 && openLane <= 2) ? openLane : Math.floor(Math.random() * 3);
+        var blockedLanes = [0, 1, 2].filter(function(lane) { return lane !== openLane; });
 
         var beamMat = new THREE.MeshLambertMaterial({ color: 0xFF4444 });
-        var beam = new THREE.Mesh(new THREE.BoxGeometry(SG.GROUND_WIDTH + 1.5, 0.5, 1.2), beamMat);
-        beam.position.set(0, 0.25, 0);
-        group.add(beam);
+        var stripeMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+        var laneBeamWidth = Math.min(SG.LANE_WIDTH * 0.78, 1.7);
+        for (var bi = 0; bi < blockedLanes.length; bi++) {
+            var lane = blockedLanes[bi];
+            var laneX = SG.LANE_POSITIONS[lane];
+            var beam = new THREE.Mesh(new THREE.BoxGeometry(laneBeamWidth, 0.5, 1.2), beamMat);
+            beam.position.set(laneX, 0.25, 0);
+            group.add(beam);
 
-        var stripe = new THREE.Mesh(
-            new THREE.BoxGeometry(SG.GROUND_WIDTH + 1.0, 0.05, 0.05),
-            new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
-        );
-        stripe.position.set(0, 0.5, 0.6);
-        group.add(stripe);
-        var stripe2 = stripe.clone();
-        stripe2.position.z = -0.6;
-        group.add(stripe2);
+            var stripe = new THREE.Mesh(new THREE.BoxGeometry(laneBeamWidth * 0.9, 0.05, 0.05), stripeMat);
+            stripe.position.set(laneX, 0.5, 0.6);
+            group.add(stripe);
+            var stripe2 = stripe.clone();
+            stripe2.position.z = -0.6;
+            group.add(stripe2);
+        }
 
         var postMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
-        for (var side = -1; side <= 1; side += 2) {
+        var postXs = [
+            SG.LANE_POSITIONS[0] - laneBeamWidth / 2 - 0.12,
+            SG.LANE_POSITIONS[2] + laneBeamWidth / 2 + 0.12
+        ];
+        for (var side = 0; side < postXs.length; side++) {
             var post = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.7, 0.15), postMat);
-            post.position.set(side * (SG.GROUND_WIDTH / 2 + 0.8), 0.35, 0);
+            post.position.set(postXs[side], 0.35, 0);
             group.add(post);
             var light = new THREE.Mesh(
                 new THREE.SphereGeometry(0.08, 4, 4),
                 new THREE.MeshBasicMaterial({ color: 0xFF0000 })
             );
-            light.position.set(side * (SG.GROUND_WIDTH / 2 + 0.8), 0.75, 0);
+            light.position.set(postXs[side], 0.75, 0);
             group.add(light);
         }
 
         group.position.set(0, 0, zPos);
-        group.userData = { type: 'full_barrier', width: SG.GROUND_WIDTH + 1.5, height: 0.5, depth: 1.2, visualDepth: 1.6 };
+        group.userData = {
+            type: 'full_barrier',
+            openLane: openLane,
+            blockedLanes: blockedLanes,
+            width: laneBeamWidth,
+            height: 0.5,
+            depth: 1.2,
+            visualDepth: 1.6
+        };
         return group;
     };
 

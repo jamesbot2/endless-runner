@@ -55,6 +55,20 @@
             }
 
             if (od.type === 'full_barrier') {
+                if (Array.isArray(od.blockedLanes)) {
+                    var playerLane = state.currentLane;
+                    var nearestDist = Infinity;
+                    for (var li = 0; li < SG.LANE_POSITIONS.length; li++) {
+                        var laneDist = Math.abs(playerPos.x - SG.LANE_POSITIONS[li]);
+                        if (laneDist < nearestDist) {
+                            nearestDist = laneDist;
+                            playerLane = li;
+                        }
+                    }
+                    if (od.blockedLanes.indexOf(playerLane) < 0) continue;
+                    obsBox.x = SG.LANE_POSITIONS[playerLane];
+                    obsBox.w = od.width || 1.6;
+                }
                 if (state.isJumping && state.playerHeight > 0.9) continue;
             }
 
