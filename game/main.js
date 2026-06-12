@@ -274,6 +274,7 @@
 
         var delta = Math.min(SG.clock.getDelta(), 0.05);
         SG.state.gameTime += delta;
+        if (SG.updatePlayerModelAnimation) SG.updatePlayerModelAnimation(delta);
 
         // Speed increase
         if (SG.state.speed < SG.MAX_SPEED) {
