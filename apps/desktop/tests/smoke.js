@@ -398,11 +398,15 @@ app.whenReady().then(async () => {
       r.coinDetail = null
       if (window.__SG && window.__SG.createCoin && window.__SG.disposeObject) {
         var detailedCoin = window.__SG.createCoin(1, -12, 0.3)
+        var coinShape = detailedCoin.children.find(function(child) { return child.geometry && child.geometry.type === 'ShapeGeometry' })
         r.coinDetail = {
           children: detailedCoin.children.length,
           marker: detailedCoin.userData.coinDetail,
           hasTorus: detailedCoin.children.some(function(child) { return child.geometry && child.geometry.type === 'TorusGeometry' }),
-          hasShape: detailedCoin.children.some(function(child) { return child.geometry && child.geometry.type === 'ShapeGeometry' })
+          hasShape: !!coinShape,
+          centeredShape: !!coinShape && Math.abs(coinShape.position.x) < 0.001 && Math.abs(coinShape.position.y - detailedCoin.userData.baseCoinY) < 0.001,
+          hasBaseY: detailedCoin.children.every(function(child) { return child.userData && typeof child.userData.baseY === 'number' }),
+          shapeColor: coinShape && coinShape.material && coinShape.material.color ? coinShape.material.color.getHex() : null
         }
         window.__SG.disposeObject(detailedCoin)
       }
@@ -602,7 +606,7 @@ app.whenReady().then(async () => {
   check("14j. vehicle model loader exists", !!state.vehicleLoader, state.vehicleTrainPath || 'missing train path')
   check("14k. obstacle spacing guard exists", !!state.obstacleSpacing)
   check("14l. coin spacing guard exists", !!state.coinSpacing)
-  check("14l-1. coin model has rim, emblem, and highlight detail", !!state.coinDetail && state.coinDetail.children >= 6 && !!state.coinDetail.hasTorus && !!state.coinDetail.hasShape && state.coinDetail.marker === 'rim-star-highlight', state.coinDetail ? JSON.stringify(state.coinDetail) : 'missing')
+  check("14l-1. coin model has centered high-contrast surface detail", !!state.coinDetail && state.coinDetail.children >= 6 && !!state.coinDetail.hasTorus && !!state.coinDetail.hasShape && !!state.coinDetail.centeredShape && !!state.coinDetail.hasBaseY && state.coinDetail.shapeColor === 0x7A3B00 && state.coinDetail.marker === 'high-contrast-centered-detail', state.coinDetail ? JSON.stringify(state.coinDetail) : 'missing')
   check("14m. scenery model loader exists", !!state.sceneryLoader, state.sceneryPathCounts ? `buildings=${state.sceneryPathCounts.buildings}, trees=${state.sceneryPathCounts.trees}` : 'missing paths')
   check("14m-0a. city scenery waits for GLB assets", !!state.cityScenerySkipsLegacyFallback)
   check("14m-0b. forest scenery waits for GLB assets", !!state.forestScenerySkipsLegacyFallback)

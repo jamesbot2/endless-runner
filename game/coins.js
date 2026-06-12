@@ -9,9 +9,10 @@
         var laneX = SG.LANE_POSITIONS[lane];
 
         var coinY = 0.6 + (yOffset || 0);
-        var goldMat = new THREE.MeshLambertMaterial({ color: 0xFFD54A, emissive: 0x6a3c00, emissiveIntensity: 0.22 });
-        var rimMat = new THREE.MeshLambertMaterial({ color: 0xFFB000, emissive: 0x7a4200, emissiveIntensity: 0.28 });
-        var brightMat = new THREE.MeshBasicMaterial({ color: 0xFFF1A8, transparent: true, opacity: 0.88 });
+        var goldMat = new THREE.MeshLambertMaterial({ color: 0xFFD34D, emissive: 0x5a3200, emissiveIntensity: 0.18 });
+        var rimMat = new THREE.MeshLambertMaterial({ color: 0xFFAA00, emissive: 0x6c3900, emissiveIntensity: 0.25 });
+        var darkDetailMat = new THREE.MeshBasicMaterial({ color: 0x7A3B00 });
+        var brightMat = new THREE.MeshBasicMaterial({ color: 0xFFF4B8, transparent: true, opacity: 0.9 });
 
         var coin = new THREE.Mesh(
             new THREE.CylinderGeometry(SG.COIN_RADIUS, SG.COIN_RADIUS, 0.1, 16),
@@ -30,7 +31,7 @@
 
         var innerRim = new THREE.Mesh(
             new THREE.TorusGeometry(SG.COIN_RADIUS * 0.48, 0.018, 6, 20),
-            new THREE.MeshBasicMaterial({ color: 0xFFE680 })
+            darkDetailMat
         );
         innerRim.position.set(0, coinY, 0.065);
         group.add(innerRim);
@@ -55,20 +56,23 @@
         star.closePath();
         var emblem = new THREE.Mesh(
             new THREE.ShapeGeometry(star),
-            new THREE.MeshBasicMaterial({ color: 0xFFF3A0 })
+            darkDetailMat
         );
         emblem.position.set(0, coinY, 0.071);
         group.add(emblem);
 
         var highlight = new THREE.Mesh(
-            new THREE.CircleGeometry(SG.COIN_RADIUS * 0.11, 10),
+            new THREE.CircleGeometry(SG.COIN_RADIUS * 0.08, 12),
             brightMat
         );
-        highlight.position.set(-SG.COIN_RADIUS * 0.26, coinY + SG.COIN_RADIUS * 0.22, 0.074);
+        highlight.position.set(0, coinY, 0.076);
         group.add(highlight);
 
         group.position.set(laneX, 0, zPos);
-        group.userData = { lane: lane, collected: false, coinDetail: 'rim-star-highlight' };
+        for (var ci = 0; ci < group.children.length; ci++) {
+            group.children[ci].userData.baseY = group.children[ci].position.y;
+        }
+        group.userData = { lane: lane, collected: false, baseCoinY: coinY, coinDetail: 'high-contrast-centered-detail' };
         return group;
     };
 

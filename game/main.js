@@ -387,9 +387,12 @@
             coin.rotation.y += delta * 3;
             var children = coin.children;
             if (children.length > 0) {
-                children[0].position.y = 0.6 + Math.sin(SG.state.gameTime * 2 + coin.id) * 0.1;
-                if (children[1] && children[1].type === 'RingGeometry') {
-                    children[1].position.y = 0.6 + Math.sin(SG.state.gameTime * 2 + coin.id) * 0.1;
+                var coinBob = Math.sin(SG.state.gameTime * 2 + coin.id) * 0.1;
+                for (var cci = 0; cci < children.length; cci++) {
+                    var childBaseY = children[cci].userData && typeof children[cci].userData.baseY === 'number'
+                        ? children[cci].userData.baseY
+                        : (coin.userData.baseCoinY || 0.6);
+                    children[cci].position.y = childBaseY + coinBob;
                 }
             }
         }
