@@ -719,6 +719,7 @@
 
         SG.initScene();
         if (SG.loadVehicleModels) SG.loadVehicleModels();
+        if (SG.loadSceneryModels) SG.loadSceneryModels();
         SG.loadShopData();
         if (typeof SG.setupUI !== 'function') { SG.setupUI = function() { console.warn('setupUI missing - ui.js may not have loaded'); }; }
         SG.setupUI();

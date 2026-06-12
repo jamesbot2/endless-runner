@@ -896,6 +896,70 @@
     const SG = window.__SG = window.__SG || {};
     const THREE = window.THREE;
 
+    SG.sceneryModelPaths = SG.sceneryModelPaths || {
+        buildings: [
+            'models/scenery/buildings/building1_small.glb',
+            'models/scenery/buildings/building2_small.glb',
+            'models/scenery/buildings/building3_small.glb',
+            'models/scenery/buildings/building4.glb',
+            'models/scenery/buildings/house2.glb'
+        ],
+        trees: [
+            'models/scenery/trees/tree_1.glb',
+            'models/scenery/trees/tree_4.glb',
+            'models/scenery/trees/tree_7.glb',
+            'models/scenery/trees/pine_1.glb',
+            'models/scenery/trees/birch_2.glb'
+        ]
+    };
+    SG.sceneryModels = SG.sceneryModels || { buildings: [], trees: [] };
+
+    SG.loadSceneryModels = function() {
+        if (!THREE || !THREE.GLTFLoader || SG.sceneryModelsLoading) return;
+        SG.sceneryModelsLoading = true;
+        var loader = new THREE.GLTFLoader();
+        ['buildings', 'trees'].forEach(function(type) {
+            SG.sceneryModelPaths[type].forEach(function(url) {
+                loader.load(url, function(gltf) {
+                    var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+                    if (!model) return;
+                    model.name = type + '-scenery-model';
+                    model.traverse(function(node) {
+                        if (node && node.isMesh) {
+                            node.castShadow = true;
+                            node.receiveShadow = true;
+                        }
+                    });
+                    SG.sceneryModels[type].push(model);
+                }, undefined, function(err) {
+                    SG.sceneryModelError = err;
+                });
+            });
+        });
+    };
+
+    SG.cloneSceneryModel = function(type) {
+        var list = SG.sceneryModels && SG.sceneryModels[type];
+        if (!list || !list.length) return null;
+        var source = list[Math.floor(Math.random() * list.length)];
+        return source.clone(true);
+    };
+
+    function createAssetScenery(type, x, z) {
+        var model = SG.cloneSceneryModel(type);
+        if (!model) return null;
+        var group = new THREE.Group();
+        group.position.set(x, 0, z);
+        var scale = type === 'buildings' ? 0.9 + Math.random() * 0.28 : 0.86 + Math.random() * 0.34;
+        model.scale.multiplyScalar(scale);
+        model.rotation.y = Math.random() * Math.PI * 2;
+        group.add(model);
+        group.userData.sceneryType = type;
+        group.userData.depth = type === 'buildings' ? 3.2 * scale : 2.2 * scale;
+        SG.scene.add(group);
+        return group;
+    }
+
     SG.THEME_COLORS = [
         { // 0: City
             bg: 0x87CEEB, fog: 0x87CEEB, ground: 0x4a4a4e, laneMark: 0x6a6a6e, curb: 0x5a5a5a,
@@ -921,6 +985,8 @@
         var theme = SG.state.theme || 0;
 
         if (theme === 0) {
+            var cityAsset = createAssetScenery('buildings', x, z);
+            if (cityAsset) return cityAsset;
             var colors = [0x8B7355, 0x6B8E8B, 0x9B8B6B, 0x7B6B5B, 0x5B7B6B, 0x8B7B5B];
             var h = 3 + Math.random() * 6;
             var w = 1.5 + Math.random();
@@ -932,6 +998,8 @@
             mesh.position.y = h / 2;
             group.add(mesh);
         } else if (theme === 1) {
+            var treeAsset = createAssetScenery('trees', x, z);
+            if (treeAsset) return treeAsset;
             var trunkH = 2 + Math.random() * 3;
             var trunk = new THREE.Mesh(
                 new THREE.CylinderGeometry(0.15, 0.2, trunkH, 6),
@@ -1007,6 +1075,22 @@
         return group;
     };
 
+    SG.getScenerySpacing = function(theme) {
+        if (theme === 0) return 4.4;
+        if (theme === 1) return 5.2;
+        return 6.5;
+    };
+
+    SG.spawnSceneryRow = function(z, side, row) {
+        var theme = SG.state.theme || 0;
+        var base = SG.GROUND_WIDTH / 2 + 1.7;
+        var laneOffset = theme === 0 ? row * 2.65 : row * 2.25;
+        var jitter = theme === 0 ? (Math.random() - 0.5) * 0.34 : (Math.random() - 0.5) * 0.7;
+        var x = side * (base + laneOffset + jitter);
+        var zJitter = (Math.random() - 0.5) * (theme === 0 ? 0.45 : 0.9);
+        return SG.createScenery(x, z + zJitter);
+    };
+
     SG.spawnBuildings = function() {
         for (var i = SG.state.buildings.length - 1; i >= 0; i--) {
             if (SG.state.buildings[i].position.z > SG.DESPAWN_BEHIND) {
@@ -1020,12 +1104,15 @@
             ? Math.min.apply(null, SG.state.buildings.map(function(b) { return b.position.z; }))
             : 0;
 
-        for (var z = farthestZ; z > -SG.SPAWN_AHEAD; z -= 6 + Math.random() * 8) {
+        var theme = SG.state.theme || 0;
+        var spacing = SG.getScenerySpacing(theme);
+        for (var z = farthestZ; z > -SG.SPAWN_AHEAD; z -= spacing) {
             if (z > farthestZ) continue;
             for (var side = -1; side <= 1; side += 2) {
-                if (Math.random() > 0.3) {
-                    var x = side * (SG.GROUND_WIDTH / 2 + 2 + Math.random() * 3);
-                    var scenery = SG.createScenery(x, z);
+                var rows = theme === 0 ? 2 : (theme === 1 && Math.random() > 0.45 ? 2 : 1);
+                for (var row = 0; row < rows; row++) {
+                    if (theme !== 0 && Math.random() < 0.18) continue;
+                    var scenery = SG.spawnSceneryRow(z - row * spacing * 0.5, side, row);
                     SG.state.buildings.push(scenery);
                 }
             }
@@ -1066,11 +1153,13 @@
         }
         SG.state.buildings = [];
         var spawnAhead = SG.state.started ? SG.SPAWN_AHEAD : 200;
-        for (var z = 0; z > -spawnAhead; z -= 6 + Math.random() * 8) {
+        var spacing = SG.getScenerySpacing(themeIndex);
+        for (var z = 0; z > -spawnAhead; z -= spacing) {
             for (var side = -1; side <= 1; side += 2) {
-                if (Math.random() > 0.3) {
-                    var x = side * (SG.GROUND_WIDTH / 2 + 2 + Math.random() * 3);
-                    var sc = SG.createScenery(x, z);
+                var rows = themeIndex === 0 ? 2 : (themeIndex === 1 && Math.random() > 0.45 ? 2 : 1);
+                for (var row = 0; row < rows; row++) {
+                    if (themeIndex !== 0 && Math.random() < 0.18) continue;
+                    var sc = SG.spawnSceneryRow(z - row * spacing * 0.5, side, row);
                     SG.state.buildings.push(sc);
                 }
             }
@@ -1191,6 +1280,43 @@
         SG.state.coinObstacleMap.set(obstacle.uuid, []);
         SG.spawnCoinsNearObstacle(obstacle, lane, z);
         return true;
+    };
+
+    SG.canPlaceCoinAt = function(lane, z, ignoreObstacle) {
+        for (var i = 0; i < SG.state.obstacles.length; i++) {
+            var obstacle = SG.state.obstacles[i];
+            if (!obstacle || obstacle === ignoreObstacle) continue;
+            var lanes = SG.getObstacleLanes(obstacle);
+            if (lanes.indexOf(lane) < 0) continue;
+            var minGap = SG.getObstacleDepth(obstacle) * 0.5 + 1.1;
+            if (Math.abs(obstacle.position.z - z) < minGap) return false;
+        }
+        if (ignoreObstacle) {
+            var ignoreLanes = SG.getObstacleLanes(ignoreObstacle);
+            if (ignoreLanes.indexOf(lane) >= 0) {
+                var ignoreGap = SG.getObstacleDepth(ignoreObstacle) * 0.5 + 1.1;
+                if (Math.abs(ignoreObstacle.position.z - z) < ignoreGap) return false;
+            }
+        }
+        return true;
+    };
+
+    SG.findSafeCoinLane = function(preferred, z, ignoreObstacle) {
+        var lanes = [preferred, (preferred + 1) % 3, (preferred + 2) % 3];
+        for (var i = 0; i < lanes.length; i++) {
+            if (SG.canPlaceCoinAt(lanes[i], z, ignoreObstacle)) return lanes[i];
+        }
+        return -1;
+    };
+
+    SG.addSafeCoin = function(lane, z, yOffset, ignoreObstacle, mapEntry) {
+        var safeLane = SG.findSafeCoinLane(lane, z, ignoreObstacle);
+        if (safeLane < 0) return null;
+        var coin = SG.createCoin(safeLane, z, yOffset);
+        SG.scene.add(coin);
+        SG.state.coinObjects.push(coin);
+        if (mapEntry) mapEntry.push(coin);
+        return coin;
     };
 
     SG.createTrain = function(lane, zPos, isMoving) {
@@ -1586,16 +1712,15 @@
 
     SG.spawnCoinsNearObstacle = function(obstacle, lane, z) {
         var coinChance = Math.random();
+        var depth = SG.getObstacleDepth(obstacle);
+        var safeStartZ = z - depth * 0.5 - 2.4;
+        var mapEntry = SG.state.coinObstacleMap.get(obstacle.uuid);
         if (coinChance < 0.5) {
             var coinLane = Math.floor(Math.random() * 3);
             while (coinLane === lane && Math.random() > 0.3) {
                 coinLane = (coinLane + 1) % 3;
             }
-            var coin = SG.createCoin(coinLane, z - 3 - Math.random() * 5, 0.3);
-            SG.scene.add(coin);
-            SG.state.coinObjects.push(coin);
-            var mapEntry = SG.state.coinObstacleMap.get(obstacle.uuid);
-            if (mapEntry) mapEntry.push(coin);
+            SG.addSafeCoin(coinLane, safeStartZ - Math.random() * 4, 0.3, obstacle, mapEntry);
         } else if (coinChance < 0.7) {
             var coinLane2 = Math.floor(Math.random() * 3);
             while (coinLane2 === lane && Math.random() > 0.4) {
@@ -1603,12 +1728,18 @@
             }
             var patterns = ['line', 'arc', 'double', 'zigzag', 'arc', 'zigzag'];
             var pattern = patterns[Math.floor(Math.random() * patterns.length)];
-            var coins = SG.createCoinPattern(coinLane2, z - 4, pattern);
+            var coins = SG.createCoinPattern(coinLane2, safeStartZ - 1.0, pattern);
+            var mapEntry2 = SG.state.coinObstacleMap.get(obstacle.uuid);
             for (var ci = 0; ci < coins.length; ci++) {
-                SG.scene.add(coins[ci]);
-                SG.state.coinObjects.push(coins[ci]);
-                var mapEntry2 = SG.state.coinObstacleMap.get(obstacle.uuid);
-                if (mapEntry2) mapEntry2.push(coins[ci]);
+                var coin = coins[ci];
+                var coinLane = Math.round((coin.position.x + SG.LANE_WIDTH) / SG.LANE_WIDTH);
+                if (coinLane < 0 || coinLane > 2 || !SG.canPlaceCoinAt(coinLane, coin.position.z, obstacle)) {
+                    SG.disposeObject(coin);
+                    continue;
+                }
+                SG.scene.add(coin);
+                SG.state.coinObjects.push(coin);
+                if (mapEntry2) mapEntry2.push(coin);
             }
         }
     };
@@ -4394,6 +4525,7 @@
 
         SG.initScene();
         if (SG.loadVehicleModels) SG.loadVehicleModels();
+        if (SG.loadSceneryModels) SG.loadSceneryModels();
         SG.loadShopData();
         if (typeof SG.setupUI !== 'function') { SG.setupUI = function() { console.warn('setupUI missing - ui.js may not have loaded'); }; }
         SG.setupUI();

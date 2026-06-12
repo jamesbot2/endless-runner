@@ -88,6 +88,43 @@
         return true;
     };
 
+    SG.canPlaceCoinAt = function(lane, z, ignoreObstacle) {
+        for (var i = 0; i < SG.state.obstacles.length; i++) {
+            var obstacle = SG.state.obstacles[i];
+            if (!obstacle || obstacle === ignoreObstacle) continue;
+            var lanes = SG.getObstacleLanes(obstacle);
+            if (lanes.indexOf(lane) < 0) continue;
+            var minGap = SG.getObstacleDepth(obstacle) * 0.5 + 1.1;
+            if (Math.abs(obstacle.position.z - z) < minGap) return false;
+        }
+        if (ignoreObstacle) {
+            var ignoreLanes = SG.getObstacleLanes(ignoreObstacle);
+            if (ignoreLanes.indexOf(lane) >= 0) {
+                var ignoreGap = SG.getObstacleDepth(ignoreObstacle) * 0.5 + 1.1;
+                if (Math.abs(ignoreObstacle.position.z - z) < ignoreGap) return false;
+            }
+        }
+        return true;
+    };
+
+    SG.findSafeCoinLane = function(preferred, z, ignoreObstacle) {
+        var lanes = [preferred, (preferred + 1) % 3, (preferred + 2) % 3];
+        for (var i = 0; i < lanes.length; i++) {
+            if (SG.canPlaceCoinAt(lanes[i], z, ignoreObstacle)) return lanes[i];
+        }
+        return -1;
+    };
+
+    SG.addSafeCoin = function(lane, z, yOffset, ignoreObstacle, mapEntry) {
+        var safeLane = SG.findSafeCoinLane(lane, z, ignoreObstacle);
+        if (safeLane < 0) return null;
+        var coin = SG.createCoin(safeLane, z, yOffset);
+        SG.scene.add(coin);
+        SG.state.coinObjects.push(coin);
+        if (mapEntry) mapEntry.push(coin);
+        return coin;
+    };
+
     SG.createTrain = function(lane, zPos, isMoving) {
         var group = new THREE.Group();
         var laneX = SG.LANE_POSITIONS[lane];
@@ -481,16 +518,15 @@
 
     SG.spawnCoinsNearObstacle = function(obstacle, lane, z) {
         var coinChance = Math.random();
+        var depth = SG.getObstacleDepth(obstacle);
+        var safeStartZ = z - depth * 0.5 - 2.4;
+        var mapEntry = SG.state.coinObstacleMap.get(obstacle.uuid);
         if (coinChance < 0.5) {
             var coinLane = Math.floor(Math.random() * 3);
             while (coinLane === lane && Math.random() > 0.3) {
                 coinLane = (coinLane + 1) % 3;
             }
-            var coin = SG.createCoin(coinLane, z - 3 - Math.random() * 5, 0.3);
-            SG.scene.add(coin);
-            SG.state.coinObjects.push(coin);
-            var mapEntry = SG.state.coinObstacleMap.get(obstacle.uuid);
-            if (mapEntry) mapEntry.push(coin);
+            SG.addSafeCoin(coinLane, safeStartZ - Math.random() * 4, 0.3, obstacle, mapEntry);
         } else if (coinChance < 0.7) {
             var coinLane2 = Math.floor(Math.random() * 3);
             while (coinLane2 === lane && Math.random() > 0.4) {
@@ -498,12 +534,18 @@
             }
             var patterns = ['line', 'arc', 'double', 'zigzag', 'arc', 'zigzag'];
             var pattern = patterns[Math.floor(Math.random() * patterns.length)];
-            var coins = SG.createCoinPattern(coinLane2, z - 4, pattern);
+            var coins = SG.createCoinPattern(coinLane2, safeStartZ - 1.0, pattern);
+            var mapEntry2 = SG.state.coinObstacleMap.get(obstacle.uuid);
             for (var ci = 0; ci < coins.length; ci++) {
-                SG.scene.add(coins[ci]);
-                SG.state.coinObjects.push(coins[ci]);
-                var mapEntry2 = SG.state.coinObstacleMap.get(obstacle.uuid);
-                if (mapEntry2) mapEntry2.push(coins[ci]);
+                var coin = coins[ci];
+                var coinLane = Math.round((coin.position.x + SG.LANE_WIDTH) / SG.LANE_WIDTH);
+                if (coinLane < 0 || coinLane > 2 || !SG.canPlaceCoinAt(coinLane, coin.position.z, obstacle)) {
+                    SG.disposeObject(coin);
+                    continue;
+                }
+                SG.scene.add(coin);
+                SG.state.coinObjects.push(coin);
+                if (mapEntry2) mapEntry2.push(coin);
             }
         }
     };

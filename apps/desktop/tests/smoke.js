@@ -161,6 +161,12 @@ app.whenReady().then(async () => {
       r.vehicleLoader = window.__SG ? typeof window.__SG.loadVehicleModels === 'function' : false
       r.vehicleTrainPath = window.__SG && window.__SG.vehicleModelPaths ? window.__SG.vehicleModelPaths.train : null
       r.obstacleSpacing = window.__SG ? typeof window.__SG.canPlaceObstacle === 'function' && typeof window.__SG.trackObstacle === 'function' : false
+      r.coinSpacing = window.__SG ? typeof window.__SG.canPlaceCoinAt === 'function' && typeof window.__SG.addSafeCoin === 'function' : false
+      r.sceneryLoader = window.__SG ? typeof window.__SG.loadSceneryModels === 'function' && typeof window.__SG.cloneSceneryModel === 'function' : false
+      r.sceneryPathCounts = window.__SG && window.__SG.sceneryModelPaths ? {
+        buildings: window.__SG.sceneryModelPaths.buildings.length,
+        trees: window.__SG.sceneryModelPaths.trees.length
+      } : null
       r.characterCatalogCount = window.__SG && window.__SG.characterCatalog ? window.__SG.characterCatalog.length : 0
       r.characterSelector = window.__SG ? typeof window.__SG.showCharacters === 'function' : false
       r.characterBuy = window.__SG ? typeof window.__SG.buyCharacter === 'function' : false
@@ -189,6 +195,9 @@ app.whenReady().then(async () => {
         r.characterOverlay = document.getElementById('characters-overlay') !== null
         r.characterPreviewCanvas = document.getElementById('character-preview-canvas') !== null
         r.characterCards = document.querySelectorAll('.character-card').length
+        const modal = document.querySelector('#characters-overlay .character-modal')
+        r.characterModalWidth = modal ? modal.getBoundingClientRect().width : 0
+        r.characterModalMaxWidth = modal ? getComputedStyle(modal).maxWidth : ''
         const overlay = document.getElementById('characters-overlay')
         if (overlay) overlay.style.display = 'none'
       }
@@ -223,12 +232,16 @@ app.whenReady().then(async () => {
   const trainModelPath = path.join(DESKTOP, 'dist/renderer/models/vehicles/train.glb')
   const busModelPath = path.join(DESKTOP, 'dist/renderer/models/vehicles/bus.glb')
   const adventurerPath = path.join(DESKTOP, 'dist/renderer/models/characters/Adventurer.gltf')
+  const sceneryBuildingPath = path.join(DESKTOP, 'dist/renderer/models/scenery/buildings/building1_small.glb')
+  const sceneryTreePath = path.join(DESKTOP, 'dist/renderer/models/scenery/trees/tree_1.glb')
   check('3d. player.glb copied to renderer dist', fs.existsSync(playerModelPath), fs.existsSync(playerModelPath) ? `${fs.statSync(playerModelPath).size} bytes` : 'missing')
   check('3e. refined player.glb size', fs.existsSync(playerModelPath) && fs.statSync(playerModelPath).size > 100000, fs.existsSync(playerModelPath) ? `${fs.statSync(playerModelPath).size} bytes` : 'missing')
   check('3f. Jetpack tuning constants', state.jetpackFuelMax === 15 && state.jetpackCooldownMax === 30 && state.jetpackMaxHeight > 0, `fuel=${state.jetpackFuelMax}, cooldown=${state.jetpackCooldownMax}, maxHeight=${state.jetpackMaxHeight}`)
   check('3g. train.glb copied to renderer dist', fs.existsSync(trainModelPath), fs.existsSync(trainModelPath) ? `${fs.statSync(trainModelPath).size} bytes` : 'missing')
   check('3h. bus.glb copied to renderer dist', fs.existsSync(busModelPath), fs.existsSync(busModelPath) ? `${fs.statSync(busModelPath).size} bytes` : 'missing')
   check('3i. Adventurer.gltf copied to renderer dist', fs.existsSync(adventurerPath), fs.existsSync(adventurerPath) ? `${fs.statSync(adventurerPath).size} bytes` : 'missing')
+  check('3j. scenery building GLB copied to renderer dist', fs.existsSync(sceneryBuildingPath), fs.existsSync(sceneryBuildingPath) ? `${fs.statSync(sceneryBuildingPath).size} bytes` : 'missing')
+  check('3k. scenery tree GLB copied to renderer dist', fs.existsSync(sceneryTreePath), fs.existsSync(sceneryTreePath) ? `${fs.statSync(sceneryTreePath).size} bytes` : 'missing')
   check('4a. desktopAPI (preload bridge)', !!state.desktopAPI)
   check('4b. __SUBWAY_CONFIG__ exists', !!state.subwayConfig)
   check('4c. API_BASE_URL is non-empty', !!state.apiBaseUrl, state.apiBaseUrl || 'empty')
@@ -256,20 +269,22 @@ app.whenReady().then(async () => {
   check("14h. console includes Homelander easter egg", state.consoleCommands && state.consoleCommands.includes('homelander'), state.consoleCommands ? state.consoleCommands.join(', ') : 'none')
   check("14i. vehicle model loader exists", !!state.vehicleLoader, state.vehicleTrainPath || 'missing train path')
   check("14j. obstacle spacing guard exists", !!state.obstacleSpacing)
-  check("14k. character catalog loaded", state.characterCatalogCount >= 12, String(state.characterCatalogCount))
-  check("14l. character selector menu exists", !!state.characterSelector && !!state.charactersButton)
-  check("14m. character price follows unlock count", state.characterBuy && state.characterPrice === state.expectedCharacterPrice, `price=${state.characterPrice}, owned=${state.ownedCharacterCount}`)
-  check("14n. character modal renders cards", !!state.characterOverlay && !!state.characterPreviewCanvas && state.characterCards >= 12, `cards=${state.characterCards || 0}`)
-  check("14o. speed growth slowed per difficulty", Array.isArray(state.speedIncrements) && state.speedIncrements[0] < 0.0005 && state.speedIncrements[1] < 0.0005 && state.speedIncrements[2] < 0.0005, state.speedIncrements ? state.speedIncrements.join(', ') : 'missing')
+  check("14k. coin spacing guard exists", !!state.coinSpacing)
+  check("14l. scenery model loader exists", !!state.sceneryLoader, state.sceneryPathCounts ? `buildings=${state.sceneryPathCounts.buildings}, trees=${state.sceneryPathCounts.trees}` : 'missing paths')
+  check("14m. character catalog loaded", state.characterCatalogCount >= 12, String(state.characterCatalogCount))
+  check("14n. character selector menu exists", !!state.characterSelector && !!state.charactersButton)
+  check("14o. character price follows unlock count", state.characterBuy && state.characterPrice === state.expectedCharacterPrice, `price=${state.characterPrice}, owned=${state.ownedCharacterCount}`)
+  check("14p. character modal renders large card grid", !!state.characterOverlay && !!state.characterPreviewCanvas && state.characterCards >= 12 && state.characterModalWidth > 800 && state.characterModalMaxWidth === 'none', `cards=${state.characterCards || 0}, width=${Math.round(state.characterModalWidth || 0)}, max=${state.characterModalMaxWidth || 'unset'}`)
+  check("14q. speed growth slowed per difficulty", Array.isArray(state.speedIncrements) && state.speedIncrements[0] < 0.0005 && state.speedIncrements[1] < 0.0005 && state.speedIncrements[2] < 0.0005, state.speedIncrements ? state.speedIncrements.join(', ') : 'missing')
   const speedLevelsOk = state.speedLevels && state.speedLevels.length === 3 &&
     state.speedLevels[0].roundtrip === 1 &&
     state.speedLevels[1].roundtrip >= 25 &&
     state.speedLevels[2].roundtrip === 50 &&
     state.speedLevels[0].distanceRate < state.speedLevels[1].distanceRate &&
     state.speedLevels[1].distanceRate < state.speedLevels[2].distanceRate
-  check("14p. distance rate scales with speed level", speedLevelsOk, state.speedLevels ? JSON.stringify(state.speedLevels) : 'missing')
-  check("14q. cyber mode reset restores normal mode", !!state.cyberReset)
-  check("14r. non-runner hides Neo shoe overlays", !!state.nonRunnerShoeOverlayHidden)
+  check("14r. distance rate scales with speed level", speedLevelsOk, state.speedLevels ? JSON.stringify(state.speedLevels) : 'missing')
+  check("14s. cyber mode reset restores normal mode", !!state.cyberReset)
+  check("14t. non-runner hides Neo shoe overlays", !!state.nonRunnerShoeOverlayHidden)
 
   // -- applyGameData runtime test --
   try {

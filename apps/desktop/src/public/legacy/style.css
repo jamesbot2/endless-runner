@@ -749,6 +749,9 @@ canvas {
    ============================================================ */
 .character-modal {
     width: min(1180px, 97vw);
+    max-width: none;
+    box-sizing: border-box;
+    padding: 22px 26px;
     max-height: 94vh;
     overflow: hidden;
 }
@@ -788,8 +791,8 @@ canvas {
 }
 .character-list {
     display: grid;
-    grid-template-columns: repeat(2, minmax(260px, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 8px;
     max-height: none;
     overflow: visible;
     padding-right: 4px;
@@ -800,8 +803,8 @@ canvas {
     display: flex;
     align-items: center;
     gap: 12px;
-    min-height: 74px;
-    padding: 12px 14px;
+    min-height: 58px;
+    padding: 9px 11px;
     background: var(--card);
     border: 1px solid var(--glass-border);
     border-radius: var(--r-md);
@@ -824,6 +827,17 @@ canvas {
     min-width: 92px;
     padding-left: 12px;
     padding-right: 12px;
+}
+
+@media (max-height: 720px) and (min-width: 769px) {
+    .character-modal { padding: 14px 18px; }
+    .character-credit-line { margin-bottom: 8px; font-size: 15px; }
+    .character-layout { grid-template-columns: minmax(300px, 0.75fr) minmax(520px, 1.25fr); gap: 12px; }
+    .character-preview-wrap { min-height: 300px; }
+    #character-preview-canvas { height: 260px; min-height: 260px; }
+    .character-card { min-height: 44px; padding: 7px 9px; }
+    .character-desc { display: none; }
+    .character-card .diff-btn { min-width: 78px; padding: 5px 8px; font-size: 10px; }
 }
 
 /* ============================================================
@@ -998,7 +1012,7 @@ input[type=range]::-moz-range-thumb {
     .bento-grid { grid-template-columns: 1fr; }
     .bento-card.span-2 { grid-column: span 1; }
     .character-layout { grid-template-columns: 1fr; }
-    .character-modal { overflow-y: auto; max-height: 94vh; }
+    .character-modal { overflow-y: auto; max-height: 94vh; max-width: none; }
     .character-preview-wrap { min-height: 300px; }
     #character-preview-canvas { height: 260px; min-height: 260px; }
     .character-list { grid-template-columns: 1fr; max-height: none; overflow: visible; }
