@@ -219,7 +219,7 @@
             }
             if (e.key === '`' || e.key === '~') {
                 e.preventDefault();
-                if (SG.state.started) SG.toggleConsole();
+                SG.toggleConsole();
                 return;
             }
 

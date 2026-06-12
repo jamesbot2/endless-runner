@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Constants =====
+﻿// ===== SUBWAY SURFER - Constants =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -46,6 +46,7 @@
         return s * 10;
     };
 })();
+
 // ===== SUBWAY SURFER - Game State =====
 (function() {
     'use strict';
@@ -94,7 +95,7 @@
         musicVolume: parseFloat(localStorage.getItem('subwayMusicVol') || '0.5'),
         sfxVolume: parseFloat(localStorage.getItem('subwaySfxVol') || '0.8'),
         rollReleaseDelay: parseInt(localStorage.getItem('subwayRollReleaseDelay') || '200'),
-        thirdPersonView: localStorage.getItem('subwayThirdPersonView') || 'far',
+        thirdPersonView: localStorage.getItem('subwayThirdPersonView') || 'near',
         lastPlayedCoin: 0,
         credits: parseInt(localStorage.getItem('subwayCredits') || '0'),
         totalCoins: parseInt(localStorage.getItem('subwayTotalCoins') || '0'),
@@ -127,6 +128,7 @@
         ownedCharacters: ['runner']
     };
 })();
+
 // ===== SUBWAY SURFER - Audio System =====
 (function() {
     'use strict';
@@ -382,6 +384,7 @@
         }
     };
 })();
+
 // ===== SUBWAY SURFER - Textures =====
 (function() {
     'use strict';
@@ -446,6 +449,7 @@
         return texture;
     };
 })();
+
 // ===== SUBWAY SURFER - Scene Setup =====
 (function() {
     'use strict';
@@ -505,6 +509,7 @@
         }
     };
 })();
+
 // ===== SUBWAY SURFER - Player =====
 (function() {
     'use strict';
@@ -852,6 +857,7 @@
         return SG.player;
     };
 })();
+
 // ===== SUBWAY SURFER - Track System =====
 (function() {
     'use strict';
@@ -892,6 +898,7 @@
         }
     };
 })();
+
 // ===== SUBWAY SURFER - Buildings & Scenery =====
 (function() {
     'use strict';
@@ -1245,6 +1252,7 @@
         }
     };
 })();
+
 // ===== SUBWAY SURFER - Obstacles =====
 (function() {
     'use strict';
@@ -1799,6 +1807,7 @@
         }
     };
 })();
+
 // ===== SUBWAY SURFER - Coins =====
 (function() {
     'use strict';
@@ -1874,6 +1883,7 @@
         return coins;
     };
 })();
+
 // ===== SUBWAY SURFER - Particles =====
 (function() {
     'use strict';
@@ -1957,6 +1967,7 @@
         }
     };
 })();
+
 // ===== SUBWAY SURFER - Collision Detection =====
 (function() {
     'use strict';
@@ -2099,6 +2110,7 @@
         }
     };
 })();
+
 // ===== SUBWAY SURFER - UI System =====
 (function() {
     'use strict';
@@ -2161,11 +2173,11 @@
         var prices = [0, 10000, 50000, 100000];
         var names = ['None', 'Double Jump', 'Jetpack', 'Roof Walk'];
         var descs = ['No ability equipped', 'Double jump in mid-air', 'Fly for 15s, max altitude, 30s cooldown', 'Walk on top of obstacles'];
-        var icons = ['🚫', '🦘', '🚀', '🏃'];
+        var icons = ['馃毇', '馃', '馃殌', '馃弮'];
 
         var html = '<div class="menu-content" style="max-height:85vh;overflow-y:auto;">';
         html += '<h1 class="menu-title" style="font-size:28px;margin-bottom:5px;">SHOP</h1>';
-        html += '<div style="color:#FFD700;font-size:20px;margin-bottom:15px;">💰 ' + SG.state.credits + ' credits</div>';
+        html += '<div style="color:#FFD700;font-size:20px;margin-bottom:15px;">馃挵 ' + SG.state.credits + ' credits</div>';
 
         var owned = [false, SG.state.canDoubleJump, SG.state.canJetpack, SG.state.canRoofWalk];
         for (var i = 0; i < 4; i++) {
@@ -2199,7 +2211,7 @@
         }
 
         html += '<hr style="border-color:rgba(255,255,255,0.05);margin:8px 0;">';
-        html += '<div style="color:#aaa;font-size:13px;margin-top:5px;">Controls: ↑ Jump | ↓ Roll | ← → Move | 👁 FPV | ` Console | M Menu</div>';
+        html += '<div style="color:#aaa;font-size:13px;margin-top:5px;">Controls: 鈫?Jump | 鈫?Roll | 鈫?鈫?Move | 馃憗 FPV | ` Console | M Menu</div>';
         html += '<div class="menu-btn modal-close-btn" onclick="__neoCloseShop()">CLOSE</div>';
         html += '</div>';
 
@@ -2382,7 +2394,36 @@
 
     SG.updateMenuCredits = function() {
         var el = document.getElementById('menu-credits');
-        if (el) el.textContent = '💰 TOTAL: ' + SG.state.credits;
+        if (el) el.textContent = '馃挵 TOTAL: ' + SG.state.credits;
+    };
+
+    SG.getSpeedKmh = function() {
+        var metersPerSecond = SG.getDistanceRate ? SG.getDistanceRate(SG.state.speed) : ((SG.state.speed || 0) * 10);
+        return Math.max(0, Math.round(metersPerSecond * 3.6));
+    };
+
+    SG.updateSpeedHUD = function() {
+        var el = SG.speedHudEl || document.getElementById('third-person-speed-hud');
+        if (!el || !SG.camera || !SG.player || !window.THREE) return;
+        if (!SG.state.started || SG.state.gameOver || SG.state.firstPerson || SG.state.homelander) {
+            el.style.display = 'none';
+            return;
+        }
+
+        var pos = SG.player.position.clone();
+        pos.x += 0.42;
+        pos.y += 1.7;
+        pos.project(SG.camera);
+
+        if (pos.z < -1 || pos.z > 1) {
+            el.style.display = 'none';
+            return;
+        }
+
+        el.textContent = SG.getSpeedKmh() + ' km/h';
+        el.style.left = ((pos.x * 0.5 + 0.5) * window.innerWidth) + 'px';
+        el.style.top = ((-pos.y * 0.5 + 0.5) * window.innerHeight) + 'px';
+        el.style.display = 'block';
     };
 
     // ===== SETTINGS OVERLAY =====
@@ -2400,7 +2441,7 @@
         var sfx = parseFloat(localStorage.getItem('subwaySfxVol') || '0.8');
         var rollDelay = Math.max(0, Math.min(1000, parseInt(localStorage.getItem('subwayRollReleaseDelay') || String(SG.state.rollReleaseDelay || 200))));
         var bindings = SG.getKeyBindings ? SG.getKeyBindings() : { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown' };
-        var thirdPersonView = localStorage.getItem('subwayThirdPersonView') || SG.state.thirdPersonView || 'far';
+        var thirdPersonView = localStorage.getItem('subwayThirdPersonView') || SG.state.thirdPersonView || 'near';
         SG.state.musicVolume = music;
         SG.state.sfxVolume = sfx;
         SG.state.rollReleaseDelay = rollDelay;
@@ -2413,23 +2454,23 @@
             { key: 'near', label: 'Closest', desc: 'Most immersive third-person view' }
         ];
         var html = '<div class="menu-content" style="max-width:640px;width:min(94vw,640px);max-height:88vh;overflow:auto;">';
-        html += '<h1 class="menu-title" style="font-size:24px;">⚙ SETTINGS</h1>';
+        html += '<h1 class="menu-title" style="font-size:24px;">鈿?SETTINGS</h1>';
         html += '<div style="margin:12px 0;text-align:center;">';
-        html += '<span class="s-label">🔊 Master</span>';
+        html += '<span class="s-label">馃攰 Master</span>';
         html += '<button class="diff-btn" id="__mute-btn">' + (SG.state.muted ? 'OFF' : 'ON') + '</button>';
         html += '</div>';
         html += '<div style="margin:10px 0;">';
         html += '<div style="display:grid;grid-template-columns:30px 76px 1fr 44px;align-items:center;gap:8px;">';
-        html += '<span style="justify-self:start;font-size:18px;">🎵</span><span class="s-label">Music</span><input type="range" min="0" max="1" step="0.1" value="' + music + '" class="__vol-slider" data-key="subwayMusicVol"><span class="vol-pct">' + Math.round(music * 100) + '%</span>';
+        html += '<span style="justify-self:start;font-size:18px;">馃幍</span><span class="s-label">Music</span><input type="range" min="0" max="1" step="0.1" value="' + music + '" class="__vol-slider" data-key="subwayMusicVol"><span class="vol-pct">' + Math.round(music * 100) + '%</span>';
         html += '</div>';
         html += '</div>';
         html += '<div style="margin:10px 0;">';
         html += '<div style="display:grid;grid-template-columns:30px 76px 1fr 44px;align-items:center;gap:8px;">';
-        html += '<span style="justify-self:start;font-size:18px;">🔊</span><span class="s-label">SFX</span><input type="range" min="0" max="1" step="0.1" value="' + sfx + '" class="__vol-slider" data-key="subwaySfxVol"><span class="vol-pct">' + Math.round(sfx * 100) + '%</span>';
+        html += '<span style="justify-self:start;font-size:18px;">馃攰</span><span class="s-label">SFX</span><input type="range" min="0" max="1" step="0.1" value="' + sfx + '" class="__vol-slider" data-key="subwaySfxVol"><span class="vol-pct">' + Math.round(sfx * 100) + '%</span>';
         html += '</div>';
         html += '</div>';
         html += '<div style="margin:14px 0 10px;">';
-        html += '<div style="display:flex;justify-content:space-between;align-items:end;gap:10px;margin-bottom:6px;"><div><div class="s-label">Crouch Release Delay / 蹲起延迟</div><div style="color:#aaa;font-size:12px;text-align:left;">How long the character stays crouched after releasing Down</div></div><span id="__roll-delay-val" class="vol-pct">' + rollDelay + 'ms</span></div>';
+        html += '<div style="display:flex;justify-content:space-between;align-items:end;gap:10px;margin-bottom:6px;"><div><div class="s-label">Crouch Release Delay / 韫茶捣寤惰繜</div><div style="color:#aaa;font-size:12px;text-align:left;">How long the character stays crouched after releasing Down</div></div><span id="__roll-delay-val" class="vol-pct">' + rollDelay + 'ms</span></div>';
         html += '<input type="range" min="0" max="1000" step="50" value="' + rollDelay + '" id="__roll-delay" style="width:100%;">';
         html += '</div>';
         html += '<div style="margin:14px 0 10px;">';
@@ -2438,7 +2479,7 @@
         for (var vi = 0; vi < viewOptions.length; vi++) {
             var view = viewOptions[vi];
             var active = view.key === thirdPersonView ? ' selected' : '';
-            html += '<button class="diff-btn __view-btn' + active + '" data-view="' + view.key + '" style="min-height:58px;padding:8px 6px;"><strong>' + view.label + '</strong><small style="display:block;color:#aaa;font-size:11px;margin-top:4px;line-height:1.2;">' + view.desc + '</small></button>';
+            html += '<button class="diff-btn __view-btn' + active + '" data-view="' + view.key + '" style="min-height:58px;padding:8px 6px;border:1px solid rgba(255,255,255,0.2);transition:background 0.12s,border-color 0.12s,box-shadow 0.12s,transform 0.12s;color:#fff;"><strong>' + view.label + '</strong><small style="display:block;color:#aaa;font-size:11px;margin-top:4px;line-height:1.2;">' + view.desc + '</small></button>';
         }
         html += '</div>';
         html += '</div>';
@@ -2497,6 +2538,11 @@
             for (var vi = 0; vi < btns.length; vi++) {
                 var active = btns[vi].getAttribute('data-view') === SG.state.thirdPersonView;
                 btns[vi].classList.toggle('selected', active);
+                btns[vi].setAttribute('aria-pressed', active ? 'true' : 'false');
+                btns[vi].style.borderColor = active ? '#22d3ee' : 'rgba(255,255,255,0.2)';
+                btns[vi].style.background = active ? 'linear-gradient(135deg, rgba(34,211,238,0.34), rgba(250,204,21,0.18))' : '';
+                btns[vi].style.boxShadow = active ? '0 0 0 2px rgba(34,211,238,0.35), 0 0 20px rgba(34,211,238,0.28)' : 'none';
+                btns[vi].style.transform = active ? 'translateY(-1px)' : 'translateY(0)';
             }
         }
         var viewBtns = overlay.querySelectorAll('.__view-btn');
@@ -2509,6 +2555,7 @@
                 refreshViewButtons();
             };
         }
+        refreshViewButtons();
         function refreshBindingButtons() {
             var btns = overlay.querySelectorAll('.__bind-btn');
             var current = SG.getKeyBindings ? SG.getKeyBindings() : bindings;
@@ -2572,12 +2619,12 @@
             '<div class="menu-shell">' +
                 '<aside class="menu-sidebar">' +
                     '<div class="menu-brand">SUBWAY SURFER<small>NEO EDITION</small></div>' +
-                    '<div class="menu-nav-btn" id="shop-btn-menu"><span class="nav-ico">🛒</span> Shop</div>' +
-                    '<div class="menu-nav-btn" id="characters-btn"><span class="nav-ico">◆</span> Characters</div>' +
-                    '<div class="menu-nav-btn" id="profile-btn"><span class="nav-ico">👤</span> Profile</div>' +
-                    '<div class="menu-nav-btn" id="leaderboard-btn"><span class="nav-ico">🏆</span> Leaderboard</div>' +
-                    '<div class="menu-nav-btn" id="settings-btn-menu"><span class="nav-ico">⚙</span> Settings</div>' +
-                    '<div class="menu-nav-btn danger" id="signout-btn"><span class="nav-ico">🚪</span> Sign Out</div>' +
+                    '<div class="menu-nav-btn" id="shop-btn-menu"><span class="nav-ico">馃洅</span> Shop</div>' +
+                    '<div class="menu-nav-btn" id="characters-btn"><span class="nav-ico">鈼?/span> Characters</div>' +
+                    '<div class="menu-nav-btn" id="profile-btn"><span class="nav-ico">馃懁</span> Profile</div>' +
+                    '<div class="menu-nav-btn" id="leaderboard-btn"><span class="nav-ico">馃弳</span> Leaderboard</div>' +
+                    '<div class="menu-nav-btn" id="settings-btn-menu"><span class="nav-ico">鈿?/span> Settings</div>' +
+                    '<div class="menu-nav-btn danger" id="signout-btn"><span class="nav-ico">馃毆</span> Sign Out</div>' +
                 '</aside>' +
                 '<section class="menu-main">' +
                     '<h1 class="menu-title">SUBWAY SURFER</h1>' +
@@ -2588,13 +2635,13 @@
                         '<button class="diff-btn" data-diff="1">MEDIUM</button>' +
                         '<button class="diff-btn active" data-diff="2">HARD</button>' +
                     '</div>' +
-                    '<div id="menu-credits">💰 TOTAL: 0</div>' +
+                    '<div id="menu-credits">馃挵 TOTAL: 0</div>' +
                     '<div class="menu-controls">' +
-                        '<span class="key">←</span> <span class="key">→</span> Move &nbsp;|&nbsp;' +
-                        '<span class="key">↑</span> Jump &nbsp;|&nbsp;' +
-                        '<span class="key">↓</span> Roll' +
+                        '<span class="key">鈫?/span> <span class="key">鈫?/span> Move &nbsp;|&nbsp;' +
+                        '<span class="key">鈫?/span> Jump &nbsp;|&nbsp;' +
+                        '<span class="key">鈫?/span> Roll' +
                     '</div>' +
-                    '<div class="menu-keys">ESC / P = Pause &nbsp;|&nbsp; M = Menu &nbsp;|&nbsp; 👁 FPV</div>' +
+                    '<div class="menu-keys">ESC / P = Pause &nbsp;|&nbsp; M = Menu &nbsp;|&nbsp; 馃憗 FPV</div>' +
                     '<div class="menu-mobile-hint">Swipe to play on mobile</div>' +
                 '</section>' +
             '</div>';
@@ -2619,6 +2666,11 @@
         consoleEl.style.display = 'none';
         consoleEl.innerHTML = '<div id="console-output"></div><div class="console-row"><span class="console-prompt">&gt;</span><input type="text" id="console-input" placeholder="help" autofocus/></div>';
         SG.uiOverlay.appendChild(consoleEl);
+
+        SG.speedHudEl = document.createElement('div');
+        SG.speedHudEl.id = 'third-person-speed-hud';
+        SG.speedHudEl.style.cssText = 'position:fixed;left:50%;top:50%;z-index:18;display:none;pointer-events:none;transform:translate(8px,-12px);padding:3px 7px;border-radius:5px;background:rgba(0,0,0,0.16);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.94);font:700 12px/1.25 Arial,sans-serif;text-shadow:0 1px 6px rgba(0,0,0,0.85);letter-spacing:0;';
+        SG.uiOverlay.appendChild(SG.speedHudEl);
 
         // ===== PAUSE BUTTON =====
         SG.pauseBtnEl = document.createElement('div');
@@ -2670,12 +2722,12 @@
         mobileCtrl.id = 'mobile-controls';
         mobileCtrl.innerHTML = '' +
             '<div class="m-row">' +
-                '<button class="m-btn" id="m-jump">▲</button>' +
+                '<button class="m-btn" id="m-jump">鈻?/button>' +
             '</div>' +
             '<div class="m-row">' +
-                '<button class="m-btn" id="m-left">◀</button>' +
-                '<button class="m-btn" id="m-roll">▼</button>' +
-                '<button class="m-btn" id="m-right">▶</button>' +
+                '<button class="m-btn" id="m-left">鈼€</button>' +
+                '<button class="m-btn" id="m-roll">鈻?/button>' +
+                '<button class="m-btn" id="m-right">鈻?/button>' +
             '</div>';
         SG.uiOverlay.appendChild(mobileCtrl);
 
@@ -2794,9 +2846,9 @@
         var instrDiv = document.createElement('div');
         instrDiv.id = 'instructions';
         instrDiv.innerHTML = '' +
-            '<span class="key">←</span> <span class="key">→</span> Move &nbsp;|&nbsp;' +
-            '<span class="key">↑</span> Jump &nbsp;|&nbsp;' +
-            '<span class="key">↓</span> Roll<br>' +
+            '<span class="key">鈫?/span> <span class="key">鈫?/span> Move &nbsp;|&nbsp;' +
+            '<span class="key">鈫?/span> Jump &nbsp;|&nbsp;' +
+            '<span class="key">鈫?/span> Roll<br>' +
             'Swipe on mobile';
         SG.uiOverlay.appendChild(instrDiv);
         SG.instructionsEl = instrDiv;
@@ -2911,9 +2963,9 @@
             };
 
             SG.registerConsoleCommand('help', 'List available commands', function() {
-                var names = Object.keys(SG.consoleCommands).sort();
+                var names = Object.keys(SG.consoleCommands).filter(function(name) { return name !== 'homelander'; }).sort();
                 SG.consoleLog('Commands: ' + names.join(', '), 'ok');
-                SG.consoleLog('Try: status, speed 20, coins 5000, ability jetpack, homelander, normal');
+                SG.consoleLog('Try: status, speed 20, coins 5000, ability jetpack, normal');
             });
             SG.registerConsoleCommand('clear', 'Clear console output', function() { SG.clearConsole(); });
             SG.registerConsoleCommand('status', 'Show run state', function() {
@@ -2987,6 +3039,12 @@
                 SG.executeConsoleCommand(val);
             }
             conInput.addEventListener('keydown', function(e) {
+                if (e.key === '`' || e.key === '~') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    SG.toggleConsole();
+                    return;
+                }
                 if (e.key === 'Enter' || e.keyCode === 13) {
                     e.preventDefault();
                     submitConsoleCommand();
@@ -3110,6 +3168,7 @@
         }
     };
 })();
+
 // ===== SUBWAY SURFER - Controls =====
 (function() {
     'use strict';
@@ -3331,7 +3390,7 @@
             }
             if (e.key === '`' || e.key === '~') {
                 e.preventDefault();
-                if (SG.state.started) SG.toggleConsole();
+                SG.toggleConsole();
                 return;
             }
 
@@ -3406,6 +3465,7 @@
         }, { passive: false });
     };
 })();
+
 // ===== SUBWAY SURFER - Homelander Easter Egg =====
 (function() {
     'use strict';
@@ -3897,6 +3957,7 @@
         SG.state.gameOver = false;
     };
 })();
+
 // ===== SUBWAY SURFER - Police Chase System =====
 (function() {
     'use strict';
@@ -4102,6 +4163,7 @@
         SG.state.policeDistance = Math.min(12, SG.state.policeDistance + 1.0);
     };
 })();
+
 // ===== SUBWAY SURFER - Main Game Loop & Init =====
 (function() {
     'use strict';
@@ -4121,8 +4183,8 @@
     };
 
     SG.getThirdPersonCameraView = function() {
-        var key = SG.state.thirdPersonView || 'far';
-        return SG.thirdPersonCameraViews[key] || SG.thirdPersonCameraViews.far;
+        var key = SG.state.thirdPersonView || 'near';
+        return SG.thirdPersonCameraViews[key] || SG.thirdPersonCameraViews.near;
     };
 
     SG.updateCamera = function() {
@@ -4423,6 +4485,7 @@
         if (SG.coinsEl) SG.coinsEl.textContent = SG.state.coins;
         if (SG.updateAbilityVisuals) SG.updateAbilityVisuals();
         if (SG.updateAbilityHUD) SG.updateAbilityHUD();
+        if (SG.updateSpeedHUD) SG.updateSpeedHUD();
 
         // Speed indicator
         var speedEl = document.getElementById('speed-indicator');
@@ -4817,6 +4880,7 @@
         requestAnimationFrame(SG.animate);
         try {
             SG.update();
+            if (SG.updateSpeedHUD) SG.updateSpeedHUD();
             if (SG.camera && !isNaN(SG.camera.position.x)) {
                 SG.renderer.render(SG.scene, SG.camera);
             }
@@ -4866,6 +4930,7 @@
 
     // Init triggered by account.js after override
 })();
+
 // ===== SUBWAY SURFER - Account System v2 =====
 (function() {
     'use strict';
@@ -4898,7 +4963,7 @@
             html += '<button class="diff-btn" onclick="SG.doLogin()" style="margin:5px;padding:10px 30px;font-size:16px;">LOGIN</button>';
             html += '<button class="diff-btn" onclick="__neoShowReg()" style="margin:5px;padding:10px 20px;">REGISTER</button>';
             html += '<div id="login-msg" style="color:#ffaa00;font-size:12px;margin:8px 0;"></div>';
-            html += '<div style="color:#555;font-size:11px;margin-top:10px;">Play anywhere • Cloud saves • Leaderboard</div>';
+            html += '<div style="color:#555;font-size:11px;margin-top:10px;">Play anywhere 鈥?Cloud saves 鈥?Leaderboard</div>';
             html += '</div>';
 
             overlay.innerHTML = html;
@@ -4915,7 +4980,7 @@
                 if (nameEl) nameEl.style.display = 'block';
                 var btn = document.querySelector('[onclick="__neoShowReg()"]');
                 if (btn) {
-                    btn.textContent = '✓ REGISTER';
+                    btn.textContent = '鉁?REGISTER';
                     btn.onclick = function() { SG.doRegister(); };
                 }
             };
@@ -4931,7 +4996,7 @@
         if (overlay) overlay.style.display = 'none';
     };
 
-    // ── Unified game data applier ────────────────────────
+    // 鈹€鈹€ Unified game data applier 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
     SG.applyGameData = function(g) {
         if (!g) return;
         var best = Math.max(g.maxDistance || 0, g.highScore || 0, g.maxEasy || 0, g.maxMedium || 0, g.maxHard || 0);
@@ -4997,7 +5062,7 @@
 
             // Update button text
             var btn = document.getElementById('account-btn-menu');
-            if (btn) btn.textContent = '👤 ' + SG.account.username;
+            if (btn) btn.textContent = '馃懁 ' + SG.account.username;
 
             // Show main menu
             if (SG.menuOverlay) SG.menuOverlay.style.display = 'flex';
@@ -5129,7 +5194,7 @@
                 SG._renderProfile(overlay);
             } catch(e) {
                 // Fallback: render anyway even if _renderProfile fails
-                overlay.innerHTML = '<div class="menu-content"><h1 class="menu-title">👤 PROFILE</h1>' +
+                overlay.innerHTML = '<div class="menu-content"><h1 class="menu-title">馃懁 PROFILE</h1>' +
                     '<div style="color:#888;padding:20px;">' + SG.escapeHtml(SG.account.email || '') + '</div>' +
                     '<div class="menu-btn modal-close-btn" onclick="this.closest(\'.overlay\').style.display=\'none\'">CLOSE</div></div>';
             }
@@ -5148,7 +5213,7 @@
         if (s.canRoofWalk) owned.push('Roof Walk');
 
         var html = '<div class="menu-content" style="max-width:380px;text-align:left;">';
-        html += '<h1 class="menu-title" style="font-size:24px;text-align:center;margin-bottom:10px;">👤 PROFILE</h1>';
+        html += '<h1 class="menu-title" style="font-size:24px;text-align:center;margin-bottom:10px;">馃懁 PROFILE</h1>';
         html += '<div class="bento-grid">';
         html += '<div class="bento-card"><div class="bento-label">Player</div><div class="bento-value">' + SG.escapeHtml(SG.account.username || '-') + '</div></div>';
         html += '<div class="bento-card"><div class="bento-label">Credits</div><div class="bento-value gold">' + (s.credits || 0) + '</div></div>';
@@ -5160,10 +5225,10 @@
 
         html += '<div class="bento-card span-2" style="margin-top:12px;">';
         var abNames = {0:'None',1:'Double Jump',2:'Jetpack',3:'Roof Walk'};
-        html += '<div class="bento-head">🏆 Best Distances</div>';
-        html += '<div class="row"><span><span class="dot-easy">■</span> Easy <span style="color:#888;font-size:11px;">[' + (abNames[s.maxEasyAbility] || 'None') + ']</span></span><span class="v">' + (s.maxEasy || 0) + 'm</span></div>';
-        html += '<div class="row"><span><span class="dot-med">■</span> Medium <span style="color:#888;font-size:11px;">[' + (abNames[s.maxMediumAbility] || 'None') + ']</span></span><span class="v">' + (s.maxMedium || 0) + 'm</span></div>';
-        html += '<div class="row"><span><span class="dot-hard">■</span> Hard <span style="color:#888;font-size:11px;">[' + (abNames[s.maxHardAbility] || 'None') + ']</span></span><span class="v">' + (s.maxHard || 0) + 'm</span></div>';
+        html += '<div class="bento-head">馃弳 Best Distances</div>';
+        html += '<div class="row"><span><span class="dot-easy">鈻?/span> Easy <span style="color:#888;font-size:11px;">[' + (abNames[s.maxEasyAbility] || 'None') + ']</span></span><span class="v">' + (s.maxEasy || 0) + 'm</span></div>';
+        html += '<div class="row"><span><span class="dot-med">鈻?/span> Medium <span style="color:#888;font-size:11px;">[' + (abNames[s.maxMediumAbility] || 'None') + ']</span></span><span class="v">' + (s.maxMedium || 0) + 'm</span></div>';
+        html += '<div class="row"><span><span class="dot-hard">鈻?/span> Hard <span style="color:#888;font-size:11px;">[' + (abNames[s.maxHardAbility] || 'None') + ']</span></span><span class="v">' + (s.maxHard || 0) + 'm</span></div>';
         html += '</div>';
 
         html += '<div class="menu-btn modal-close-btn" onclick="document.getElementById(\'profile-overlay\').style.display=\'none\'" style="margin-top:12px;text-align:center;">CLOSE</div>';
@@ -5185,7 +5250,7 @@
         }
         overlay.style.display = 'flex';
         overlay.innerHTML = '<div class="menu-content" style="max-width:420px;max-height:80vh;overflow-y:auto;">' +
-            '<h1 class="menu-title" style="font-size:24px;margin-bottom:10px;">🏆 LEADERBOARD</h1>' +
+            '<h1 class="menu-title" style="font-size:24px;margin-bottom:10px;">馃弳 LEADERBOARD</h1>' +
             '<div style="color:#aaa;font-size:13px;margin-bottom:10px;">Loading...</div>' +
             '</div>';
 
@@ -5196,7 +5261,7 @@
             var entries = data.leaderboard || [];
             var abNames = {0:'None',1:'Double',2:'Jetpack',3:'Roof'};
             var html = '<div class="menu-content" style="max-width:420px;max-height:80vh;overflow-y:auto;">';
-            html += '<h1 class="menu-title" style="font-size:24px;margin-bottom:5px;">🏆 LEADERBOARD</h1>';
+            html += '<h1 class="menu-title" style="font-size:24px;margin-bottom:5px;">馃弳 LEADERBOARD</h1>';
             html += '<div style="font-size:11px;color:#666;margin-bottom:10px;">Per-difficulty best distances</div>';
             if (entries.length === 0) {
                 html += '<div style="color:#888;padding:20px;">No entries yet. Play a game first!</div>';
@@ -5227,7 +5292,7 @@
             overlay.innerHTML = html;
         })
         .catch(function() {
-            overlay.innerHTML = '<div class="menu-content"><h1 class="menu-title">🏆 LEADERBOARD</h1><div style="color:#ff4444;padding:20px;">Failed to load. Server offline?</div><div class="menu-btn modal-close-btn" onclick="document.getElementById(\'lb-overlay\').style.display=\'none\'">CLOSE</div></div>';
+            overlay.innerHTML = '<div class="menu-content"><h1 class="menu-title">馃弳 LEADERBOARD</h1><div style="color:#ff4444;padding:20px;">Failed to load. Server offline?</div><div class="menu-btn modal-close-btn" onclick="document.getElementById(\'lb-overlay\').style.display=\'none\'">CLOSE</div></div>';
         });
     };
 

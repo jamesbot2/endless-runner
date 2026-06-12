@@ -166,8 +166,13 @@ app.whenReady().then(async () => {
       r.rollDelayHasDescription = false
       r.thirdPersonViewButtons = 0
       r.thirdPersonViewSaved = false
+      r.thirdPersonDefault = window.__SG ? window.__SG.state.thirdPersonView : null
+      r.thirdPersonButtonFeedback = false
       r.settingsModalWide = false
       r.thirdPersonCameraViews = window.__SG && window.__SG.thirdPersonCameraViews ? window.__SG.thirdPersonCameraViews : null
+      r.speedHud = false
+      r.speedHudText = ''
+      r.speedHudBackground = ''
       if (window.__SG && window.__SG.setKeyBinding && window.__SG.resetKeyBindings && window.__SG.showSettings) {
         window.__SG.setKeyBinding('up', 'k')
         r.keyBindingActionAfter = window.__SG.getInputActionForKey ? window.__SG.getInputActionForKey('k') : null
@@ -180,9 +185,11 @@ app.whenReady().then(async () => {
         r.settingsBindingButtons = document.querySelectorAll('#settings-overlay .__bind-btn').length
         r.rollDelayHasDescription = document.getElementById('settings-overlay').textContent.indexOf('stays crouched') >= 0
         r.thirdPersonViewButtons = document.querySelectorAll('#settings-overlay .__view-btn').length
-        var nearBtn = document.querySelector('#settings-overlay .__view-btn[data-view="near"]')
-        if (nearBtn) nearBtn.click()
-        r.thirdPersonViewSaved = window.__SG.state.thirdPersonView === 'near' && localStorage.getItem('subwayThirdPersonView') === 'near'
+        var mediumBtn = document.querySelector('#settings-overlay .__view-btn[data-view="medium"]')
+        if (mediumBtn) mediumBtn.click()
+        var mediumStyle = mediumBtn ? getComputedStyle(mediumBtn) : null
+        r.thirdPersonViewSaved = window.__SG.state.thirdPersonView === 'medium' && localStorage.getItem('subwayThirdPersonView') === 'medium'
+        r.thirdPersonButtonFeedback = !!mediumBtn && mediumBtn.classList.contains('selected') && mediumBtn.getAttribute('aria-pressed') === 'true' && mediumStyle && mediumStyle.boxShadow !== 'none' && mediumStyle.borderColor.indexOf('34') >= 0
         var modal = document.querySelector('#settings-overlay .menu-content')
         r.settingsModalWide = modal ? modal.getBoundingClientRect().width >= 560 : false
         var volumeRows = document.querySelectorAll('#settings-overlay .__vol-slider')
@@ -197,11 +204,65 @@ app.whenReady().then(async () => {
         var settingsOverlay = document.getElementById('settings-overlay')
         if (settingsOverlay) settingsOverlay.style.display = 'none'
         window.__SG.resetKeyBindings()
-        window.__SG.state.thirdPersonView = 'far'
-        localStorage.setItem('subwayThirdPersonView', 'far')
+        window.__SG.state.thirdPersonView = 'near'
+        localStorage.setItem('subwayThirdPersonView', 'near')
       }
       r.consoleCommands = window.__SG && window.__SG.consoleCommands ? Object.keys(window.__SG.consoleCommands).sort() : []
       r.executeConsoleCommand = window.__SG ? typeof window.__SG.executeConsoleCommand === 'function' : false
+      r.consoleBacktickToggle = false
+      r.consoleEscapeClose = false
+      r.consoleHelpHidesHomelander = false
+      if (window.__SG && window.__SG.toggleConsole && r.executeConsoleCommand) {
+        var devConsole = document.getElementById('dev-console')
+        var consoleInput = document.getElementById('console-input')
+        var consoleOutput = document.getElementById('console-output')
+        var tickKey = String.fromCharCode(96)
+        if (devConsole && consoleInput) {
+          devConsole.style.display = 'none'
+          window.__SG.state.paused = false
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: tickKey, bubbles: true }))
+          var openedByTick = devConsole.style.display === 'flex'
+          consoleInput.dispatchEvent(new KeyboardEvent('keydown', { key: tickKey, bubbles: true }))
+          var closedByTick = devConsole.style.display === 'none'
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: tickKey, bubbles: true }))
+          var openedAgain = devConsole.style.display === 'flex'
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+          var closedByEscape = devConsole.style.display === 'none'
+          r.consoleBacktickToggle = openedByTick && closedByTick
+          r.consoleEscapeClose = openedAgain && closedByEscape
+        }
+        if (consoleOutput && window.__SG.clearConsole) {
+          window.__SG.clearConsole()
+          window.__SG.executeConsoleCommand('help')
+          r.consoleHelpHidesHomelander = consoleOutput.textContent.toLowerCase().indexOf('homelander') < 0
+        }
+      }
+      if (window.__SG && window.__SG.updateSpeedHUD && window.__SG.player && window.__SG.camera) {
+        var prevStarted = window.__SG.state.started
+        var prevGameOver = window.__SG.state.gameOver
+        var prevFirstPerson = window.__SG.state.firstPerson
+        var prevHomelander = window.__SG.state.homelander
+        var prevSpeed = window.__SG.state.speed
+        window.__SG.state.started = true
+        window.__SG.state.gameOver = false
+        window.__SG.state.firstPerson = false
+        window.__SG.state.homelander = false
+        window.__SG.state.speed = window.__SG.speedForLevel ? window.__SG.speedForLevel(20) : 1
+        if (window.__SG.updateCamera) window.__SG.updateCamera()
+        window.__SG.updateSpeedHUD()
+        var speedHud = document.getElementById('third-person-speed-hud')
+        if (speedHud) {
+          r.speedHudText = speedHud.textContent
+          r.speedHudBackground = getComputedStyle(speedHud).backgroundColor
+          r.speedHud = speedHud.style.display !== 'none' && /km\\/h/.test(speedHud.textContent)
+        }
+        window.__SG.state.started = prevStarted
+        window.__SG.state.gameOver = prevGameOver
+        window.__SG.state.firstPerson = prevFirstPerson
+        window.__SG.state.homelander = prevHomelander
+        window.__SG.state.speed = prevSpeed
+        window.__SG.updateSpeedHUD()
+      }
       r.homelanderModelPath = window.__SG ? window.__SG.homelanderModelPath : null
       r.homelanderLoader = window.__SG ? typeof window.__SG.loadHomelanderModel === 'function' : false
       r.homelanderTuning = window.__SG && window.__SG.homelanderModelTuning ? {
@@ -457,9 +518,15 @@ app.whenReady().then(async () => {
   check("14e-5. settings labels roll delay", !!state.rollDelayHasDescription)
   check("14e-6. settings exposes third-person camera choices", state.thirdPersonViewButtons === 3 && !!state.thirdPersonViewSaved && !!state.settingsModalWide, `buttons=${state.thirdPersonViewButtons}, wide=${state.settingsModalWide}`)
   check("14e-7. third-person camera presets move closer", !!state.thirdPersonCameraViews && state.thirdPersonCameraViews.far.z === 7 && state.thirdPersonCameraViews.medium.z < state.thirdPersonCameraViews.far.z && state.thirdPersonCameraViews.near.z < state.thirdPersonCameraViews.medium.z, state.thirdPersonCameraViews ? JSON.stringify(state.thirdPersonCameraViews) : 'missing')
+  check("14e-8. third-person camera defaults to closest", state.thirdPersonDefault === 'near', String(state.thirdPersonDefault))
+  check("14e-9. third-person camera buttons give selected feedback", !!state.thirdPersonButtonFeedback)
+  check("14e-10. third-person speed HUD follows runner", !!state.speedHud, state.speedHudText || state.speedHudBackground || 'missing')
   check("14f. restart keeps player facing forward", Math.abs(state.restartRotationY - Math.PI) < 0.001, String(state.restartRotationY))
   check("14g. console command runner exists", !!state.executeConsoleCommand)
   check("14h. console includes Homelander easter egg", state.consoleCommands && state.consoleCommands.includes('homelander'), state.consoleCommands ? state.consoleCommands.join(', ') : 'none')
+  check("14h-1. console opens/closes with tilde", !!state.consoleBacktickToggle)
+  check("14h-2. console closes with Escape", !!state.consoleEscapeClose)
+  check("14h-3. console help does not reveal Homelander", !!state.consoleHelpHidesHomelander)
   check("14i. Homelander GLB loader exists", !!state.homelanderLoader && state.homelanderModelPath === 'models/homelander.glb', state.homelanderModelPath || 'missing path')
   check("14i-1. Homelander GLB tuning faces forward with eye lasers", !!state.homelanderTuning && Math.abs(state.homelanderTuning.modelRotationY) < 0.001 && state.homelanderTuning.modelYOffset <= -0.15 && state.homelanderTuning.eyeOffsetY > 1.5 && state.homelanderTuning.eyeOffsetZ < 0, state.homelanderTuning ? JSON.stringify(state.homelanderTuning) : 'missing tuning')
   check("14i-2. Homelander GLB loads into scene", !!state.homelanderModelLoaded && state.homelanderModelHeight > 1.7, `height=${state.homelanderModelHeight}`)

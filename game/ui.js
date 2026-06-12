@@ -284,6 +284,35 @@
         if (el) el.textContent = '💰 TOTAL: ' + SG.state.credits;
     };
 
+    SG.getSpeedKmh = function() {
+        var metersPerSecond = SG.getDistanceRate ? SG.getDistanceRate(SG.state.speed) : ((SG.state.speed || 0) * 10);
+        return Math.max(0, Math.round(metersPerSecond * 3.6));
+    };
+
+    SG.updateSpeedHUD = function() {
+        var el = SG.speedHudEl || document.getElementById('third-person-speed-hud');
+        if (!el || !SG.camera || !SG.player || !window.THREE) return;
+        if (!SG.state.started || SG.state.gameOver || SG.state.firstPerson || SG.state.homelander) {
+            el.style.display = 'none';
+            return;
+        }
+
+        var pos = SG.player.position.clone();
+        pos.x += 0.42;
+        pos.y += 1.7;
+        pos.project(SG.camera);
+
+        if (pos.z < -1 || pos.z > 1) {
+            el.style.display = 'none';
+            return;
+        }
+
+        el.textContent = SG.getSpeedKmh() + ' km/h';
+        el.style.left = ((pos.x * 0.5 + 0.5) * window.innerWidth) + 'px';
+        el.style.top = ((-pos.y * 0.5 + 0.5) * window.innerHeight) + 'px';
+        el.style.display = 'block';
+    };
+
     // ===== SETTINGS OVERLAY =====
     SG.showSettings = function() {
         var overlay = document.getElementById('settings-overlay');
@@ -299,7 +328,7 @@
         var sfx = parseFloat(localStorage.getItem('subwaySfxVol') || '0.8');
         var rollDelay = Math.max(0, Math.min(1000, parseInt(localStorage.getItem('subwayRollReleaseDelay') || String(SG.state.rollReleaseDelay || 200))));
         var bindings = SG.getKeyBindings ? SG.getKeyBindings() : { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown' };
-        var thirdPersonView = localStorage.getItem('subwayThirdPersonView') || SG.state.thirdPersonView || 'far';
+        var thirdPersonView = localStorage.getItem('subwayThirdPersonView') || SG.state.thirdPersonView || 'near';
         SG.state.musicVolume = music;
         SG.state.sfxVolume = sfx;
         SG.state.rollReleaseDelay = rollDelay;
@@ -337,7 +366,7 @@
         for (var vi = 0; vi < viewOptions.length; vi++) {
             var view = viewOptions[vi];
             var active = view.key === thirdPersonView ? ' selected' : '';
-            html += '<button class="diff-btn __view-btn' + active + '" data-view="' + view.key + '" style="min-height:58px;padding:8px 6px;"><strong>' + view.label + '</strong><small style="display:block;color:#aaa;font-size:11px;margin-top:4px;line-height:1.2;">' + view.desc + '</small></button>';
+            html += '<button class="diff-btn __view-btn' + active + '" data-view="' + view.key + '" style="min-height:58px;padding:8px 6px;border:1px solid rgba(255,255,255,0.2);transition:background 0.12s,border-color 0.12s,box-shadow 0.12s,transform 0.12s;color:#fff;"><strong>' + view.label + '</strong><small style="display:block;color:#aaa;font-size:11px;margin-top:4px;line-height:1.2;">' + view.desc + '</small></button>';
         }
         html += '</div>';
         html += '</div>';
@@ -396,6 +425,11 @@
             for (var vi = 0; vi < btns.length; vi++) {
                 var active = btns[vi].getAttribute('data-view') === SG.state.thirdPersonView;
                 btns[vi].classList.toggle('selected', active);
+                btns[vi].setAttribute('aria-pressed', active ? 'true' : 'false');
+                btns[vi].style.borderColor = active ? '#22d3ee' : 'rgba(255,255,255,0.2)';
+                btns[vi].style.background = active ? 'linear-gradient(135deg, rgba(34,211,238,0.34), rgba(250,204,21,0.18))' : '';
+                btns[vi].style.boxShadow = active ? '0 0 0 2px rgba(34,211,238,0.35), 0 0 20px rgba(34,211,238,0.28)' : 'none';
+                btns[vi].style.transform = active ? 'translateY(-1px)' : 'translateY(0)';
             }
         }
         var viewBtns = overlay.querySelectorAll('.__view-btn');
@@ -408,6 +442,7 @@
                 refreshViewButtons();
             };
         }
+        refreshViewButtons();
         function refreshBindingButtons() {
             var btns = overlay.querySelectorAll('.__bind-btn');
             var current = SG.getKeyBindings ? SG.getKeyBindings() : bindings;
@@ -518,6 +553,11 @@
         consoleEl.style.display = 'none';
         consoleEl.innerHTML = '<div id="console-output"></div><div class="console-row"><span class="console-prompt">&gt;</span><input type="text" id="console-input" placeholder="help" autofocus/></div>';
         SG.uiOverlay.appendChild(consoleEl);
+
+        SG.speedHudEl = document.createElement('div');
+        SG.speedHudEl.id = 'third-person-speed-hud';
+        SG.speedHudEl.style.cssText = 'position:fixed;left:50%;top:50%;z-index:18;display:none;pointer-events:none;transform:translate(8px,-12px);padding:3px 7px;border-radius:5px;background:rgba(0,0,0,0.16);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.94);font:700 12px/1.25 Arial,sans-serif;text-shadow:0 1px 6px rgba(0,0,0,0.85);letter-spacing:0;';
+        SG.uiOverlay.appendChild(SG.speedHudEl);
 
         // ===== PAUSE BUTTON =====
         SG.pauseBtnEl = document.createElement('div');
@@ -810,9 +850,9 @@
             };
 
             SG.registerConsoleCommand('help', 'List available commands', function() {
-                var names = Object.keys(SG.consoleCommands).sort();
+                var names = Object.keys(SG.consoleCommands).filter(function(name) { return name !== 'homelander'; }).sort();
                 SG.consoleLog('Commands: ' + names.join(', '), 'ok');
-                SG.consoleLog('Try: status, speed 20, coins 5000, ability jetpack, homelander, normal');
+                SG.consoleLog('Try: status, speed 20, coins 5000, ability jetpack, normal');
             });
             SG.registerConsoleCommand('clear', 'Clear console output', function() { SG.clearConsole(); });
             SG.registerConsoleCommand('status', 'Show run state', function() {
@@ -886,6 +926,12 @@
                 SG.executeConsoleCommand(val);
             }
             conInput.addEventListener('keydown', function(e) {
+                if (e.key === '`' || e.key === '~') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    SG.toggleConsole();
+                    return;
+                }
                 if (e.key === 'Enter' || e.keyCode === 13) {
                     e.preventDefault();
                     submitConsoleCommand();

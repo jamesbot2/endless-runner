@@ -17,8 +17,8 @@
     };
 
     SG.getThirdPersonCameraView = function() {
-        var key = SG.state.thirdPersonView || 'far';
-        return SG.thirdPersonCameraViews[key] || SG.thirdPersonCameraViews.far;
+        var key = SG.state.thirdPersonView || 'near';
+        return SG.thirdPersonCameraViews[key] || SG.thirdPersonCameraViews.near;
     };
 
     SG.updateCamera = function() {
@@ -319,6 +319,7 @@
         if (SG.coinsEl) SG.coinsEl.textContent = SG.state.coins;
         if (SG.updateAbilityVisuals) SG.updateAbilityVisuals();
         if (SG.updateAbilityHUD) SG.updateAbilityHUD();
+        if (SG.updateSpeedHUD) SG.updateSpeedHUD();
 
         // Speed indicator
         var speedEl = document.getElementById('speed-indicator');
@@ -713,6 +714,7 @@
         requestAnimationFrame(SG.animate);
         try {
             SG.update();
+            if (SG.updateSpeedHUD) SG.updateSpeedHUD();
             if (SG.camera && !isNaN(SG.camera.position.x)) {
                 SG.renderer.render(SG.scene, SG.camera);
             }

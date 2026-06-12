@@ -63,7 +63,7 @@ function defaultSettings(): AppSettings {
     sfxVolume: 0.8,
     theme: 0,
     rollReleaseDelay: 200,
-    thirdPersonView: 'far',
+    thirdPersonView: 'near',
     keyBindings: {
       left: 'ArrowLeft',
       right: 'ArrowRight',

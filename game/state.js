@@ -46,7 +46,7 @@
         musicVolume: parseFloat(localStorage.getItem('subwayMusicVol') || '0.5'),
         sfxVolume: parseFloat(localStorage.getItem('subwaySfxVol') || '0.8'),
         rollReleaseDelay: parseInt(localStorage.getItem('subwayRollReleaseDelay') || '200'),
-        thirdPersonView: localStorage.getItem('subwayThirdPersonView') || 'far',
+        thirdPersonView: localStorage.getItem('subwayThirdPersonView') || 'near',
         lastPlayedCoin: 0,
         credits: parseInt(localStorage.getItem('subwayCredits') || '0'),
         totalCoins: parseInt(localStorage.getItem('subwayTotalCoins') || '0'),
