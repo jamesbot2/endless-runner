@@ -163,6 +163,11 @@ app.whenReady().then(async () => {
       r.rollReleaseDelaySetting = null
       r.settingsBindingButtons = 0
       r.settingsVolumeGridLeftAligned = false
+      r.rollDelayHasDescription = false
+      r.thirdPersonViewButtons = 0
+      r.thirdPersonViewSaved = false
+      r.settingsModalWide = false
+      r.thirdPersonCameraViews = window.__SG && window.__SG.thirdPersonCameraViews ? window.__SG.thirdPersonCameraViews : null
       if (window.__SG && window.__SG.setKeyBinding && window.__SG.resetKeyBindings && window.__SG.showSettings) {
         window.__SG.setKeyBinding('up', 'k')
         r.keyBindingActionAfter = window.__SG.getInputActionForKey ? window.__SG.getInputActionForKey('k') : null
@@ -173,6 +178,13 @@ app.whenReady().then(async () => {
         var delaySlider = document.getElementById('__roll-delay')
         r.rollReleaseDelaySetting = delaySlider ? parseInt(delaySlider.value, 10) : null
         r.settingsBindingButtons = document.querySelectorAll('#settings-overlay .__bind-btn').length
+        r.rollDelayHasDescription = document.getElementById('settings-overlay').textContent.indexOf('stays crouched') >= 0
+        r.thirdPersonViewButtons = document.querySelectorAll('#settings-overlay .__view-btn').length
+        var nearBtn = document.querySelector('#settings-overlay .__view-btn[data-view="near"]')
+        if (nearBtn) nearBtn.click()
+        r.thirdPersonViewSaved = window.__SG.state.thirdPersonView === 'near' && localStorage.getItem('subwayThirdPersonView') === 'near'
+        var modal = document.querySelector('#settings-overlay .menu-content')
+        r.settingsModalWide = modal ? modal.getBoundingClientRect().width >= 560 : false
         var volumeRows = document.querySelectorAll('#settings-overlay .__vol-slider')
         if (volumeRows.length >= 2) {
           var row0 = volumeRows[0].parentElement
@@ -185,6 +197,8 @@ app.whenReady().then(async () => {
         var settingsOverlay = document.getElementById('settings-overlay')
         if (settingsOverlay) settingsOverlay.style.display = 'none'
         window.__SG.resetKeyBindings()
+        window.__SG.state.thirdPersonView = 'far'
+        localStorage.setItem('subwayThirdPersonView', 'far')
       }
       r.consoleCommands = window.__SG && window.__SG.consoleCommands ? Object.keys(window.__SG.consoleCommands).sort() : []
       r.executeConsoleCommand = window.__SG ? typeof window.__SG.executeConsoleCommand === 'function' : false
@@ -440,6 +454,9 @@ app.whenReady().then(async () => {
   check("14e-2. key binding remap updates action lookup", state.keyBindingActionBefore === 'up' && state.keyBindingActionAfter === 'up' && !!state.keyBindingSaved, `before=${state.keyBindingActionBefore}, after=${state.keyBindingActionAfter}`)
   check("14e-3. settings exposes roll delay and key binding controls", state.rollReleaseDelaySetting === 350 && state.settingsBindingButtons === 4, `delay=${state.rollReleaseDelaySetting}, buttons=${state.settingsBindingButtons}`)
   check("14e-4. settings volume rows keep icons on the left", !!state.settingsVolumeGridLeftAligned)
+  check("14e-5. settings labels roll delay", !!state.rollDelayHasDescription)
+  check("14e-6. settings exposes third-person camera choices", state.thirdPersonViewButtons === 3 && !!state.thirdPersonViewSaved && !!state.settingsModalWide, `buttons=${state.thirdPersonViewButtons}, wide=${state.settingsModalWide}`)
+  check("14e-7. third-person camera presets move closer", !!state.thirdPersonCameraViews && state.thirdPersonCameraViews.far.z === 7 && state.thirdPersonCameraViews.medium.z < state.thirdPersonCameraViews.far.z && state.thirdPersonCameraViews.near.z < state.thirdPersonCameraViews.medium.z, state.thirdPersonCameraViews ? JSON.stringify(state.thirdPersonCameraViews) : 'missing')
   check("14f. restart keeps player facing forward", Math.abs(state.restartRotationY - Math.PI) < 0.001, String(state.restartRotationY))
   check("14g. console command runner exists", !!state.executeConsoleCommand)
   check("14h. console includes Homelander easter egg", state.consoleCommands && state.consoleCommands.includes('homelander'), state.consoleCommands ? state.consoleCommands.join(', ') : 'none')

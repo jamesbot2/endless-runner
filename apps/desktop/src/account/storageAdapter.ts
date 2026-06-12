@@ -26,6 +26,7 @@ export interface AppSettings {
   sfxVolume: number
   theme: number
   rollReleaseDelay?: number
+  thirdPersonView?: string
   keyBindings?: Record<string, string>
   [key: string]: unknown
 }
@@ -62,6 +63,7 @@ function defaultSettings(): AppSettings {
     sfxVolume: 0.8,
     theme: 0,
     rollReleaseDelay: 200,
+    thirdPersonView: 'far',
     keyBindings: {
       left: 'ArrowLeft',
       right: 'ArrowRight',

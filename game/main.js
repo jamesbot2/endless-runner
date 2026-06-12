@@ -10,6 +10,17 @@
     };
 
     // ===== CAMERA =====
+    SG.thirdPersonCameraViews = SG.thirdPersonCameraViews || {
+        far: { label: 'Farthest', y: 5.0, z: 7.0, lookY: -1.0, lookZ: -10.0 },
+        medium: { label: 'Medium', y: 4.1, z: 5.4, lookY: -0.65, lookZ: -8.0 },
+        near: { label: 'Closest', y: 3.0, z: 3.7, lookY: -0.25, lookZ: -6.2 }
+    };
+
+    SG.getThirdPersonCameraView = function() {
+        var key = SG.state.thirdPersonView || 'far';
+        return SG.thirdPersonCameraViews[key] || SG.thirdPersonCameraViews.far;
+    };
+
     SG.updateCamera = function() {
         if (!SG.camera) return;
 
@@ -30,9 +41,10 @@
             if (SG.homelanderGroup) SG.homelanderGroup.visible = false;
         } else {
             if (SG.homelanderGroup) SG.homelanderGroup.visible = true;
+            var view = SG.getThirdPersonCameraView();
             var targetX = camTarget.x;
-            var targetY = camTarget.y + 5;
-            var targetZ = camTarget.z + 7;
+            var targetY = camTarget.y + view.y;
+            var targetZ = camTarget.z + view.z;
             var shakeX = 0, shakeY = 0;
             if (SG.state.cameraShake > 0.01) {
                 shakeX = (Math.random() - 0.5) * SG.state.cameraShake * 0.3;
@@ -41,7 +53,7 @@
             SG.camera.position.x += (targetX + shakeX - SG.camera.position.x) * 0.1;
             SG.camera.position.y += (targetY + shakeY - SG.camera.position.y) * 0.1;
             SG.camera.position.z += (targetZ - SG.camera.position.z) * 0.1;
-            SG.camera.lookAt(camTarget.x, camTarget.y - 1, camTarget.z - 10);
+            SG.camera.lookAt(camTarget.x, camTarget.y + view.lookY, camTarget.z + view.lookZ);
             if (SG.player && !SG.state.homelander) SG.player.visible = true;
         }
     };

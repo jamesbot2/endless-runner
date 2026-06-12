@@ -224,6 +224,11 @@ if (window.desktopAPI) {
         const s4 = SG()
         if (s4?.state) s4.state.rollReleaseDelay = settings.rollReleaseDelay
       }
+      if (typeof settings.thirdPersonView === 'string') {
+        localStorage.setItem('subwayThirdPersonView', settings.thirdPersonView)
+        const sView = SG()
+        if (sView?.state) sView.state.thirdPersonView = settings.thirdPersonView
+      }
       if (settings.keyBindings && typeof settings.keyBindings === 'object') {
         localStorage.setItem('subwayKeyBindings', JSON.stringify(settings.keyBindings))
         const s5 = SG()
@@ -246,6 +251,9 @@ if (window.desktopAPI) {
     }
     if (key === 'subwayRollReleaseDelay') {
       saveSettings({ rollReleaseDelay: parseInt(value, 10) }).catch(() => {})
+    }
+    if (key === 'subwayThirdPersonView') {
+      saveSettings({ thirdPersonView: value }).catch(() => {})
     }
     if (key === 'subwayKeyBindings') {
       try {

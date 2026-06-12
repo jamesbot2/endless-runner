@@ -94,6 +94,7 @@
         musicVolume: parseFloat(localStorage.getItem('subwayMusicVol') || '0.5'),
         sfxVolume: parseFloat(localStorage.getItem('subwaySfxVol') || '0.8'),
         rollReleaseDelay: parseInt(localStorage.getItem('subwayRollReleaseDelay') || '200'),
+        thirdPersonView: localStorage.getItem('subwayThirdPersonView') || 'far',
         lastPlayedCoin: 0,
         credits: parseInt(localStorage.getItem('subwayCredits') || '0'),
         totalCoins: parseInt(localStorage.getItem('subwayTotalCoins') || '0'),
@@ -2399,12 +2400,19 @@
         var sfx = parseFloat(localStorage.getItem('subwaySfxVol') || '0.8');
         var rollDelay = Math.max(0, Math.min(1000, parseInt(localStorage.getItem('subwayRollReleaseDelay') || String(SG.state.rollReleaseDelay || 200))));
         var bindings = SG.getKeyBindings ? SG.getKeyBindings() : { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown' };
+        var thirdPersonView = localStorage.getItem('subwayThirdPersonView') || SG.state.thirdPersonView || 'far';
         SG.state.musicVolume = music;
         SG.state.sfxVolume = sfx;
         SG.state.rollReleaseDelay = rollDelay;
+        SG.state.thirdPersonView = thirdPersonView;
 
         var actionOrder = ['up', 'down', 'left', 'right'];
-        var html = '<div class="menu-content" style="max-width:520px;width:min(92vw,520px);">';
+        var viewOptions = [
+            { key: 'far', label: 'Farthest', desc: 'Current camera distance' },
+            { key: 'medium', label: 'Medium', desc: 'Closer third-person view' },
+            { key: 'near', label: 'Closest', desc: 'Most immersive third-person view' }
+        ];
+        var html = '<div class="menu-content" style="max-width:640px;width:min(94vw,640px);max-height:88vh;overflow:auto;">';
         html += '<h1 class="menu-title" style="font-size:24px;">⚙ SETTINGS</h1>';
         html += '<div style="margin:12px 0;text-align:center;">';
         html += '<span class="s-label">🔊 Master</span>';
@@ -2421,8 +2429,18 @@
         html += '</div>';
         html += '</div>';
         html += '<div style="margin:14px 0 10px;">';
-        html += '<div class="s-label" style="margin-bottom:6px;">Roll Release Delay</div>';
-        html += '<div style="display:grid;grid-template-columns:1fr 58px;align-items:center;gap:10px;"><input type="range" min="0" max="1000" step="50" value="' + rollDelay + '" id="__roll-delay"><span id="__roll-delay-val" class="vol-pct">' + rollDelay + 'ms</span></div>';
+        html += '<div style="display:flex;justify-content:space-between;align-items:end;gap:10px;margin-bottom:6px;"><div><div class="s-label">Crouch Release Delay / 蹲起延迟</div><div style="color:#aaa;font-size:12px;text-align:left;">How long the character stays crouched after releasing Down</div></div><span id="__roll-delay-val" class="vol-pct">' + rollDelay + 'ms</span></div>';
+        html += '<input type="range" min="0" max="1000" step="50" value="' + rollDelay + '" id="__roll-delay" style="width:100%;">';
+        html += '</div>';
+        html += '<div style="margin:14px 0 10px;">';
+        html += '<div class="s-label" style="margin-bottom:8px;">Third-Person Camera</div>';
+        html += '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">';
+        for (var vi = 0; vi < viewOptions.length; vi++) {
+            var view = viewOptions[vi];
+            var active = view.key === thirdPersonView ? ' selected' : '';
+            html += '<button class="diff-btn __view-btn' + active + '" data-view="' + view.key + '" style="min-height:58px;padding:8px 6px;"><strong>' + view.label + '</strong><small style="display:block;color:#aaa;font-size:11px;margin-top:4px;line-height:1.2;">' + view.desc + '</small></button>';
+        }
+        html += '</div>';
         html += '</div>';
         html += '<div style="margin:14px 0 8px;">';
         html += '<div class="s-label" style="margin-bottom:8px;">Key Bindings</div>';
@@ -2472,6 +2490,23 @@
                 localStorage.setItem('subwayRollReleaseDelay', String(val));
                 var out = document.getElementById('__roll-delay-val');
                 if (out) out.textContent = val + 'ms';
+            };
+        }
+        function refreshViewButtons() {
+            var btns = overlay.querySelectorAll('.__view-btn');
+            for (var vi = 0; vi < btns.length; vi++) {
+                var active = btns[vi].getAttribute('data-view') === SG.state.thirdPersonView;
+                btns[vi].classList.toggle('selected', active);
+            }
+        }
+        var viewBtns = overlay.querySelectorAll('.__view-btn');
+        for (var vk = 0; vk < viewBtns.length; vk++) {
+            viewBtns[vk].onclick = function(e) {
+                e.preventDefault();
+                var view = this.getAttribute('data-view') || 'far';
+                SG.state.thirdPersonView = view;
+                localStorage.setItem('subwayThirdPersonView', view);
+                refreshViewButtons();
             };
         }
         function refreshBindingButtons() {
@@ -4079,6 +4114,17 @@
     };
 
     // ===== CAMERA =====
+    SG.thirdPersonCameraViews = SG.thirdPersonCameraViews || {
+        far: { label: 'Farthest', y: 5.0, z: 7.0, lookY: -1.0, lookZ: -10.0 },
+        medium: { label: 'Medium', y: 4.1, z: 5.4, lookY: -0.65, lookZ: -8.0 },
+        near: { label: 'Closest', y: 3.0, z: 3.7, lookY: -0.25, lookZ: -6.2 }
+    };
+
+    SG.getThirdPersonCameraView = function() {
+        var key = SG.state.thirdPersonView || 'far';
+        return SG.thirdPersonCameraViews[key] || SG.thirdPersonCameraViews.far;
+    };
+
     SG.updateCamera = function() {
         if (!SG.camera) return;
 
@@ -4099,9 +4145,10 @@
             if (SG.homelanderGroup) SG.homelanderGroup.visible = false;
         } else {
             if (SG.homelanderGroup) SG.homelanderGroup.visible = true;
+            var view = SG.getThirdPersonCameraView();
             var targetX = camTarget.x;
-            var targetY = camTarget.y + 5;
-            var targetZ = camTarget.z + 7;
+            var targetY = camTarget.y + view.y;
+            var targetZ = camTarget.z + view.z;
             var shakeX = 0, shakeY = 0;
             if (SG.state.cameraShake > 0.01) {
                 shakeX = (Math.random() - 0.5) * SG.state.cameraShake * 0.3;
@@ -4110,7 +4157,7 @@
             SG.camera.position.x += (targetX + shakeX - SG.camera.position.x) * 0.1;
             SG.camera.position.y += (targetY + shakeY - SG.camera.position.y) * 0.1;
             SG.camera.position.z += (targetZ - SG.camera.position.z) * 0.1;
-            SG.camera.lookAt(camTarget.x, camTarget.y - 1, camTarget.z - 10);
+            SG.camera.lookAt(camTarget.x, camTarget.y + view.lookY, camTarget.z + view.lookZ);
             if (SG.player && !SG.state.homelander) SG.player.visible = true;
         }
     };
