@@ -686,6 +686,23 @@
             SG.uiOverlay.appendChild(el);
         })();
 
+        // ===== GUN CROSSHAIR =====
+        (function() {
+            var cross = document.createElement('div');
+            cross.id = 'gun-crosshair';
+            cross.style.cssText = 'position:absolute;left:50%;top:50%;width:24px;height:24px;transform:translate(-50%,-50%);display:none;pointer-events:none;z-index:40;';
+            var h = document.createElement('div');
+            h.style.cssText = 'position:absolute;left:2px;right:2px;top:11px;height:2px;background:#ffe84a;box-shadow:0 0 6px rgba(255,232,74,0.95),0 0 1px #000;';
+            var v = document.createElement('div');
+            v.style.cssText = 'position:absolute;top:2px;bottom:2px;left:11px;width:2px;background:#ffe84a;box-shadow:0 0 6px rgba(255,232,74,0.95),0 0 1px #000;';
+            var dot = document.createElement('div');
+            dot.style.cssText = 'position:absolute;left:10px;top:10px;width:4px;height:4px;border-radius:50%;background:#fff38a;box-shadow:0 0 7px rgba(255,232,74,1);';
+            cross.appendChild(h);
+            cross.appendChild(v);
+            cross.appendChild(dot);
+            SG.uiOverlay.appendChild(cross);
+        })();
+
         // ===== GAME OVER SCREEN =====
         var gameOverDiv = document.createElement('div');
         gameOverDiv.id = 'game-over-screen';

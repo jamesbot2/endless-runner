@@ -53,14 +53,18 @@ function normalizeModel(object, target) {
 function materialFor(mat, accent) {
   const name = (mat && mat.name ? mat.name : '').toLowerCase()
   let color = mat && mat.color ? mat.color.clone() : new THREE.Color(0x9aa4b2)
-  if (/black|dark|rubber|handle|grip/.test(name)) color = new THREE.Color(0x101827)
-  if (/blue|light|energy|cyan|glow/.test(name)) color = new THREE.Color(accent)
-  if (/white|silver|metal/.test(name)) color = new THREE.Color(0xdce5ef)
+  const brightness = (color.r + color.g + color.b) / 3
+  if (brightness < 0.07) color.lerp(new THREE.Color(0xffffff), 0.18)
+  if (/barrel|detail|scope|glass|light|energy|cyan|glow/.test(name)) color.lerp(new THREE.Color(accent), 0.28)
+  if (/main/.test(name) && brightness < 0.16) color.lerp(new THREE.Color(0x9aa4b2), 0.22)
+  if (/handle|grip|dark/.test(name)) color.lerp(new THREE.Color(0x29364a), 0.18)
   return new THREE.MeshStandardMaterial({
     name: mat && mat.name ? mat.name : 'GunMaterial',
     color,
-    roughness: 0.58,
-    metalness: /metal|silver|grey|gray/.test(name) ? 0.28 : 0.08
+    emissive: /detail|glass|light|energy|glow/.test(name) ? new THREE.Color(accent) : new THREE.Color(0x000000),
+    emissiveIntensity: /detail|glass|light|energy|glow/.test(name) ? 0.18 : 0,
+    roughness: 0.5,
+    metalness: /barrel|metal|silver|grey|gray|main/.test(name) ? 0.26 : 0.08
   })
 }
 

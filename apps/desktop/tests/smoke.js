@@ -359,6 +359,12 @@ app.whenReady().then(async () => {
           var pickup = window.__SG.createGunPickup(1, -2, sniper)
           var picked = window.__SG.collectGunPickup(pickup)
           var timerStartsAt30 = window.__SG.state.gunTimer === 30
+          window.__SG.state.gunTimer = 7
+          var riflePickup = window.__SG.createGunPickup(1, -2, window.__SG.getGunDef('rifle'))
+          var replaced = window.__SG.collectGunPickup(riflePickup) &&
+            window.__SG.state.activeGun &&
+            window.__SG.state.activeGun.id === 'rifle' &&
+            window.__SG.state.gunTimer === 30
           window.__SG.state.gunTimer = 30
           window.__SG.updateGunSystem(1)
           var timerTicks = window.__SG.state.gunTimer > 28.9 && window.__SG.state.gunTimer < 29.1
@@ -372,6 +378,9 @@ app.whenReady().then(async () => {
           window.__SG.state.gunShotCooldown = 0
           var shotBreakable = window.__SG.shootGun()
           var breakableDestroyed = breakable ? window.__SG.state.obstacles.indexOf(breakable) < 0 : false
+          var brightBeamParticles = window.__SG.state.particles.filter(function(particle) {
+            return particle && particle.material && particle.material.blending === window.THREE.AdditiveBlending && particle.material.opacity >= 0.4
+          }).length >= 2
           var train = new window.THREE.Group()
           train.position.set(window.__SG.LANE_POSITIONS[1], 0, -12)
           train.userData = { type: 'train', lane: 1, width: 2.2, height: 1.7, depth: 5.5, visualDepth: 5.5 }
@@ -394,18 +403,33 @@ app.whenReady().then(async () => {
           window.__SG.updateCamera()
           window.__SG.updateGunViewModel()
           var firstPersonGunVisible = !!(window.__SG.gunViewModel && window.__SG.gunViewModel.visible)
+          var viewModelUpright = false
+          if (window.__SG.gunViewModel && window.__SG.gunViewModel.children[0]) {
+            var gunChild = window.__SG.gunViewModel.children[0]
+            viewModelUpright = Math.abs(gunChild.rotation.y) < 0.01 && Math.abs(gunChild.rotation.z) < 0.01
+          }
+          var crosshair = document.getElementById('gun-crosshair')
+          var firstPersonCrosshair = crosshair && crosshair.style.display !== 'none'
+          window.__SG.state.firstPerson = false
+          if (window.__SG.updateGunViewModel) window.__SG.updateGunViewModel()
+          if (window.__SG.updateGunHUD) window.__SG.updateGunHUD()
+          var thirdPersonCrosshair = crosshair && crosshair.style.display !== 'none'
           r.gunSystem = {
             catalog: window.__SG.gunCatalog.length,
             paths: window.__SG.gunModelPaths,
             picked,
+            replaced,
             timerStartsAt30,
             timerTicks,
             shotBreakable,
             breakableDestroyed,
+            brightBeamParticles,
             shotTrain,
             trainSurvived,
             homelanderBlocked,
             firstPersonGunVisible,
+            viewModelUpright,
+            crosshair: firstPersonCrosshair && thirdPersonCrosshair,
             hud: document.getElementById('gun-hud') !== null
           }
         } finally {
@@ -735,9 +759,10 @@ app.whenReady().then(async () => {
   check("14i-1. Homelander GLB tuning faces forward with eye lasers", !!state.homelanderTuning && Math.abs(state.homelanderTuning.modelRotationY) < 0.001 && state.homelanderTuning.modelYOffset <= -0.15 && state.homelanderTuning.eyeOffsetY > 1.5 && state.homelanderTuning.eyeOffsetZ < 0, state.homelanderTuning ? JSON.stringify(state.homelanderTuning) : 'missing tuning')
   check("14i-2. Homelander GLB loads into scene", !!state.homelanderModelLoaded && state.homelanderModelHeight > 1.7, `height=${state.homelanderModelHeight}`)
   check("14j. vehicle model loader exists", !!state.vehicleLoader, state.vehicleTrainPath || 'missing train path')
-  check("14j-1. gun pickup system supports timed weapons", !!state.gunSystem && state.gunSystem.catalog >= 4 && state.gunSystem.paths.sniper === 'models/guns/sniper-rifle.glb' && !!state.gunSystem.picked && !!state.gunSystem.timerStartsAt30 && !!state.gunSystem.timerTicks && !!state.gunSystem.hud, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
+  check("14j-1. gun pickup system supports timed weapon replacement", !!state.gunSystem && state.gunSystem.catalog >= 4 && state.gunSystem.paths.sniper === 'models/guns/sniper-rifle.glb' && !!state.gunSystem.picked && !!state.gunSystem.replaced && !!state.gunSystem.timerStartsAt30 && !!state.gunSystem.timerTicks && !!state.gunSystem.hud, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
   check("14j-2. guns break non-train obstacles only", !!state.gunSystem && !!state.gunSystem.shotBreakable && !!state.gunSystem.breakableDestroyed && !!state.gunSystem.shotTrain && !!state.gunSystem.trainSurvived && !!state.gunSystem.homelanderBlocked, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
-  check("14j-3. first-person gun view model appears", !!state.gunSystem && !!state.gunSystem.firstPersonGunVisible)
+  check("14j-3. first-person gun view model is upright and visible", !!state.gunSystem && !!state.gunSystem.firstPersonGunVisible && !!state.gunSystem.viewModelUpright, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
+  check("14j-4. gun crosshair and bright shots render", !!state.gunSystem && !!state.gunSystem.crosshair && !!state.gunSystem.brightBeamParticles, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
   check("14k. obstacle spacing guard exists", !!state.obstacleSpacing)
   check("14l. coin spacing guard exists", !!state.coinSpacing)
   check("14l-1. coin model has centered high-contrast surface detail", !!state.coinDetail && state.coinDetail.children >= 6 && !!state.coinDetail.hasTorus && !!state.coinDetail.hasShape && !!state.coinDetail.centeredShape && !!state.coinDetail.hasBaseY && state.coinDetail.shapeColor === 0x7A3B00 && state.coinDetail.marker === 'high-contrast-centered-detail', state.coinDetail ? JSON.stringify(state.coinDetail) : 'missing')

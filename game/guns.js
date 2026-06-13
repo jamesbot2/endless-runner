@@ -21,6 +21,29 @@
         { id: 'sniper', name: 'Sniper Rifle', modelKey: 'sniper', power: 3.4, fireInterval: 0.16, color: 0xff5fd7, range: 58, pickupScale: 1.0, viewScale: 1.12 }
     ];
 
+    SG.tuneGunMaterials = function(root, def) {
+        if (!root || !root.traverse) return;
+        root.traverse(function(node) {
+            if (!node || !node.isMesh || !node.material) return;
+            var mats = Array.isArray(node.material) ? node.material : [node.material];
+            for (var i = 0; i < mats.length; i++) {
+                var mat = mats[i];
+                if (!mat || !mat.color) continue;
+                var brightness = (mat.color.r + mat.color.g + mat.color.b) / 3;
+                if (brightness < 0.09) mat.color.lerp(new THREE.Color(0xffffff), 0.2);
+                var name = (mat.name || '').toLowerCase();
+                if (/detail|barrel|scope|glass|light|energy|glow/.test(name)) {
+                    mat.color.lerp(new THREE.Color(def.color), 0.16);
+                    if (mat.emissive) {
+                        mat.emissive.setHex(def.color);
+                        mat.emissiveIntensity = Math.max(mat.emissiveIntensity || 0, 0.16);
+                    }
+                }
+                mat.needsUpdate = true;
+            }
+        });
+    };
+
     SG.getGunDef = function(id) {
         for (var i = 0; i < SG.gunCatalog.length; i++) {
             if (SG.gunCatalog[i].id === id) return SG.gunCatalog[i];
@@ -42,6 +65,8 @@
                     node.castShadow = true;
                     node.receiveShadow = true;
                 });
+                var def = SG.getGunDef(Object.keys(SG.gunModelPaths).filter(function(id) { return SG.gunModelPaths[id] === SG.gunModelPaths[key]; })[0]);
+                SG.tuneGunMaterials(model, def);
                 SG.gunModels[key] = model;
             }, undefined, function(err) {
                 SG.gunModelError = err;
@@ -56,6 +81,7 @@
         var clone = source.clone(true);
         clone.name = def.id + (forView ? '-view-gun' : '-pickup-gun');
         clone.scale.multiplyScalar(forView ? def.viewScale : def.pickupScale);
+        SG.tuneGunMaterials(clone, def);
         return clone;
     };
 
@@ -86,7 +112,7 @@
         group.name = def.id + '-pickup';
         group.position.set(SG.LANE_POSITIONS[lane], 0.16, z);
         var model = SG.cloneGunModel(def, false);
-        model.rotation.set(-0.05, Math.PI, Math.PI / 2);
+        model.rotation.set(-0.08, 0, 0);
         model.position.y = 0.22;
         group.add(model);
 
@@ -164,6 +190,7 @@
         if (idx >= 0) SG.state.gunPickups.splice(idx, 1);
         if (SG.disposeObject) SG.disposeObject(pickup);
         SG.refreshGunViewModel();
+        SG.updateGunCrosshair();
         SG.flashGunHUD('Picked up ' + def.name);
         return true;
     };
@@ -173,6 +200,7 @@
         SG.state.gunTimer = 0;
         SG.state.gunShotCooldown = 0;
         if (SG.gunViewModel) SG.gunViewModel.visible = false;
+        SG.updateGunCrosshair();
         SG.updateGunHUD();
     };
 
@@ -196,8 +224,8 @@
         SG.gunViewModel.name = 'first-person-gun-viewmodel';
         var def = SG.getGunDef(SG.state.activeGun && SG.state.activeGun.id);
         var model = SG.cloneGunModel(def, true);
-        model.position.set(0, -0.04, 0);
-        model.rotation.set(-0.08, Math.PI, Math.PI / 2);
+        model.position.set(0, -0.02, 0);
+        model.rotation.set(-0.08, 0, 0);
         SG.gunViewModel.add(model);
         SG.gunViewModel.visible = false;
         SG.scene.add(SG.gunViewModel);
@@ -213,9 +241,9 @@
         var down = new THREE.Vector3(0, -1, 0).applyQuaternion(SG.camera.quaternion);
         SG.camera.getWorldDirection(forward);
         SG.gunViewModel.position.copy(SG.camera.position)
-            .add(right.multiplyScalar(0.42))
-            .add(down.multiplyScalar(0.34))
-            .add(forward.multiplyScalar(0.72));
+            .add(right.multiplyScalar(0.38))
+            .add(down.multiplyScalar(0.32))
+            .add(forward.multiplyScalar(0.78));
         SG.gunViewModel.quaternion.copy(SG.camera.quaternion);
     };
 
@@ -271,17 +299,47 @@
         end.y += target ? Math.min(target.userData.height || 1, 1.1) * 0.55 : 0;
         var dir = end.clone().sub(start);
         var len = Math.max(0.1, dir.length());
+        var shotColor = SG.state.activeGun.color || 0xffe34d;
         var mat = new THREE.MeshBasicMaterial({
-            color: SG.state.activeGun.color || 0x4be7ff,
+            color: shotColor,
             transparent: true,
-            opacity: 0.95
+            opacity: 1,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
         });
-        var beam = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, len, 10), mat);
-        beam.position.copy(start).add(dir.multiplyScalar(0.5));
+        var beam = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, len, 12), mat);
+        beam.position.copy(start).add(dir.clone().multiplyScalar(0.5));
         beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), end.clone().sub(start).normalize());
-        beam.userData = { vx: 0, vy: 0, vz: 0, life: 1, decay: 0.22 };
+        beam.userData = { vx: 0, vy: 0, vz: 0, life: 1, decay: 0.18 };
         SG.scene.add(beam);
         SG.state.particles.push(beam);
+
+        var glowMat = new THREE.MeshBasicMaterial({
+            color: SG.state.activeGun.color || 0x4be7ff,
+            transparent: true,
+            opacity: 0.42,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        var glow = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, len, 12), glowMat);
+        glow.position.copy(beam.position);
+        glow.quaternion.copy(beam.quaternion);
+        glow.userData = { vx: 0, vy: 0, vz: 0, life: 1, decay: 0.22 };
+        SG.scene.add(glow);
+        SG.state.particles.push(glow);
+
+        var flashMat = new THREE.MeshBasicMaterial({
+            color: 0xfff36a,
+            transparent: true,
+            opacity: 0.98,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        var flash = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 8), flashMat);
+        flash.position.copy(start);
+        flash.userData = { vx: 0, vy: 0, vz: 0, life: 1, decay: 0.32 };
+        SG.scene.add(flash);
+        SG.state.particles.push(flash);
     };
 
     SG.playGunSound = function() {
@@ -332,10 +390,19 @@
         if (!el) return;
         if (!SG.state.activeGun || SG.state.gunTimer <= 0 || SG.state.homelander) {
             el.style.display = 'none';
+            SG.updateGunCrosshair();
             return;
         }
         el.style.display = 'block';
         el.textContent = 'GUN: ' + SG.state.activeGun.name + '  ' + SG.state.gunTimer.toFixed(1) + 's';
+        SG.updateGunCrosshair();
+    };
+
+    SG.updateGunCrosshair = function() {
+        var el = document.getElementById('gun-crosshair');
+        if (!el) return;
+        var show = !!(SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander && SG.state.started && !SG.state.gameOver);
+        el.style.display = show ? 'block' : 'none';
     };
 
     SG.updateGunSystem = function(delta) {
