@@ -690,7 +690,7 @@
         (function() {
             var cross = document.createElement('div');
             cross.id = 'gun-crosshair';
-            cross.style.cssText = 'position:absolute;left:50%;top:50%;width:24px;height:24px;transform:translate(-50%,-50%);display:none;pointer-events:none;z-index:40;';
+            cross.style.cssText = 'position:fixed;left:50%;top:50%;width:24px;height:24px;transform:translate(-50%,-50%);display:none;visibility:hidden;opacity:0;pointer-events:none;z-index:9999;';
             var h = document.createElement('div');
             h.style.cssText = 'position:absolute;left:2px;right:2px;top:11px;height:2px;background:#ffe84a;box-shadow:0 0 6px rgba(255,232,74,0.95),0 0 1px #000;';
             var v = document.createElement('div');

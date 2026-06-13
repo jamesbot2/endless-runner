@@ -404,9 +404,11 @@ app.whenReady().then(async () => {
           window.__SG.updateGunViewModel()
           var firstPersonGunVisible = !!(window.__SG.gunViewModel && window.__SG.gunViewModel.visible)
           var viewModelUpright = false
+          var viewModelAimsUp = false
           if (window.__SG.gunViewModel && window.__SG.gunViewModel.children[0]) {
             var gunChild = window.__SG.gunViewModel.children[0]
             viewModelUpright = Math.abs(gunChild.rotation.y) < 0.01 && Math.abs(gunChild.rotation.z) < 0.01
+            viewModelAimsUp = gunChild.rotation.x > 0
           }
           var crosshair = document.getElementById('gun-crosshair')
           var firstPersonCrosshair = crosshair && crosshair.style.display !== 'none'
@@ -429,6 +431,7 @@ app.whenReady().then(async () => {
             homelanderBlocked,
             firstPersonGunVisible,
             viewModelUpright,
+            viewModelAimsUp,
             crosshair: firstPersonCrosshair && thirdPersonCrosshair,
             hud: document.getElementById('gun-hud') !== null
           }
@@ -761,7 +764,7 @@ app.whenReady().then(async () => {
   check("14j. vehicle model loader exists", !!state.vehicleLoader, state.vehicleTrainPath || 'missing train path')
   check("14j-1. gun pickup system supports timed weapon replacement", !!state.gunSystem && state.gunSystem.catalog >= 4 && state.gunSystem.paths.sniper === 'models/guns/sniper-rifle.glb' && !!state.gunSystem.picked && !!state.gunSystem.replaced && !!state.gunSystem.timerStartsAt30 && !!state.gunSystem.timerTicks && !!state.gunSystem.hud, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
   check("14j-2. guns break non-train obstacles only", !!state.gunSystem && !!state.gunSystem.shotBreakable && !!state.gunSystem.breakableDestroyed && !!state.gunSystem.shotTrain && !!state.gunSystem.trainSurvived && !!state.gunSystem.homelanderBlocked, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
-  check("14j-3. first-person gun view model is upright and visible", !!state.gunSystem && !!state.gunSystem.firstPersonGunVisible && !!state.gunSystem.viewModelUpright, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
+  check("14j-3. first-person gun view model is upright and aimed up", !!state.gunSystem && !!state.gunSystem.firstPersonGunVisible && !!state.gunSystem.viewModelUpright && !!state.gunSystem.viewModelAimsUp, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
   check("14j-4. gun crosshair and bright shots render", !!state.gunSystem && !!state.gunSystem.crosshair && !!state.gunSystem.brightBeamParticles, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
   check("14k. obstacle spacing guard exists", !!state.obstacleSpacing)
   check("14l. coin spacing guard exists", !!state.coinSpacing)

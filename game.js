@@ -2135,16 +2135,8 @@
             for (var i = 0; i < mats.length; i++) {
                 var mat = mats[i];
                 if (!mat || !mat.color) continue;
-                var brightness = (mat.color.r + mat.color.g + mat.color.b) / 3;
-                if (brightness < 0.09) mat.color.lerp(new THREE.Color(0xffffff), 0.2);
-                var name = (mat.name || '').toLowerCase();
-                if (/detail|barrel|scope|glass|light|energy|glow/.test(name)) {
-                    mat.color.lerp(new THREE.Color(def.color), 0.16);
-                    if (mat.emissive) {
-                        mat.emissive.setHex(def.color);
-                        mat.emissiveIntensity = Math.max(mat.emissiveIntensity || 0, 0.16);
-                    }
-                }
+                if (mat.emissive) mat.emissive.setHex(0x000000);
+                mat.emissiveIntensity = 0;
                 mat.needsUpdate = true;
             }
         });
@@ -2331,7 +2323,7 @@
         var def = SG.getGunDef(SG.state.activeGun && SG.state.activeGun.id);
         var model = SG.cloneGunModel(def, true);
         model.position.set(0, -0.02, 0);
-        model.rotation.set(-0.08, 0, 0);
+        model.rotation.set(0.12, 0, 0);
         SG.gunViewModel.add(model);
         SG.gunViewModel.visible = false;
         SG.scene.add(SG.gunViewModel);
@@ -2347,10 +2339,25 @@
         var down = new THREE.Vector3(0, -1, 0).applyQuaternion(SG.camera.quaternion);
         SG.camera.getWorldDirection(forward);
         SG.gunViewModel.position.copy(SG.camera.position)
-            .add(right.multiplyScalar(0.38))
-            .add(down.multiplyScalar(0.32))
-            .add(forward.multiplyScalar(0.78));
+            .add(right.multiplyScalar(0.34))
+            .add(down.multiplyScalar(0.29))
+            .add(forward.multiplyScalar(0.82));
         SG.gunViewModel.quaternion.copy(SG.camera.quaternion);
+    };
+
+    SG.getGunMuzzlePosition = function() {
+        if (!THREE || !SG.player) return null;
+        if (SG.state.firstPerson && SG.camera) {
+            var forward = new THREE.Vector3();
+            var right = new THREE.Vector3(1, 0, 0).applyQuaternion(SG.camera.quaternion);
+            var down = new THREE.Vector3(0, -1, 0).applyQuaternion(SG.camera.quaternion);
+            SG.camera.getWorldDirection(forward);
+            return SG.camera.position.clone()
+                .add(right.multiplyScalar(0.34))
+                .add(down.multiplyScalar(0.23))
+                .add(forward.multiplyScalar(1.12));
+        }
+        return SG.player.position.clone().add(new THREE.Vector3(0.32, 0.92, -0.58));
     };
 
     SG.findGunTarget = function() {
@@ -2397,11 +2404,10 @@
 
     SG.createGunBeam = function(target) {
         if (!THREE || !SG.scene || !SG.player || !SG.state.activeGun) return;
-        var start = SG.player.position.clone();
-        start.y += SG.state.firstPerson ? 1.05 : 0.85;
-        start.z -= 0.4;
-        start.x += SG.state.firstPerson ? 0.25 : 0;
-        var end = target ? target.position.clone() : start.clone().add(new THREE.Vector3(0, 0, -SG.state.activeGun.range));
+        var start = SG.getGunMuzzlePosition() || SG.player.position.clone();
+        var forward = new THREE.Vector3(0, 0, -1);
+        if (SG.camera) SG.camera.getWorldDirection(forward);
+        var end = target ? target.position.clone() : start.clone().add(forward.multiplyScalar(SG.state.activeGun.range));
         end.y += target ? Math.min(target.userData.height || 1, 1.1) * 0.55 : 0;
         var dir = end.clone().sub(start);
         var len = Math.max(0.1, dir.length());
@@ -2452,17 +2458,42 @@
         if (!SG.audioCtx || SG.state.muted) return;
         SG.scheduleSound(0, function(t) {
             try {
-                var osc = SG.audioCtx.createOscillator();
-                var gain = SG.audioCtx.createGain();
-                osc.type = 'square';
-                osc.frequency.setValueAtTime(760, t);
-                osc.frequency.exponentialRampToValueAtTime(150, t + 0.07);
-                gain.gain.setValueAtTime(0.08 * (SG.state.sfxVolume || 0.8), t);
-                gain.gain.linearRampToValueAtTime(0, t + 0.09);
-                osc.connect(gain);
-                gain.connect(SG.audioCtx.destination);
-                osc.start(t);
-                osc.stop(t + 0.1);
+                var sfx = SG.state.sfxVolume || 0.8;
+                var master = SG.audioCtx.createGain();
+                master.gain.setValueAtTime(0.32 * sfx, t);
+                master.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+                master.connect(SG.audioCtx.destination);
+
+                var body = SG.audioCtx.createOscillator();
+                body.type = 'sawtooth';
+                body.frequency.setValueAtTime(150, t);
+                body.frequency.exponentialRampToValueAtTime(58, t + 0.11);
+                body.connect(master);
+                body.start(t);
+                body.stop(t + 0.16);
+
+                var crack = SG.audioCtx.createOscillator();
+                crack.type = 'square';
+                crack.frequency.setValueAtTime(1250, t);
+                crack.frequency.exponentialRampToValueAtTime(310, t + 0.045);
+                crack.connect(master);
+                crack.start(t);
+                crack.stop(t + 0.055);
+
+                var bufferSize = Math.floor(SG.audioCtx.sampleRate * 0.055);
+                var buffer = SG.audioCtx.createBuffer(1, bufferSize, SG.audioCtx.sampleRate);
+                var data = buffer.getChannelData(0);
+                for (var i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2);
+                }
+                var noise = SG.audioCtx.createBufferSource();
+                var noiseGain = SG.audioCtx.createGain();
+                noise.buffer = buffer;
+                noiseGain.gain.setValueAtTime(0.22 * sfx, t);
+                noiseGain.gain.linearRampToValueAtTime(0, t + 0.055);
+                noise.connect(noiseGain);
+                noiseGain.connect(SG.audioCtx.destination);
+                noise.start(t);
             } catch(e) {}
         });
     };
@@ -2509,6 +2540,8 @@
         if (!el) return;
         var show = !!(SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander && SG.state.started && !SG.state.gameOver);
         el.style.display = show ? 'block' : 'none';
+        el.style.visibility = show ? 'visible' : 'hidden';
+        el.style.opacity = show ? '1' : '0';
     };
 
     SG.updateGunSystem = function(delta) {
@@ -3482,7 +3515,7 @@
         (function() {
             var cross = document.createElement('div');
             cross.id = 'gun-crosshair';
-            cross.style.cssText = 'position:absolute;left:50%;top:50%;width:24px;height:24px;transform:translate(-50%,-50%);display:none;pointer-events:none;z-index:40;';
+            cross.style.cssText = 'position:fixed;left:50%;top:50%;width:24px;height:24px;transform:translate(-50%,-50%);display:none;visibility:hidden;opacity:0;pointer-events:none;z-index:9999;';
             var h = document.createElement('div');
             h.style.cssText = 'position:absolute;left:2px;right:2px;top:11px;height:2px;background:#ffe84a;box-shadow:0 0 6px rgba(255,232,74,0.95),0 0 1px #000;';
             var v = document.createElement('div');
@@ -4940,7 +4973,8 @@
             var eyeY = camTarget.y + 1.3 + rollDrop;
             var eyeZ = camTarget.z + 0.5;
             SG.camera.position.set(camTarget.x, eyeY, eyeZ);
-            SG.camera.lookAt(camTarget.x, camTarget.y + 0.3, camTarget.z - 30);
+            var pitchUp = Math.tan(5 * Math.PI / 180) * 30;
+            SG.camera.lookAt(camTarget.x, camTarget.y + 0.3 + pitchUp, camTarget.z - 30);
             if (SG.player) SG.player.visible = false;
             if (SG.homelanderGroup) SG.homelanderGroup.visible = false;
         } else {
@@ -5642,6 +5676,7 @@
         try {
             SG.update();
             if (SG.updateSpeedHUD) SG.updateSpeedHUD();
+            if (SG.updateGunCrosshair) SG.updateGunCrosshair();
             if (SG.camera && !isNaN(SG.camera.position.x)) {
                 SG.renderer.render(SG.scene, SG.camera);
             }

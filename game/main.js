@@ -36,7 +36,8 @@
             var eyeY = camTarget.y + 1.3 + rollDrop;
             var eyeZ = camTarget.z + 0.5;
             SG.camera.position.set(camTarget.x, eyeY, eyeZ);
-            SG.camera.lookAt(camTarget.x, camTarget.y + 0.3, camTarget.z - 30);
+            var pitchUp = Math.tan(5 * Math.PI / 180) * 30;
+            SG.camera.lookAt(camTarget.x, camTarget.y + 0.3 + pitchUp, camTarget.z - 30);
             if (SG.player) SG.player.visible = false;
             if (SG.homelanderGroup) SG.homelanderGroup.visible = false;
         } else {
@@ -738,6 +739,7 @@
         try {
             SG.update();
             if (SG.updateSpeedHUD) SG.updateSpeedHUD();
+            if (SG.updateGunCrosshair) SG.updateGunCrosshair();
             if (SG.camera && !isNaN(SG.camera.position.x)) {
                 SG.renderer.render(SG.scene, SG.camera);
             }
