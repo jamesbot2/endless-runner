@@ -677,6 +677,15 @@
             SG.uiOverlay.appendChild(el);
         })();
 
+        // ===== GUN TIMER =====
+        (function() {
+            var el = document.createElement('div');
+            el.id = 'gun-hud';
+            el.style.cssText = 'position:absolute;top:116px;right:16px;color:rgba(255,255,255,0.86);font-size:11px;text-shadow:0 1px 8px rgba(0,0,0,0.9);background:rgba(0,0,0,0.32);padding:3px 10px;border-radius:10px;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);border:1px solid rgba(75,231,255,0.24);display:none;pointer-events:none;';
+            el.textContent = '';
+            SG.uiOverlay.appendChild(el);
+        })();
+
         // ===== GAME OVER SCREEN =====
         var gameOverDiv = document.createElement('div');
         gameOverDiv.id = 'game-over-screen';

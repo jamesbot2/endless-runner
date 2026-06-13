@@ -316,6 +316,7 @@
 
         SG.state.isJumping = false;
         SG.state.isRolling = false;
+        if (SG.clearActiveGun) SG.clearActiveGun();
         if (SG.startHomelanderTheme) SG.startHomelanderTheme();
     };
 

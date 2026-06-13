@@ -272,7 +272,8 @@ app.whenReady().then(async () => {
             themeLoop: window.__SG.homelanderThemeAudio ? window.__SG.homelanderThemeAudio.loop === true : false,
             voiceLoop: window.__SG.homelanderVoiceAudio ? window.__SG.homelanderVoiceAudio.loop === false : false,
             themeVolume: window.__SG.homelanderThemeAudio ? window.__SG.homelanderThemeAudio.volume : null,
-            voiceVolume: window.__SG.homelanderVoiceAudio ? window.__SG.homelanderVoiceAudio.volume : null
+            voiceVolume: window.__SG.homelanderVoiceAudio ? window.__SG.homelanderVoiceAudio.volume : null,
+            voiceGain: window.__SG.homelanderVoiceGain ? window.__SG.homelanderVoiceGain.gain.value : null
           }
           r.homelanderVoiceAfterConsoleClose = pendingAfterCommand &&
             window.__SG.pendingHomelanderVoice === false &&
@@ -331,6 +332,98 @@ app.whenReady().then(async () => {
       }
       r.vehicleLoader = window.__SG ? typeof window.__SG.loadVehicleModels === 'function' : false
       r.vehicleTrainPath = window.__SG && window.__SG.vehicleModelPaths ? window.__SG.vehicleModelPaths.train : null
+      r.gunSystem = null
+      if (window.__SG && window.__SG.createGunPickup && window.__SG.collectGunPickup && window.__SG.shootGun && window.__SG.clearGunSystem && window.THREE) {
+        var savedGunPickups = window.__SG.state.gunPickups.slice()
+        var savedActiveGun = window.__SG.state.activeGun
+        var savedGunTimer = window.__SG.state.gunTimer
+        var savedShotCooldown = window.__SG.state.gunShotCooldown
+        var savedObstaclesForGun = window.__SG.state.obstacles
+        var savedStartedForGun = window.__SG.state.started
+        var savedPausedForGun = window.__SG.state.paused
+        var savedGameOverForGun = window.__SG.state.gameOver
+        var savedHomelanderForGun = window.__SG.state.homelander
+        var savedCurrentLaneForGun = window.__SG.state.currentLane
+        var savedFirstPersonForGun = window.__SG.state.firstPerson
+        var savedPlayerPosForGun = window.__SG.player ? window.__SG.player.position.clone() : null
+        try {
+          window.__SG.state.gunPickups = []
+          window.__SG.state.obstacles = []
+          window.__SG.state.started = true
+          window.__SG.state.paused = false
+          window.__SG.state.gameOver = false
+          window.__SG.state.homelander = false
+          window.__SG.state.currentLane = 1
+          if (window.__SG.player) window.__SG.player.position.set(window.__SG.LANE_POSITIONS[1], window.__SG.PLAYER_Y, 0)
+          var sniper = window.__SG.getGunDef('sniper')
+          var pickup = window.__SG.createGunPickup(1, -2, sniper)
+          var picked = window.__SG.collectGunPickup(pickup)
+          var timerStartsAt30 = window.__SG.state.gunTimer === 30
+          window.__SG.state.gunTimer = 30
+          window.__SG.updateGunSystem(1)
+          var timerTicks = window.__SG.state.gunTimer > 28.9 && window.__SG.state.gunTimer < 29.1
+          var breakable = window.__SG.createLowFlyingObstacle ? window.__SG.createLowFlyingObstacle(1, -12) : null
+          if (breakable) {
+            window.__SG.scene.add(breakable)
+            window.__SG.state.obstacles.push(breakable)
+          }
+          window.__SG.state.activeGun = { id: 'sniper', name: 'Sniper Rifle', power: 3.4, fireInterval: 0.16, range: 58, color: 0xff5fd7 }
+          window.__SG.state.gunTimer = 30
+          window.__SG.state.gunShotCooldown = 0
+          var shotBreakable = window.__SG.shootGun()
+          var breakableDestroyed = breakable ? window.__SG.state.obstacles.indexOf(breakable) < 0 : false
+          var train = new window.THREE.Group()
+          train.position.set(window.__SG.LANE_POSITIONS[1], 0, -12)
+          train.userData = { type: 'train', lane: 1, width: 2.2, height: 1.7, depth: 5.5, visualDepth: 5.5 }
+          window.__SG.scene.add(train)
+          window.__SG.state.obstacles = [train]
+          window.__SG.state.gunShotCooldown = 0
+          var shotTrain = window.__SG.shootGun()
+          var trainSurvived = window.__SG.state.obstacles.indexOf(train) >= 0
+          window.__SG.scene.remove(train)
+          window.__SG.disposeObject(train)
+          var blockedPickup = window.__SG.createGunPickup(1, -2, sniper)
+          window.__SG.state.homelander = true
+          var homelanderBlocked = window.__SG.collectGunPickup(blockedPickup) === false
+          window.__SG.disposeObject(blockedPickup)
+          window.__SG.state.homelander = false
+          window.__SG.state.activeGun = { id: 'rifle', name: 'Rifle', power: 2.35, fireInterval: 0.2, range: 50, color: 0xffd34e }
+          window.__SG.state.gunTimer = 20
+          window.__SG.state.firstPerson = true
+          window.__SG.refreshGunViewModel()
+          window.__SG.updateCamera()
+          window.__SG.updateGunViewModel()
+          var firstPersonGunVisible = !!(window.__SG.gunViewModel && window.__SG.gunViewModel.visible)
+          r.gunSystem = {
+            catalog: window.__SG.gunCatalog.length,
+            paths: window.__SG.gunModelPaths,
+            picked,
+            timerStartsAt30,
+            timerTicks,
+            shotBreakable,
+            breakableDestroyed,
+            shotTrain,
+            trainSurvived,
+            homelanderBlocked,
+            firstPersonGunVisible,
+            hud: document.getElementById('gun-hud') !== null
+          }
+        } finally {
+          if (window.__SG.clearGunSystem) window.__SG.clearGunSystem()
+          window.__SG.state.gunPickups = savedGunPickups
+          window.__SG.state.activeGun = savedActiveGun
+          window.__SG.state.gunTimer = savedGunTimer
+          window.__SG.state.gunShotCooldown = savedShotCooldown
+          window.__SG.state.obstacles = savedObstaclesForGun
+          window.__SG.state.started = savedStartedForGun
+          window.__SG.state.paused = savedPausedForGun
+          window.__SG.state.gameOver = savedGameOverForGun
+          window.__SG.state.homelander = savedHomelanderForGun
+          window.__SG.state.currentLane = savedCurrentLaneForGun
+          window.__SG.state.firstPerson = savedFirstPersonForGun
+          if (window.__SG.player && savedPlayerPosForGun) window.__SG.player.position.copy(savedPlayerPosForGun)
+        }
+      }
       r.obstacleSpacing = window.__SG ? typeof window.__SG.canPlaceObstacle === 'function' && typeof window.__SG.trackObstacle === 'function' : false
       r.coinSpacing = window.__SG ? typeof window.__SG.canPlaceCoinAt === 'function' && typeof window.__SG.addSafeCoin === 'function' : false
       r.sceneryLoader = window.__SG ? typeof window.__SG.loadSceneryModels === 'function' && typeof window.__SG.cloneSceneryModel === 'function' : false
@@ -580,6 +673,7 @@ app.whenReady().then(async () => {
   const homelanderVoicePath = path.join(DESKTOP, 'dist/renderer/audio/im-better-homelander.mp3')
   const trainModelPath = path.join(DESKTOP, 'dist/renderer/models/vehicles/train.glb')
   const busModelPath = path.join(DESKTOP, 'dist/renderer/models/vehicles/bus.glb')
+  const gunModelPath = path.join(DESKTOP, 'dist/renderer/models/guns/sniper-rifle.glb')
   const adventurerPath = path.join(DESKTOP, 'dist/renderer/models/characters/Adventurer.gltf')
   const sceneryBuildingPath = path.join(DESKTOP, 'dist/renderer/models/scenery/buildings/building1_small.glb')
   const sceneryTreePath = path.join(DESKTOP, 'dist/renderer/models/scenery/trees/tree_1.glb')
@@ -591,6 +685,7 @@ app.whenReady().then(async () => {
   check('3g. homelander.glb copied to renderer dist', fs.existsSync(homelanderModelPath), fs.existsSync(homelanderModelPath) ? `${fs.statSync(homelanderModelPath).size} bytes` : 'missing')
   check('3h. train.glb copied to renderer dist', fs.existsSync(trainModelPath), fs.existsSync(trainModelPath) ? `${fs.statSync(trainModelPath).size} bytes` : 'missing')
   check('3i. bus.glb copied to renderer dist', fs.existsSync(busModelPath), fs.existsSync(busModelPath) ? `${fs.statSync(busModelPath).size} bytes` : 'missing')
+  check('3i-1. gun GLB copied to renderer dist', fs.existsSync(gunModelPath), fs.existsSync(gunModelPath) ? `${fs.statSync(gunModelPath).size} bytes` : 'missing')
   check('3j. Adventurer.gltf copied to renderer dist', fs.existsSync(adventurerPath), fs.existsSync(adventurerPath) ? `${fs.statSync(adventurerPath).size} bytes` : 'missing')
   check('3k. scenery building GLB copied to renderer dist', fs.existsSync(sceneryBuildingPath), fs.existsSync(sceneryBuildingPath) ? `${fs.statSync(sceneryBuildingPath).size} bytes` : 'missing')
   check('3l. scenery tree GLB copied to renderer dist', fs.existsSync(sceneryTreePath), fs.existsSync(sceneryTreePath) ? `${fs.statSync(sceneryTreePath).size} bytes` : 'missing')
@@ -635,11 +730,14 @@ app.whenReady().then(async () => {
   check("14h-2. console closes with Escape", !!state.consoleEscapeClose)
   check("14h-3. console help does not reveal Homelander", !!state.consoleHelpHidesHomelander)
   check("14h-4. Homelander voice plays once after console closes", !!state.homelanderVoiceAfterConsoleClose, state.homelanderAudio ? JSON.stringify(state.homelanderAudio) : 'missing audio')
-  check("14h-5. Homelander theme loops below voice volume", !!state.homelanderAudio && state.homelanderAudio.theme === 'audio/homelander-theme.mp3' && state.homelanderAudio.voice === 'audio/im-better-homelander.mp3' && !!state.homelanderAudio.themeLoop && !!state.homelanderAudio.voiceLoop && state.homelanderAudio.voiceVolume > state.homelanderAudio.themeVolume, state.homelanderAudio ? JSON.stringify(state.homelanderAudio) : 'missing audio')
+  check("14h-5. Homelander theme loops below amplified voice", !!state.homelanderAudio && state.homelanderAudio.theme === 'audio/homelander-theme.mp3' && state.homelanderAudio.voice === 'audio/im-better-homelander.mp3' && !!state.homelanderAudio.themeLoop && !!state.homelanderAudio.voiceLoop && state.homelanderAudio.voiceVolume >= 1 && state.homelanderAudio.voiceGain > 1.8, state.homelanderAudio ? JSON.stringify(state.homelanderAudio) : 'missing audio')
   check("14i. Homelander GLB loader exists", !!state.homelanderLoader && state.homelanderModelPath === 'models/homelander.glb', state.homelanderModelPath || 'missing path')
   check("14i-1. Homelander GLB tuning faces forward with eye lasers", !!state.homelanderTuning && Math.abs(state.homelanderTuning.modelRotationY) < 0.001 && state.homelanderTuning.modelYOffset <= -0.15 && state.homelanderTuning.eyeOffsetY > 1.5 && state.homelanderTuning.eyeOffsetZ < 0, state.homelanderTuning ? JSON.stringify(state.homelanderTuning) : 'missing tuning')
   check("14i-2. Homelander GLB loads into scene", !!state.homelanderModelLoaded && state.homelanderModelHeight > 1.7, `height=${state.homelanderModelHeight}`)
   check("14j. vehicle model loader exists", !!state.vehicleLoader, state.vehicleTrainPath || 'missing train path')
+  check("14j-1. gun pickup system supports timed weapons", !!state.gunSystem && state.gunSystem.catalog >= 4 && state.gunSystem.paths.sniper === 'models/guns/sniper-rifle.glb' && !!state.gunSystem.picked && !!state.gunSystem.timerStartsAt30 && !!state.gunSystem.timerTicks && !!state.gunSystem.hud, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
+  check("14j-2. guns break non-train obstacles only", !!state.gunSystem && !!state.gunSystem.shotBreakable && !!state.gunSystem.breakableDestroyed && !!state.gunSystem.shotTrain && !!state.gunSystem.trainSurvived && !!state.gunSystem.homelanderBlocked, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
+  check("14j-3. first-person gun view model appears", !!state.gunSystem && !!state.gunSystem.firstPersonGunVisible)
   check("14k. obstacle spacing guard exists", !!state.obstacleSpacing)
   check("14l. coin spacing guard exists", !!state.coinSpacing)
   check("14l-1. coin model has centered high-contrast surface detail", !!state.coinDetail && state.coinDetail.children >= 6 && !!state.coinDetail.hasTorus && !!state.coinDetail.hasShape && !!state.coinDetail.centeredShape && !!state.coinDetail.hasBaseY && state.coinDetail.shapeColor === 0x7A3B00 && state.coinDetail.marker === 'high-contrast-centered-detail', state.coinDetail ? JSON.stringify(state.coinDetail) : 'missing')

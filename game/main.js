@@ -64,14 +64,17 @@
         for (i = 0; i < SG.state.trackSegments.length; i++) { SG.scene.remove(SG.state.trackSegments[i]); SG.disposeObject(SG.state.trackSegments[i]); }
         for (i = 0; i < SG.state.obstacles.length; i++) { SG.scene.remove(SG.state.obstacles[i]); SG.disposeObject(SG.state.obstacles[i]); }
         for (i = 0; i < SG.state.coinObjects.length; i++) { SG.scene.remove(SG.state.coinObjects[i]); SG.disposeObject(SG.state.coinObjects[i]); }
+        for (i = 0; i < SG.state.gunPickups.length; i++) { SG.scene.remove(SG.state.gunPickups[i]); SG.disposeObject(SG.state.gunPickups[i]); }
         for (i = 0; i < SG.state.buildings.length; i++) { SG.scene.remove(SG.state.buildings[i]); SG.disposeObject(SG.state.buildings[i]); }
         for (i = 0; i < SG.state.particles.length; i++) { SG.scene.remove(SG.state.particles[i]); SG.disposeObject(SG.state.particles[i]); }
         SG.state.trackSegments = [];
         SG.state.obstacles = [];
         SG.state.coinObjects = [];
+        SG.state.gunPickups = [];
         SG.state.coinObstacleMap = new Map();
         SG.state.buildings = [];
         SG.state.particles = [];
+        if (SG.clearActiveGun) SG.clearActiveGun();
     };
 
     SG.resetCyberMode = function() {
@@ -117,6 +120,7 @@
         SG.state.jumpingFromRoof = false;
         SG.state.jetpackFuel = 0;
         SG.state.jetpackCooldown = 0;
+        SG.state.gunSpawnTimer = 6;
         SG.state.policeChasing = false;
         SG.state.policeDistance = 12.0;
         SG.state.policeCaught = false;
@@ -186,6 +190,7 @@
         SG.state.jumpingFromRoof = false;
         SG.state.jetpackFuel = 0;
         SG.state.jetpackCooldown = 0;
+        SG.state.gunSpawnTimer = 6;
         SG.state.policeChasing = false;
         SG.state.policeDistance = 12.0;
         SG.state.policeCaught = false;
@@ -571,6 +576,7 @@
         }
 
         // Spawn new objects
+        if (SG.updateGunSystem) SG.updateGunSystem(delta);
         SG.spawnObstacles();
         SG.spawnBuildings();
 
@@ -639,6 +645,7 @@
         SG.updateBgMusic(delta);
         if (SG.updateAbilityHUD) SG.updateAbilityHUD();
         SG.updateCamera();
+        if (SG.updateGunViewModel) SG.updateGunViewModel();
     };
 
     SG.updateAbilityHUD = function() {
@@ -751,6 +758,7 @@
         SG.initScene();
         if (SG.loadVehicleModels) SG.loadVehicleModels();
         if (SG.loadSceneryModels) SG.loadSceneryModels();
+        if (SG.loadGunModels) SG.loadGunModels();
         SG.loadShopData();
         if (typeof SG.setupUI !== 'function') { SG.setupUI = function() { console.warn('setupUI missing - ui.js may not have loaded'); }; }
         SG.setupUI();

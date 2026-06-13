@@ -11,6 +11,9 @@
     };
     SG.homelanderThemeAudio = null;
     SG.homelanderVoiceAudio = null;
+    SG.homelanderVoiceSource = null;
+    SG.homelanderVoiceGain = null;
+    SG.HOMELANDER_VOICE_GAIN = 2.55;
     SG.pendingHomelanderVoice = false;
 
     SG.initAudio = function() {
@@ -192,6 +195,17 @@
             SG.homelanderVoiceAudio.loop = false;
             SG.homelanderVoiceAudio.preload = 'auto';
         }
+        if (SG.audioCtx && SG.homelanderVoiceAudio && !SG.homelanderVoiceSource) {
+            try {
+                SG.homelanderVoiceSource = SG.audioCtx.createMediaElementSource(SG.homelanderVoiceAudio);
+                SG.homelanderVoiceGain = SG.audioCtx.createGain();
+                SG.homelanderVoiceSource.connect(SG.homelanderVoiceGain);
+                SG.homelanderVoiceGain.connect(SG.audioCtx.destination);
+            } catch(e) {
+                SG.homelanderVoiceSource = null;
+                SG.homelanderVoiceGain = null;
+            }
+        }
     };
 
     SG.updateHomelanderAudioVolume = function() {
@@ -201,7 +215,10 @@
             SG.homelanderThemeAudio.volume = SG.state.muted ? 0 : Math.min(1, Math.max(0, music * 0.65));
         }
         if (SG.homelanderVoiceAudio) {
-            SG.homelanderVoiceAudio.volume = SG.state.muted ? 0 : Math.min(1, Math.max(0.82, sfx * 1.35));
+            SG.homelanderVoiceAudio.volume = SG.state.muted ? 0 : 1;
+        }
+        if (SG.homelanderVoiceGain) {
+            SG.homelanderVoiceGain.gain.value = SG.state.muted ? 0 : Math.min(3.2, Math.max(1.9, sfx * SG.HOMELANDER_VOICE_GAIN));
         }
     };
 
@@ -228,6 +245,8 @@
     SG.playPendingHomelanderVoice = function() {
         if (!SG.pendingHomelanderVoice) return;
         SG.pendingHomelanderVoice = false;
+        if (!SG.audioCtx && SG.initAudio) SG.initAudio();
+        if (SG.audioCtx && SG.audioCtx.state === 'suspended') SG.audioCtx.resume().catch(function() {});
         SG.ensureHomelanderAudio();
         SG.updateHomelanderAudioVolume();
         if (!SG.homelanderVoiceAudio || SG.state.muted) return;

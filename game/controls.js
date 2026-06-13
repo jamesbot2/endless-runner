@@ -228,6 +228,13 @@
                 return;
             }
 
+            if ((e.key === 'f' || e.key === 'F') && SG.shootGun && SG.state.started) {
+                if (SG.shootGun()) {
+                    e.preventDefault();
+                    return;
+                }
+            }
+
             if ((e.key === 'm' || e.key === 'M') && SG.state.started) {
                 if (!SG.state.gameOver) {
                     SG.togglePause();
@@ -244,6 +251,14 @@
         document.addEventListener('keyup', function(e) {
             SG.keys[e.key] = false;
             if (e.keyCode) { SG.keys['_kc_' + e.keyCode] = false; }
+        });
+
+        document.addEventListener('mousedown', function(e) {
+            if (!SG.shootGun || e.button !== 0) return;
+            if (!SG.state.started || SG.state.paused || SG.state.gameOver) return;
+            var target = e.target;
+            if (target && target.closest && target.closest('#menu-overlay,#pause-overlay,#game-over-screen,#settings-overlay,#characters-overlay,#dev-console,button,input,textarea,select,.mobile-btn')) return;
+            if (SG.shootGun()) e.preventDefault();
         });
 
         // Touch controls
