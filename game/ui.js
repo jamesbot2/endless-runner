@@ -406,6 +406,7 @@
                 localStorage.setItem(key, String(val));
                 if (key === 'subwayMusicVol') SG.state.musicVolume = val;
                 else if (key === 'subwaySfxVol') SG.state.sfxVolume = val;
+                if (SG.updateHomelanderAudioVolume) SG.updateHomelanderAudioVolume();
                 var pct = this.parentNode.querySelector('.vol-pct');
                 if (pct) pct.textContent = Math.round(val * 100) + '%';
             };
@@ -888,6 +889,7 @@
             });
             SG.registerConsoleCommand('homelander', 'Easter egg: enable Homelander mode', function() {
                 SG.state.homelander = true;
+                SG.pendingHomelanderVoice = true;
                 if (SG.activateHomelander) SG.activateHomelander();
                 SG.consoleLog('homelander mode enabled', 'ok');
             });
@@ -947,8 +949,7 @@
                     conInput.value = SG.consoleHistory[SG.consoleHistoryIndex] || '';
                 }
                 if (e.key === 'Escape') {
-                    document.getElementById('dev-console').style.display = 'none';
-                    if (SG.state.paused) SG.state.paused = false;
+                    if (SG.closeConsole) SG.closeConsole();
                 }
                 e.stopPropagation();
             });
@@ -1007,21 +1008,28 @@
         SG.startBgMusic();
     };
 
+    SG.closeConsole = function() {
+        var con = document.getElementById('dev-console');
+        if (!con) return;
+        con.style.display = 'none';
+        SG.state.paused = false;
+        if (SG.playPendingHomelanderVoice) SG.playPendingHomelanderVoice();
+    };
+
     SG.toggleConsole = function() {
         var con = document.getElementById('dev-console');
         if (!con) return;
         if (con.style.display === 'flex') {
-            con.style.display = 'none';
-            SG.state.paused = false;
-        } else {
-            con.style.display = 'flex';
-            SG.state.paused = true;
-            var ci = document.getElementById('console-input');
-            if (ci) {
-                ci.value = '';
-                ci.focus();
-                setTimeout(function() { ci.focus(); }, 100);
-            }
+            SG.closeConsole();
+            return;
+        }
+        con.style.display = 'flex';
+        SG.state.paused = true;
+        var ci = document.getElementById('console-input');
+        if (ci) {
+            ci.value = '';
+            ci.focus();
+            setTimeout(function() { ci.focus(); }, 100);
         }
     };
 
@@ -1049,9 +1057,11 @@
             try { SG.audioCtx.suspend(); } catch(e) {}
             SG.stopBgMusic();
             SG.stopSiren();
+            if (SG.stopHomelanderAudio) SG.stopHomelanderAudio();
         } else if (!SG.state.muted && SG.audioCtx && SG.audioCtx.state === 'suspended') {
             try { SG.audioCtx.resume(); } catch(e) {}
             if (SG.state.started && !SG.state.gameOver) SG.startBgMusic();
+            if (SG.state.homelander && SG.startHomelanderTheme) SG.startHomelanderTheme();
         }
     };
 })();

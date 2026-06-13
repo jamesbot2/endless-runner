@@ -138,6 +138,13 @@
     const THREE = window.THREE;
 
     SG.audioCtx = null;
+    SG.homelanderAudioPaths = SG.homelanderAudioPaths || {
+        theme: 'audio/homelander-theme.mp3',
+        voice: 'audio/im-better-homelander.mp3'
+    };
+    SG.homelanderThemeAudio = null;
+    SG.homelanderVoiceAudio = null;
+    SG.pendingHomelanderVoice = false;
 
     SG.initAudio = function() {
         try {
@@ -305,6 +312,75 @@
             try { SG.bgMusicState.currentOscs[i].stop(); } catch(e) {}
         }
         SG.bgMusicState.currentOscs = [];
+    };
+
+    SG.ensureHomelanderAudio = function() {
+        if (!SG.homelanderThemeAudio && typeof Audio !== 'undefined') {
+            SG.homelanderThemeAudio = new Audio(SG.homelanderAudioPaths.theme);
+            SG.homelanderThemeAudio.loop = true;
+            SG.homelanderThemeAudio.preload = 'auto';
+        }
+        if (!SG.homelanderVoiceAudio && typeof Audio !== 'undefined') {
+            SG.homelanderVoiceAudio = new Audio(SG.homelanderAudioPaths.voice);
+            SG.homelanderVoiceAudio.loop = false;
+            SG.homelanderVoiceAudio.preload = 'auto';
+        }
+    };
+
+    SG.updateHomelanderAudioVolume = function() {
+        var music = typeof SG.state.musicVolume === 'number' ? SG.state.musicVolume : 0.5;
+        var sfx = typeof SG.state.sfxVolume === 'number' ? SG.state.sfxVolume : 0.8;
+        if (SG.homelanderThemeAudio) {
+            SG.homelanderThemeAudio.volume = SG.state.muted ? 0 : Math.min(1, Math.max(0, music * 0.65));
+        }
+        if (SG.homelanderVoiceAudio) {
+            SG.homelanderVoiceAudio.volume = SG.state.muted ? 0 : Math.min(1, Math.max(0.82, sfx * 1.35));
+        }
+    };
+
+    SG.startHomelanderTheme = function() {
+        SG.ensureHomelanderAudio();
+        SG.updateHomelanderAudioVolume();
+        if (SG.stopBgMusic) SG.stopBgMusic();
+        if (!SG.homelanderThemeAudio || SG.state.muted) return;
+        try {
+            SG.homelanderThemeAudio.currentTime = 0;
+            var p = SG.homelanderThemeAudio.play();
+            if (p && p.catch) p.catch(function() {});
+        } catch(e) {}
+    };
+
+    SG.stopHomelanderTheme = function() {
+        if (!SG.homelanderThemeAudio) return;
+        try {
+            SG.homelanderThemeAudio.pause();
+            SG.homelanderThemeAudio.currentTime = 0;
+        } catch(e) {}
+    };
+
+    SG.playPendingHomelanderVoice = function() {
+        if (!SG.pendingHomelanderVoice) return;
+        SG.pendingHomelanderVoice = false;
+        SG.ensureHomelanderAudio();
+        SG.updateHomelanderAudioVolume();
+        if (!SG.homelanderVoiceAudio || SG.state.muted) return;
+        try {
+            SG.homelanderVoiceAudio.pause();
+            SG.homelanderVoiceAudio.currentTime = 0;
+            var p = SG.homelanderVoiceAudio.play();
+            if (p && p.catch) p.catch(function() {});
+        } catch(e) {}
+    };
+
+    SG.stopHomelanderAudio = function() {
+        SG.pendingHomelanderVoice = false;
+        SG.stopHomelanderTheme();
+        if (SG.homelanderVoiceAudio) {
+            try {
+                SG.homelanderVoiceAudio.pause();
+                SG.homelanderVoiceAudio.currentTime = 0;
+            } catch(e) {}
+        }
     };
 
     SG.updateBgMusic = function(delta) {
@@ -2655,6 +2731,7 @@
                 localStorage.setItem(key, String(val));
                 if (key === 'subwayMusicVol') SG.state.musicVolume = val;
                 else if (key === 'subwaySfxVol') SG.state.sfxVolume = val;
+                if (SG.updateHomelanderAudioVolume) SG.updateHomelanderAudioVolume();
                 var pct = this.parentNode.querySelector('.vol-pct');
                 if (pct) pct.textContent = Math.round(val * 100) + '%';
             };
@@ -3137,6 +3214,7 @@
             });
             SG.registerConsoleCommand('homelander', 'Easter egg: enable Homelander mode', function() {
                 SG.state.homelander = true;
+                SG.pendingHomelanderVoice = true;
                 if (SG.activateHomelander) SG.activateHomelander();
                 SG.consoleLog('homelander mode enabled', 'ok');
             });
@@ -3196,8 +3274,7 @@
                     conInput.value = SG.consoleHistory[SG.consoleHistoryIndex] || '';
                 }
                 if (e.key === 'Escape') {
-                    document.getElementById('dev-console').style.display = 'none';
-                    if (SG.state.paused) SG.state.paused = false;
+                    if (SG.closeConsole) SG.closeConsole();
                 }
                 e.stopPropagation();
             });
@@ -3256,21 +3333,28 @@
         SG.startBgMusic();
     };
 
+    SG.closeConsole = function() {
+        var con = document.getElementById('dev-console');
+        if (!con) return;
+        con.style.display = 'none';
+        SG.state.paused = false;
+        if (SG.playPendingHomelanderVoice) SG.playPendingHomelanderVoice();
+    };
+
     SG.toggleConsole = function() {
         var con = document.getElementById('dev-console');
         if (!con) return;
         if (con.style.display === 'flex') {
-            con.style.display = 'none';
-            SG.state.paused = false;
-        } else {
-            con.style.display = 'flex';
-            SG.state.paused = true;
-            var ci = document.getElementById('console-input');
-            if (ci) {
-                ci.value = '';
-                ci.focus();
-                setTimeout(function() { ci.focus(); }, 100);
-            }
+            SG.closeConsole();
+            return;
+        }
+        con.style.display = 'flex';
+        SG.state.paused = true;
+        var ci = document.getElementById('console-input');
+        if (ci) {
+            ci.value = '';
+            ci.focus();
+            setTimeout(function() { ci.focus(); }, 100);
         }
     };
 
@@ -3298,9 +3382,11 @@
             try { SG.audioCtx.suspend(); } catch(e) {}
             SG.stopBgMusic();
             SG.stopSiren();
+            if (SG.stopHomelanderAudio) SG.stopHomelanderAudio();
         } else if (!SG.state.muted && SG.audioCtx && SG.audioCtx.state === 'suspended') {
             try { SG.audioCtx.resume(); } catch(e) {}
             if (SG.state.started && !SG.state.gameOver) SG.startBgMusic();
+            if (SG.state.homelander && SG.startHomelanderTheme) SG.startHomelanderTheme();
         }
     };
 })();
@@ -3922,6 +4008,7 @@
 
         SG.state.isJumping = false;
         SG.state.isRolling = false;
+        if (SG.startHomelanderTheme) SG.startHomelanderTheme();
     };
 
     SG.deactivateHomelander = function() {
@@ -3963,6 +4050,8 @@
         SG.homelanderModel = null;
         SG.homelanderProceduralParts = [];
         if (SG.player) SG.player.visible = true;
+        if (SG.stopHomelanderAudio) SG.stopHomelanderAudio();
+        if (SG.state.started && !SG.state.gameOver && !SG.state.muted && SG.startBgMusic) SG.startBgMusic();
     };
 
     SG.updateHomelander = function(delta) {

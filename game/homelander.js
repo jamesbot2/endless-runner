@@ -316,6 +316,7 @@
 
         SG.state.isJumping = false;
         SG.state.isRolling = false;
+        if (SG.startHomelanderTheme) SG.startHomelanderTheme();
     };
 
     SG.deactivateHomelander = function() {
@@ -357,6 +358,8 @@
         SG.homelanderModel = null;
         SG.homelanderProceduralParts = [];
         if (SG.player) SG.player.visible = true;
+        if (SG.stopHomelanderAudio) SG.stopHomelanderAudio();
+        if (SG.state.started && !SG.state.gameOver && !SG.state.muted && SG.startBgMusic) SG.startBgMusic();
     };
 
     SG.updateHomelander = function(delta) {

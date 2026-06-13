@@ -224,6 +224,8 @@ app.whenReady().then(async () => {
       r.consoleBacktickToggle = false
       r.consoleEscapeClose = false
       r.consoleHelpHidesHomelander = false
+      r.homelanderAudio = null
+      r.homelanderVoiceAfterConsoleClose = false
       if (window.__SG && window.__SG.toggleConsole && r.executeConsoleCommand) {
         var devConsole = document.getElementById('dev-console')
         var consoleInput = document.getElementById('console-input')
@@ -247,6 +249,35 @@ app.whenReady().then(async () => {
           window.__SG.clearConsole()
           window.__SG.executeConsoleCommand('help')
           r.consoleHelpHidesHomelander = consoleOutput.textContent.toLowerCase().indexOf('homelander') < 0
+        }
+        if (devConsole && window.__SG.ensureHomelanderAudio && window.__SG.closeConsole && window.__SG.deactivateHomelander) {
+          window.__SG.ensureHomelanderAudio()
+          window.__SG.state.musicVolume = 0.5
+          window.__SG.state.sfxVolume = 0.8
+          if (window.__SG.updateHomelanderAudioVolume) window.__SG.updateHomelanderAudioVolume()
+          var voicePlayCount = 0
+          if (window.__SG.homelanderVoiceAudio) {
+            window.__SG.homelanderVoiceAudio.play = function() { voicePlayCount++; return Promise.resolve() }
+          }
+          if (window.__SG.homelanderThemeAudio) {
+            window.__SG.homelanderThemeAudio.play = function() { return Promise.resolve() }
+          }
+          devConsole.style.display = 'flex'
+          window.__SG.executeConsoleCommand('homelander')
+          var pendingAfterCommand = window.__SG.pendingHomelanderVoice === true
+          window.__SG.closeConsole()
+          r.homelanderAudio = {
+            theme: window.__SG.homelanderAudioPaths ? window.__SG.homelanderAudioPaths.theme : null,
+            voice: window.__SG.homelanderAudioPaths ? window.__SG.homelanderAudioPaths.voice : null,
+            themeLoop: window.__SG.homelanderThemeAudio ? window.__SG.homelanderThemeAudio.loop === true : false,
+            voiceLoop: window.__SG.homelanderVoiceAudio ? window.__SG.homelanderVoiceAudio.loop === false : false,
+            themeVolume: window.__SG.homelanderThemeAudio ? window.__SG.homelanderThemeAudio.volume : null,
+            voiceVolume: window.__SG.homelanderVoiceAudio ? window.__SG.homelanderVoiceAudio.volume : null
+          }
+          r.homelanderVoiceAfterConsoleClose = pendingAfterCommand &&
+            window.__SG.pendingHomelanderVoice === false &&
+            voicePlayCount === 1
+          window.__SG.deactivateHomelander()
         }
       }
       if (window.__SG && window.__SG.updateSpeedHUD && window.__SG.player && window.__SG.camera) {
@@ -545,6 +576,8 @@ app.whenReady().then(async () => {
   const playerModelPath = path.join(DESKTOP, 'dist/renderer/models/player.glb')
   const jetpackModelPath = path.join(DESKTOP, 'dist/renderer/models/jetpack.glb')
   const homelanderModelPath = path.join(DESKTOP, 'dist/renderer/models/homelander.glb')
+  const homelanderThemePath = path.join(DESKTOP, 'dist/renderer/audio/homelander-theme.mp3')
+  const homelanderVoicePath = path.join(DESKTOP, 'dist/renderer/audio/im-better-homelander.mp3')
   const trainModelPath = path.join(DESKTOP, 'dist/renderer/models/vehicles/train.glb')
   const busModelPath = path.join(DESKTOP, 'dist/renderer/models/vehicles/bus.glb')
   const adventurerPath = path.join(DESKTOP, 'dist/renderer/models/characters/Adventurer.gltf')
@@ -554,6 +587,7 @@ app.whenReady().then(async () => {
   check('3e. refined player.glb size', fs.existsSync(playerModelPath) && fs.statSync(playerModelPath).size > 100000, fs.existsSync(playerModelPath) ? `${fs.statSync(playerModelPath).size} bytes` : 'missing')
   check('3f. Jetpack tuning constants', state.jetpackFuelMax === 15 && state.jetpackCooldownMax === 30 && state.jetpackMaxHeight > 0, `fuel=${state.jetpackFuelMax}, cooldown=${state.jetpackCooldownMax}, maxHeight=${state.jetpackMaxHeight}`)
   check('3f-1. jetpack.glb copied to renderer dist', fs.existsSync(jetpackModelPath) && fs.statSync(jetpackModelPath).size > 1000000, fs.existsSync(jetpackModelPath) ? `${fs.statSync(jetpackModelPath).size} bytes` : 'missing')
+  check('3f-2. Homelander audio copied to renderer dist', fs.existsSync(homelanderThemePath) && fs.existsSync(homelanderVoicePath), `${fs.existsSync(homelanderThemePath) ? fs.statSync(homelanderThemePath).size : 0}/${fs.existsSync(homelanderVoicePath) ? fs.statSync(homelanderVoicePath).size : 0} bytes`)
   check('3g. homelander.glb copied to renderer dist', fs.existsSync(homelanderModelPath), fs.existsSync(homelanderModelPath) ? `${fs.statSync(homelanderModelPath).size} bytes` : 'missing')
   check('3h. train.glb copied to renderer dist', fs.existsSync(trainModelPath), fs.existsSync(trainModelPath) ? `${fs.statSync(trainModelPath).size} bytes` : 'missing')
   check('3i. bus.glb copied to renderer dist', fs.existsSync(busModelPath), fs.existsSync(busModelPath) ? `${fs.statSync(busModelPath).size} bytes` : 'missing')
@@ -600,6 +634,8 @@ app.whenReady().then(async () => {
   check("14h-1. console opens/closes with tilde", !!state.consoleBacktickToggle)
   check("14h-2. console closes with Escape", !!state.consoleEscapeClose)
   check("14h-3. console help does not reveal Homelander", !!state.consoleHelpHidesHomelander)
+  check("14h-4. Homelander voice plays once after console closes", !!state.homelanderVoiceAfterConsoleClose, state.homelanderAudio ? JSON.stringify(state.homelanderAudio) : 'missing audio')
+  check("14h-5. Homelander theme loops below voice volume", !!state.homelanderAudio && state.homelanderAudio.theme === 'audio/homelander-theme.mp3' && state.homelanderAudio.voice === 'audio/im-better-homelander.mp3' && !!state.homelanderAudio.themeLoop && !!state.homelanderAudio.voiceLoop && state.homelanderAudio.voiceVolume > state.homelanderAudio.themeVolume, state.homelanderAudio ? JSON.stringify(state.homelanderAudio) : 'missing audio')
   check("14i. Homelander GLB loader exists", !!state.homelanderLoader && state.homelanderModelPath === 'models/homelander.glb', state.homelanderModelPath || 'missing path')
   check("14i-1. Homelander GLB tuning faces forward with eye lasers", !!state.homelanderTuning && Math.abs(state.homelanderTuning.modelRotationY) < 0.001 && state.homelanderTuning.modelYOffset <= -0.15 && state.homelanderTuning.eyeOffsetY > 1.5 && state.homelanderTuning.eyeOffsetZ < 0, state.homelanderTuning ? JSON.stringify(state.homelanderTuning) : 'missing tuning')
   check("14i-2. Homelander GLB loads into scene", !!state.homelanderModelLoaded && state.homelanderModelHeight > 1.7, `height=${state.homelanderModelHeight}`)
