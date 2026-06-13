@@ -1,4 +1,4 @@
-// ===== Subway Surfer - Storage Adapter =====
+// ===== Endless Runner - Storage Adapter =====
 // Dual-mode persistence: Electron desktopAPI → localStorage fallback.
 // Local saves are kept separate from cloud saves (server-side).
 

@@ -7,7 +7,7 @@
 | `npm run dev` | Vite hot-reload + Electron (development) | — |
 | `npm run build` | Compile TypeScript + Vite bundle | `dist/` |
 | `npm run pack` | Build + `electron-builder --dir` | `release/win-unpacked/` |
-| `npm run dist` | Build + NSIS installer | `release/Subway Surfer Setup *.exe` |
+| `npm run dist` | Build + NSIS installer | `release/Endless Runner Setup *.exe` |
 
 From repo root, prefix with `npm --prefix apps/desktop` or use the shorthand:
 
@@ -51,7 +51,7 @@ Output goes to `apps/desktop/dist/`.
 npm run desktop:pack
 ```
 
-Generates `apps/desktop/release/win-unpacked/Subway Surfer.exe` — a
+Generates `apps/desktop/release/win-unpacked/Endless Runner.exe` — a
 **portable, no-installer** directory. No symlink privileges required.
 Run the `.exe` directly from that folder.
 
@@ -67,24 +67,24 @@ another machine — no installation needed.
 ### Running the packed app
 
 ```
-release/win-unpacked/Subway Surfer.exe
+release/win-unpacked/Endless Runner.exe
 ```
 
 ### Configuring the API server
 
-Set the `SUBWAY_API_BASE_URL` environment variable before launching to point
+Set the `ENDLESS_RUNNER_API_BASE_URL` environment variable before launching to point
 to a custom account server:
 
 ```powershell
 # PowerShell
-$env:SUBWAY_API_BASE_URL="http://35.212.200.85:3000"
-.\release\win-unpacked\Subway Surfer.exe
+$env:ENDLESS_RUNNER_API_BASE_URL="http://35.212.200.85:3000"
+.\release\win-unpacked\Endless Runner.exe
 ```
 
 ```cmd
 REM Command Prompt
-set SUBWAY_API_BASE_URL=http://35.212.200.85:3000
-"release\win-unpacked\Subway Surfer.exe"
+set ENDLESS_RUNNER_API_BASE_URL=http://35.212.200.85:3000
+"release\win-unpacked\Endless Runner.exe"
 ```
 
 Default: `http://35.212.200.85:3000` (packaged release) or `http://localhost:3000` (development).
@@ -100,7 +100,7 @@ connection status (online / offline).
 npm run desktop:dist
 ```
 
-Generates `apps/desktop/release/Subway Surfer Setup x.x.x.exe` — a
+Generates `apps/desktop/release/Endless Runner Setup x.x.x.exe` — a
 Windows NSIS installer.
 
 ### ⚠️ Symlink / signing privilege note
@@ -155,23 +155,23 @@ Every push to `main` triggers a workflow at `.github/workflows/desktop-build.yml
 ### Trigger
 
 - **Automatic**: on push to `main`
-- **Manual**: `workflow_dispatch` with optional `SUBWAY_API_BASE_URL` input
+- **Manual**: `workflow_dispatch` with optional `ENDLESS_RUNNER_API_BASE_URL` input
 
 ### Download the artifact
 
 1. Go to the repository on GitHub
 2. Click **Actions** → select the latest workflow run
-3. Scroll to **Artifacts** → click `Subway-Surfer-win-unpacked`
-4. Extract the zip, run `Subway Surfer.exe`
+3. Scroll to **Artifacts** → click `Endless-Runner-win-unpacked`
+4. Extract the zip, run `Endless Runner.exe`
 
 ### Configure the API server
 
-Set `SUBWAY_API_BASE_URL` in the workflow's environment or via manual dispatch
+Set `ENDLESS_RUNNER_API_BASE_URL` in the workflow's environment or via manual dispatch
 input:
 
 ```yaml
 env:
-  SUBWAY_API_BASE_URL: http://35.212.200.85:3000
+  ENDLESS_RUNNER_API_BASE_URL: http://35.212.200.85:3000
 ```
 
 Default: `http://35.212.200.85:3000` (packaged release) or `http://localhost:3000` (development).
@@ -201,9 +201,9 @@ Electron-builder reads these from the `build/` directory automatically.
 Settings and game saves are stored in the OS user data directory:
 
 ```
-Windows: %APPDATA%/subway-surfer-desktop/
-macOS:   ~/Library/Application Support/subway-surfer-desktop/
-Linux:   ~/.config/subway-surfer-desktop/
+Windows: %APPDATA%/endless-runner-desktop/
+macOS:   ~/Library/Application Support/endless-runner-desktop/
+Linux:   ~/.config/endless-runner-desktop/
 ```
 
 To reset everything:
@@ -212,7 +212,7 @@ To reset everything:
 # Delete both files:
 rm settings.json save.json
 # Or remove the whole directory:
-rm -rf %APPDATA%/subway-surfer-desktop/
+rm -rf %APPDATA%/endless-runner-desktop/
 ```
 
 Settings and saves are independent from the cloud. Deleting them doesn't

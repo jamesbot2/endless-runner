@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Homelander Easter Egg =====
+// ===== ENDLESS RUNNER - Homelander Easter Egg =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};

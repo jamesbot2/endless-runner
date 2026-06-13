@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Track System =====
+// ===== ENDLESS RUNNER - Track System =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};

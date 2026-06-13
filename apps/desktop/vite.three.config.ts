@@ -9,7 +9,7 @@ export default defineConfig({
     lib: {
       entry: resolve(__dirname, 'src/three-bootstrap.ts'),
       formats: ['iife'],
-      name: 'SubwayThree',
+      name: 'EndlessRunnerThree',
       fileName: () => 'three-bootstrap.js',
     },
     outDir: resolve(__dirname, 'src/public'),

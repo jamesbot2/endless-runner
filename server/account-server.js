@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Account Server v3 =====
+// ===== ENDLESS RUNNER - Account Server v3 =====
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -204,7 +204,7 @@ function sendEmail(to, subject, body) {
                 auth: { user: smtpUser, pass: smtpPass }
             });
             transporter.sendMail({
-                from: '"Subway Surfer" <' + smtpUser + '>',
+                from: '"Endless Runner" <' + smtpUser + '>',
                 to: to,
                 subject: subject,
                 text: body
@@ -264,7 +264,7 @@ async function handleRequest(req, res) {
     if (pathname === '/admin' && method === 'GET') {
         // Basic auth
         if (!checkAdminAuth(req.headers)) {
-            res.writeHead(401, { 'Content-Type': 'text/html', 'WWW-Authenticate': 'Basic realm="Subway Admin"' });
+            res.writeHead(401, { 'Content-Type': 'text/html', 'WWW-Authenticate': 'Basic realm="Endless Runner Admin"' });
             res.end('<h1>401 Unauthorized</h1><p>Admin access requires login.</p>');
             return;
         }
@@ -399,7 +399,7 @@ async function handleRequest(req, res) {
     // ---- SHOW VERIFY CODES ----
     if (pathname === '/verify-codes' && method === 'GET') {
         if (!checkAdminAuth(req.headers)) {
-            res.writeHead(401, { 'Content-Type': 'text/html', 'WWW-Authenticate': 'Basic realm="Subway Admin"' });
+            res.writeHead(401, { 'Content-Type': 'text/html', 'WWW-Authenticate': 'Basic realm="Endless Runner Admin"' });
             res.end('<h1>401</h1>');
             return;
         }
@@ -505,7 +505,7 @@ async function handleRequest(req, res) {
 
         // Send verification email
         try {
-            sendEmail(email, 'Subway Surfer - Verification Code',
+            sendEmail(email, 'Endless Runner - Verification Code',
                 'Your verification code is: ' + code + '\n\n' +
                 'Enter this code in the app to verify your email.\n\n' +
                 'Code: ' + code + '\n\n' +

@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Constants =====
+// ===== ENDLESS RUNNER - Constants =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};

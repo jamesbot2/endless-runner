@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - UI System =====
+// ===== ENDLESS RUNNER - UI System =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
@@ -530,7 +530,7 @@
         SG.menuOverlay.innerHTML = '' +
             '<div class="menu-shell">' +
                 '<aside class="menu-sidebar">' +
-                    '<div class="menu-brand">SUBWAY SURFER<small>NEO EDITION</small></div>' +
+                    '<div class="menu-brand">ENDLESS RUNNER<small>NEO EDITION</small></div>' +
                     '<div class="menu-nav-btn" id="shop-btn-menu"><span class="nav-ico">🛒</span> Shop</div>' +
                     '<div class="menu-nav-btn" id="characters-btn"><span class="nav-ico">◆</span> Characters</div>' +
                     '<div class="menu-nav-btn" id="profile-btn"><span class="nav-ico">👤</span> Profile</div>' +
@@ -539,7 +539,7 @@
                     '<div class="menu-nav-btn danger" id="signout-btn"><span class="nav-ico">🚪</span> Sign Out</div>' +
                 '</aside>' +
                 '<section class="menu-main">' +
-                    '<h1 class="menu-title">SUBWAY SURFER</h1>' +
+                    '<h1 class="menu-title">ENDLESS RUNNER</h1>' +
                     '<p class="menu-subtitle">Neo Edition</p>' +
                     '<div class="tap-to-start pulse">TAP TO START</div>' +
                     '<div class="diff-select">' +

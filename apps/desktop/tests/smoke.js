@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// ===== Subway Surfer - Electron Smoke Test =====
+// ===== Endless Runner - Electron Smoke Test =====
 //
 // Usage:
 //   ELECTRON_HEADLESS_CI=1 xvfb-run -a node tests/smoke.js
 //
 // Or:
-//   SUBWAY_API_BASE_URL=http://test.example.com:3000 npm run test:smoke
+//   ENDLESS_RUNNER_API_BASE_URL=http://test.example.com:3000 npm run test:smoke
 //
 // Exits 0 on pass, 1 on fail.
 
@@ -16,7 +16,7 @@ const fs = require('fs')
 const DESKTOP = path.resolve(__dirname, '..')
 
 // ── Temp data dir for IPC handler tests ──────────────────
-const TMPDIR = path.join(app.getPath('temp'), 'subway-surfer-smoke-' + Date.now())
+const TMPDIR = path.join(app.getPath('temp'), 'endless-runner-smoke-' + Date.now())
 const SETTINGS_FILE = path.join(TMPDIR, 'settings.json')
 const SAVE_FILE = path.join(TMPDIR, 'save.json')
 app.setPath('userData', TMPDIR)
@@ -53,14 +53,16 @@ function check(name, pass, detail) {
 app.whenReady().then(async () => {
   console.log('')
   console.log('═══════════════════════════════════════════')
-  console.log('  Subway Surfer — Smoke Test')
+  console.log('  Endless Runner — Smoke Test')
   console.log('═══════════════════════════════════════════')
   console.log('')
 
-  // Pass SUBWAY_API_BASE_URL to preload via additionalArguments
+  // Pass ENDLESS_RUNNER_API_BASE_URL to preload via additionalArguments.
+  // SUBWAY_API_BASE_URL remains supported as a legacy alias.
   const addArgs = []
-  if (process.env.SUBWAY_API_BASE_URL) {
-    addArgs.push('--api-base-url=' + process.env.SUBWAY_API_BASE_URL)
+  const requestedApiUrl = process.env.ENDLESS_RUNNER_API_BASE_URL || process.env.SUBWAY_API_BASE_URL
+  if (requestedApiUrl) {
+    addArgs.push('--api-base-url=' + requestedApiUrl)
   }
 
   const win = new BrowserWindow({
@@ -124,10 +126,12 @@ app.whenReady().then(async () => {
 
       // 4. Preload bridge
       r.desktopAPI = typeof window.desktopAPI !== 'undefined' && window.desktopAPI !== null
+      r.endlessRunnerConfig = typeof window.__ENDLESS_RUNNER_CONFIG__ !== 'undefined'
       r.subwayConfig = typeof window.__SUBWAY_CONFIG__ !== 'undefined'
 
       // 4b. API_BASE_URL from config
-      r.apiBaseUrl = window.__SUBWAY_CONFIG__ ? window.__SUBWAY_CONFIG__.API_BASE_URL : null
+      r.apiBaseUrl = window.__ENDLESS_RUNNER_CONFIG__ ? window.__ENDLESS_RUNNER_CONFIG__.API_BASE_URL : null
+      r.legacyApiBaseUrl = window.__SUBWAY_CONFIG__ ? window.__SUBWAY_CONFIG__.API_BASE_URL : null
 
       // 5. SG.runtime set by renderer
       r.sgRuntime = window.__SG ? window.__SG.runtime : null
@@ -812,7 +816,8 @@ app.whenReady().then(async () => {
   check('3k. scenery building GLB copied to renderer dist', fs.existsSync(sceneryBuildingPath), fs.existsSync(sceneryBuildingPath) ? `${fs.statSync(sceneryBuildingPath).size} bytes` : 'missing')
   check('3l. scenery tree GLB copied to renderer dist', fs.existsSync(sceneryTreePath), fs.existsSync(sceneryTreePath) ? `${fs.statSync(sceneryTreePath).size} bytes` : 'missing')
   check('4a. desktopAPI (preload bridge)', !!state.desktopAPI)
-  check('4b. __SUBWAY_CONFIG__ exists', !!state.subwayConfig)
+  check('4b. __ENDLESS_RUNNER_CONFIG__ exists', !!state.endlessRunnerConfig)
+  check('4b-legacy. __SUBWAY_CONFIG__ legacy alias exists', !!state.subwayConfig)
   check('4c. API_BASE_URL is non-empty', !!state.apiBaseUrl, state.apiBaseUrl || 'empty')
   check('5a. SG.runtime === "electron"', state.sgRuntime === 'electron', state.sgRuntime || 'undefined')
   check('5b. SG.apiBaseUrl set', !!state.sgApiBaseUrl, state.sgApiBaseUrl || 'undefined')
@@ -975,15 +980,17 @@ app.whenReady().then(async () => {
   // ── Environment variable check ─────────────────────
   console.log('')
   console.log('  ── Environment config check ──')
-  const envUrl = process.env.SUBWAY_API_BASE_URL || ''
-  check('SUBWAY_API_BASE_URL env (info)', true, envUrl || '(not set)')
+  const envUrl = process.env.ENDLESS_RUNNER_API_BASE_URL || process.env.SUBWAY_API_BASE_URL || ''
+  check('ENDLESS_RUNNER_API_BASE_URL env (info)', true, envUrl || '(not set)')
   if (envUrl) {
-    check('4d. __SUBWAY_CONFIG__.API_BASE_URL matches env', state.apiBaseUrl === envUrl, state.apiBaseUrl)
+    check('4d. __ENDLESS_RUNNER_CONFIG__.API_BASE_URL matches env', state.apiBaseUrl === envUrl, state.apiBaseUrl)
+    check('4d-legacy. __SUBWAY_CONFIG__.API_BASE_URL matches env', state.legacyApiBaseUrl === envUrl, state.legacyApiBaseUrl)
     check('5c. SG.apiBaseUrl matches env', state.sgApiBaseUrl === envUrl, state.sgApiBaseUrl)
   } else {
     // No env var → should use production default
     const prodUrl = 'http://35.212.200.85:3000'
     check('4d. API_BASE_URL defaults to production', state.apiBaseUrl === prodUrl, state.apiBaseUrl || 'undefined')
+    check('4d-legacy. legacy API_BASE_URL defaults to production', state.legacyApiBaseUrl === prodUrl, state.legacyApiBaseUrl || 'undefined')
     check('5c. SG.apiBaseUrl defaults to production', state.sgApiBaseUrl === prodUrl, state.sgApiBaseUrl || 'undefined')
   }
 

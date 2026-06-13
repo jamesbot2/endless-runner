@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Main Game Loop & Init =====
+// ===== ENDLESS RUNNER - Main Game Loop & Init =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};

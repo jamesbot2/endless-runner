@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Account System v2 =====
+// ===== ENDLESS RUNNER - Account System v2 =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
@@ -21,7 +21,7 @@
             overlay.style.zIndex = '100';
 
             var html = '<div class="menu-content" style="max-width:360px;">';
-            html += '<h1 class="menu-title" style="font-size:28px;">SUBWAY SURFER</h1>';
+            html += '<h1 class="menu-title" style="font-size:28px;">ENDLESS RUNNER</h1>';
             html += '<div style="color:#888;font-size:13px;margin:-15px 0 15px;">Sign in to play</div>';
             html += '<input id="login-name" placeholder="Username" style="width:90%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;display:none;">';
             html += '<input id="login-email" placeholder="Email (qq/163/gmail)" style="width:90%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;">';

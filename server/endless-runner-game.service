@@ -1,0 +1,17 @@
+[Unit]
+Description=Endless Runner Game Server (static files)
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/node /home/ejimm363/.openclaw/workspace/endless-runner/server/static-server.js
+WorkingDirectory=/home/ejimm363/.openclaw/workspace/endless-runner
+Restart=always
+RestartSec=5
+User=ejimm363
+Group=ejimm363
+Environment=NODE_ENV=production
+StandardOutput=append:/tmp/endless-runner-game.log
+StandardError=append:/tmp/endless-runner-game.log
+
+[Install]
+WantedBy=multi-user.target

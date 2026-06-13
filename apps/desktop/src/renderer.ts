@@ -1,4 +1,4 @@
-// ===== Subway Surfer - Renderer Entry =====
+// ===== Endless Runner - Renderer Entry =====
 // Loaded as an ES module after the legacy game.js bundle.
 // Bridges Electron APIs to the game without modifying game logic.
 
@@ -16,6 +16,7 @@ const SG = (): any => (window as any).__SG
 
 function getApiBaseUrl(): string {
   return (
+    window.__ENDLESS_RUNNER_CONFIG__?.API_BASE_URL ||
     window.__SUBWAY_CONFIG__?.API_BASE_URL ||
     API_BASE_URL ||
     'http://localhost:3000'
@@ -25,10 +26,10 @@ function getApiBaseUrl(): string {
 // ── Environment Detection ────────────────────────────────
 
 if (window.desktopAPI) {
-  console.log('[Subway Surfer] Running in Electron desktop shell')
+  console.log('[Endless Runner] Running in Electron desktop shell')
 
   const apiUrl = getApiBaseUrl()
-  console.log('[Subway Surfer] API_BASE_URL:', apiUrl)
+  console.log('[Endless Runner] API_BASE_URL:', apiUrl)
 
   // ── Expose config to SG namespace ────────────────────────
   const s = SG()
@@ -56,15 +57,15 @@ if (window.desktopAPI) {
         s2.serverOnline = resp.ok
         s2.offlineMode = false
       }
-      console.log('[Subway Surfer] Server online:', resp.ok)
-      document.title = `Subway Surfer [${apiUrl}] ✓`
+      console.log('[Endless Runner] Server online:', resp.ok)
+      document.title = `Endless Runner [${apiUrl}] ✓`
     } catch {
       if (s2) {
         s2.serverOnline = false
         s2.offlineMode = true
       }
-      console.warn('[Subway Surfer] Server unreachable — offline mode')
-      document.title = `Subway Surfer [offline]`
+      console.warn('[Endless Runner] Server unreachable — offline mode')
+      document.title = `Endless Runner [offline]`
     }
 
     // Update status bar
@@ -106,13 +107,13 @@ if (window.desktopAPI) {
           updatedAt: new Date().toISOString(),
         }
         saveLocalGame(save).catch((e: Error) =>
-          console.warn('[Subway Surfer] Local save failed:', e)
+          console.warn('[Endless Runner] Local save failed:', e)
         )
       }
       return result
     }
 
-    console.log('[Subway Surfer] Storage adapter wired to SG.accountSave')
+    console.log('[Endless Runner] Storage adapter wired to SG.accountSave')
 
     // ── Create status bar ────────────────────────────────
     createStatusBar(apiUrl)
@@ -157,10 +158,10 @@ if (window.desktopAPI) {
           localStorage.setItem('subwayCredits', String(st.credits))
           localStorage.setItem('subwayTotalCoins', String(st.totalCoins))
           localStorage.setItem('subwayBest', String(st.bestScore || 0))
-          console.log('[Subway Surfer] Local save restored')
+          console.log('[Endless Runner] Local save restored')
         }
       } catch (e) {
-        console.warn('[Subway Surfer] Local save restore failed:', e)
+        console.warn('[Endless Runner] Local save restore failed:', e)
       }
     }
 
@@ -189,7 +190,7 @@ if (window.desktopAPI) {
         if (s3.menuOverlay) s3.menuOverlay.style.display = 'flex'
       },
       onOfflinePlay: () => {
-        console.log('[Subway Surfer] Playing offline (local saves only)')
+        console.log('[Endless Runner] Playing offline (local saves only)')
         s3.account.loggedIn = false
         // Show main menu directly
         if (s3.menuOverlay) s3.menuOverlay.style.display = 'flex'
@@ -210,7 +211,7 @@ if (window.desktopAPI) {
         s3.showLogin(true)
       }
     }
-    console.log('[Subway Surfer] Desktop auth UI initialized')
+    console.log('[Endless Runner] Desktop auth UI initialized')
   })()
 
   // ── Settings sync ───────────────────────────────────────
@@ -264,8 +265,8 @@ if (window.desktopAPI) {
     }
   }
 } else {
-  console.log('[Subway Surfer] Running in browser')
-  console.log('[Subway Surfer] API_BASE_URL (Vite build):', API_BASE_URL)
+  console.log('[Endless Runner] Running in browser')
+  console.log('[Endless Runner] API_BASE_URL (Vite build):', API_BASE_URL)
 }
 
 // ── Status Bar ──────────────────────────────────────────

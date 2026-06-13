@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Player =====
+// ===== ENDLESS RUNNER - Player =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -13,7 +13,7 @@
         zOffset: 0
     };
     SG.characterCatalog = SG.characterCatalog || [
-        { id: 'runner', name: 'Neo Runner', path: 'models/player.glb', desc: 'Original subway runner' },
+        { id: 'runner', name: 'Neo Runner', path: 'models/player.glb', desc: 'Original endless runner' },
         { id: 'adventurer', name: 'Adventurer', path: 'models/characters/Adventurer.gltf', desc: 'Backpack and field gear' },
         { id: 'beach', name: 'Beach', path: 'models/characters/Beach.gltf', desc: 'Light summer outfit' },
         { id: 'casual2', name: 'Casual 2', path: 'models/characters/Casual_2.gltf', desc: 'Street casual outfit' },

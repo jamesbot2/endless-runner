@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Constants =====
+// ===== ENDLESS RUNNER - Constants =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -48,7 +48,7 @@
 })();
 
 
-// ===== SUBWAY SURFER - Game State =====
+// ===== ENDLESS RUNNER - Game State =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -139,7 +139,7 @@
 })();
 
 
-// ===== SUBWAY SURFER - Audio System =====
+// ===== ENDLESS RUNNER - Audio System =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -491,7 +491,7 @@
 })();
 
 
-// ===== SUBWAY SURFER - Textures =====
+// ===== ENDLESS RUNNER - Textures =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -826,7 +826,7 @@
 })();
 
 
-// ===== SUBWAY SURFER - Scene Setup =====
+// ===== ENDLESS RUNNER - Scene Setup =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -889,7 +889,7 @@
 })();
 
 
-// ===== SUBWAY SURFER - Player =====
+// ===== ENDLESS RUNNER - Player =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -904,7 +904,7 @@
         zOffset: 0
     };
     SG.characterCatalog = SG.characterCatalog || [
-        { id: 'runner', name: 'Neo Runner', path: 'models/player.glb', desc: 'Original subway runner' },
+        { id: 'runner', name: 'Neo Runner', path: 'models/player.glb', desc: 'Original endless runner' },
         { id: 'adventurer', name: 'Adventurer', path: 'models/characters/Adventurer.gltf', desc: 'Backpack and field gear' },
         { id: 'beach', name: 'Beach', path: 'models/characters/Beach.gltf', desc: 'Light summer outfit' },
         { id: 'casual2', name: 'Casual 2', path: 'models/characters/Casual_2.gltf', desc: 'Street casual outfit' },
@@ -1291,7 +1291,7 @@
 })();
 
 
-// ===== SUBWAY SURFER - Track System =====
+// ===== ENDLESS RUNNER - Track System =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -1333,7 +1333,7 @@
 })();
 
 
-// ===== SUBWAY SURFER - Buildings & Scenery =====
+// ===== ENDLESS RUNNER - Buildings & Scenery =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -1689,7 +1689,7 @@
 })();
 
 
-// ===== SUBWAY SURFER - Obstacles =====
+// ===== ENDLESS RUNNER - Obstacles =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -2264,7 +2264,7 @@
 })();
 
 
-// ===== SUBWAY SURFER - Coins =====
+// ===== ENDLESS RUNNER - Coins =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -2380,7 +2380,7 @@
 })();
 
 
-// ===== SUBWAY SURFER - Gun Pickups =====
+// ===== ENDLESS RUNNER - Gun Pickups =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
@@ -2877,7 +2877,7 @@
 })();
 
 
-// ===== SUBWAY SURFER - Particles =====
+// ===== ENDLESS RUNNER - Particles =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -2962,7 +2962,7 @@
 })();
 
 
-// ===== SUBWAY SURFER - Collision Detection =====
+// ===== ENDLESS RUNNER - Collision Detection =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -3120,7 +3120,7 @@
 })();
 
 
-// ===== SUBWAY SURFER - UI System =====
+// ===== ENDLESS RUNNER - UI System =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
@@ -3652,7 +3652,7 @@
         SG.menuOverlay.innerHTML = '' +
             '<div class="menu-shell">' +
                 '<aside class="menu-sidebar">' +
-                    '<div class="menu-brand">SUBWAY SURFER<small>NEO EDITION</small></div>' +
+                    '<div class="menu-brand">ENDLESS RUNNER<small>NEO EDITION</small></div>' +
                     '<div class="menu-nav-btn" id="shop-btn-menu"><span class="nav-ico">🛒</span> Shop</div>' +
                     '<div class="menu-nav-btn" id="characters-btn"><span class="nav-ico">◆</span> Characters</div>' +
                     '<div class="menu-nav-btn" id="profile-btn"><span class="nav-ico">👤</span> Profile</div>' +
@@ -3661,7 +3661,7 @@
                     '<div class="menu-nav-btn danger" id="signout-btn"><span class="nav-ico">🚪</span> Sign Out</div>' +
                 '</aside>' +
                 '<section class="menu-main">' +
-                    '<h1 class="menu-title">SUBWAY SURFER</h1>' +
+                    '<h1 class="menu-title">ENDLESS RUNNER</h1>' +
                     '<p class="menu-subtitle">Neo Edition</p>' +
                     '<div class="tap-to-start pulse">TAP TO START</div>' +
                     '<div class="diff-select">' +
@@ -4245,7 +4245,7 @@
 })();
 
 
-// ===== SUBWAY SURFER - Controls =====
+// ===== ENDLESS RUNNER - Controls =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
@@ -4558,7 +4558,7 @@
 })();
 
 
-// ===== SUBWAY SURFER - Homelander Easter Egg =====
+// ===== ENDLESS RUNNER - Homelander Easter Egg =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
@@ -5055,7 +5055,7 @@
 })();
 
 
-// ===== SUBWAY SURFER - Police Chase System =====
+// ===== ENDLESS RUNNER - Police Chase System =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
@@ -5262,7 +5262,7 @@
 })();
 
 
-// ===== SUBWAY SURFER - Main Game Loop & Init =====
+// ===== ENDLESS RUNNER - Main Game Loop & Init =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
@@ -6080,7 +6080,7 @@
 })();
 
 
-// ===== SUBWAY SURFER - Account System v2 =====
+// ===== ENDLESS RUNNER - Account System v2 =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
@@ -6103,7 +6103,7 @@
             overlay.style.zIndex = '100';
 
             var html = '<div class="menu-content" style="max-width:360px;">';
-            html += '<h1 class="menu-title" style="font-size:28px;">SUBWAY SURFER</h1>';
+            html += '<h1 class="menu-title" style="font-size:28px;">ENDLESS RUNNER</h1>';
             html += '<div style="color:#888;font-size:13px;margin:-15px 0 15px;">Sign in to play</div>';
             html += '<input id="login-name" placeholder="Username" style="width:90%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;display:none;">';
             html += '<input id="login-email" placeholder="Email (qq/163/gmail)" style="width:90%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;">';

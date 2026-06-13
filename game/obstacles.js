@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Obstacles =====
+// ===== ENDLESS RUNNER - Obstacles =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};

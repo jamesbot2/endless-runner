@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Buildings & Scenery =====
+// ===== ENDLESS RUNNER - Buildings & Scenery =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};

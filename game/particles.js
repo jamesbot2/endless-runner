@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Particles =====
+// ===== ENDLESS RUNNER - Particles =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};

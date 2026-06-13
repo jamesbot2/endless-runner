@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Coins =====
+// ===== ENDLESS RUNNER - Coins =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};

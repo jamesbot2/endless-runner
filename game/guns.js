@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Gun Pickups =====
+// ===== ENDLESS RUNNER - Gun Pickups =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
