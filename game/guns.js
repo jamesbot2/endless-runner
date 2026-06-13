@@ -234,7 +234,7 @@
         held.rotation.set(0.08, Math.PI, 0);
         held.scale.multiplyScalar(0.82);
         SG.playerGunModel.add(held);
-        SG.playerGunModel.position.set(-0.34, 0.78, 0.02);
+        SG.playerGunModel.position.set(-0.34, 0.66, 0.02);
         SG.playerGunModel.rotation.set(0, 0, 0);
         SG.playerGunModel.visible = false;
         if (SG.player) SG.player.add(SG.playerGunModel);
@@ -255,7 +255,7 @@
         SG.camera.getWorldDirection(forward);
         SG.gunViewModel.position.copy(SG.camera.position)
             .add(right.multiplyScalar(0.34))
-            .add(down.multiplyScalar(0.36))
+            .add(down.multiplyScalar(0.4))
             .add(forward.multiplyScalar(0.82));
         SG.gunViewModel.quaternion.copy(SG.camera.quaternion);
     };
@@ -269,7 +269,7 @@
             SG.camera.getWorldDirection(forward);
             return SG.camera.position.clone()
                 .add(right.multiplyScalar(0.34))
-                .add(down.multiplyScalar(0.23))
+                .add(down.multiplyScalar(0.27))
                 .add(forward.multiplyScalar(1.12));
         }
         return SG.player.position.clone().add(new THREE.Vector3(0.32, 0.92, -0.58));

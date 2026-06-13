@@ -239,7 +239,7 @@
 
         var barrier = new THREE.Mesh(
             new THREE.BoxGeometry(1.6, 0.6, 1.0),
-            new THREE.MeshLambertMaterial({ color: 0xFF6600 })
+            SG.createWarningPanelMaterial ? SG.createWarningPanelMaterial() : new THREE.MeshLambertMaterial({ color: 0xFF6600 })
         );
         barrier.position.set(0, 0.3, 0);
         group.add(barrier);
@@ -275,7 +275,7 @@
         openLane = (typeof openLane === 'number' && openLane >= 0 && openLane <= 2) ? openLane : Math.floor(Math.random() * 3);
         var blockedLanes = [0, 1, 2].filter(function(lane) { return lane !== openLane; });
 
-        var beamMat = new THREE.MeshLambertMaterial({ color: 0xFF4444 });
+        var beamMat = SG.createWarningPanelMaterial ? SG.createWarningPanelMaterial() : new THREE.MeshLambertMaterial({ color: 0xFF4444 });
         var stripeMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
         var laneBeamWidth = Math.min(SG.LANE_WIDTH * 0.78, 1.7);
         for (var bi = 0; bi < blockedLanes.length; bi++) {
@@ -293,7 +293,7 @@
             group.add(stripe2);
         }
 
-        var postMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
+        var postMat = SG.createDarkMetalMaterial ? SG.createDarkMetalMaterial() : new THREE.MeshLambertMaterial({ color: 0x888888 });
         var postXs = [
             SG.LANE_POSITIONS[0] - laneBeamWidth / 2 - 0.12,
             SG.LANE_POSITIONS[2] + laneBeamWidth / 2 + 0.12
@@ -327,7 +327,7 @@
         var group = new THREE.Group();
         var laneX = SG.LANE_POSITIONS[lane];
 
-        var bodyMat = new THREE.MeshLambertMaterial({ color: 0xFF3300 });
+        var bodyMat = SG.createWarningPanelMaterial ? SG.createWarningPanelMaterial() : new THREE.MeshLambertMaterial({ color: 0xFF3300 });
         var body = new THREE.Mesh(
             new THREE.BoxGeometry(1.2, 0.25, 1.0),
             bodyMat
@@ -335,7 +335,7 @@
         body.position.set(0, 0.9, 0);
         group.add(body);
 
-        var armMat = new THREE.MeshLambertMaterial({ color: 0xDD8800 });
+        var armMat = SG.createDarkMetalMaterial ? SG.createDarkMetalMaterial() : new THREE.MeshLambertMaterial({ color: 0xDD8800 });
         for (var i = -1; i <= 1; i += 2) {
             var arm = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 0.04), armMat);
             arm.position.set(i * 0.3, 1.05, 0);
@@ -376,7 +376,7 @@
 
         var top = new THREE.Mesh(
             new THREE.BoxGeometry(1.42, 0.28, 3.75),
-            new THREE.MeshLambertMaterial({ color: 0xFF6600 })
+            SG.createWarningPanelMaterial ? SG.createWarningPanelMaterial() : new THREE.MeshLambertMaterial({ color: 0xFF6600 })
         );
         top.position.set(0, 1.18, 0);
         group.add(top);
@@ -388,7 +388,7 @@
         stripe.position.set(0, 0.98, 0);
         group.add(stripe);
 
-        var supMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
+        var supMat = SG.createDarkMetalMaterial ? SG.createDarkMetalMaterial() : new THREE.MeshLambertMaterial({ color: 0x555555 });
         for (var side = -1; side <= 1; side += 2) {
             var sup = new THREE.Mesh(new THREE.BoxGeometry(0.10, 1.34, 0.10), supMat);
             sup.position.set(side * 0.66, 0.67, 0);

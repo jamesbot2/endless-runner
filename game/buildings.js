@@ -289,6 +289,7 @@
         SG.scene.fog.color.setHex(theme.fog);
         SG.scene.fog.near = themeIndex >= 2 ? 40 : 60;
         SG.scene.fog.far = themeIndex >= 2 ? 90 : 120;
+        if (SG.updateSkyDome) SG.updateSkyDome(themeIndex, 'normal');
 
         for (var si = 0; si < SG.state.trackSegments.length; si++) {
             var seg = SG.state.trackSegments[si];

@@ -42,6 +42,8 @@
         dirLight.position.set(10, 20, 5);
         SG.scene.add(dirLight);
 
+        if (SG.createSkyDome) SG.createSkyDome();
+
         SG.clock = new THREE.Clock();
 
         window.addEventListener('resize', SG.onResize);

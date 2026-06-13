@@ -460,6 +460,7 @@ app.whenReady().then(async () => {
           if (window.__SG.updateGunHUD) window.__SG.updateGunHUD()
           var thirdPersonCrosshairHidden = crosshair && crosshair.style.display === 'none'
           var thirdPersonHeldGunVisible = !!(window.__SG.playerGunModel && window.__SG.playerGunModel.visible)
+          var thirdPersonHeldGunLower = !!(window.__SG.playerGunModel && window.__SG.playerGunModel.position.y <= 0.68)
           var heldGunFacesForward = false
           if (window.__SG.playerGunModel && window.__SG.playerGunModel.children[0]) {
             var heldGun = window.__SG.playerGunModel.children[0]
@@ -488,6 +489,7 @@ app.whenReady().then(async () => {
             pausedCrosshairHidden,
             resumedCrosshairVisible,
             thirdPersonHeldGunVisible,
+            thirdPersonHeldGunLower,
             heldGunFacesForward,
             hud: document.getElementById('gun-hud') !== null
           }
@@ -603,6 +605,22 @@ app.whenReady().then(async () => {
       }
       r.rollUnderSize = null
       r.coinDetail = null
+      r.realisticMaterials = null
+      if (window.__SG && window.__SG.createTrackSegment && window.__SG.disposeObject) {
+        var textureSegment = window.__SG.createTrackSegment(-72)
+        var groundMesh = textureSegment.children[0]
+        var laneMesh = textureSegment.children[1]
+        var curbMesh = textureSegment.children[3]
+        r.realisticMaterials = {
+          skyDome: !!(window.__SG.skyDome && window.__SG.skyDome.material && window.__SG.skyDome.material.map),
+          skyDomeName: window.__SG.skyDome ? window.__SG.skyDome.name : null,
+          asphalt: !!(groundMesh && groundMesh.material && groundMesh.material.map),
+          lanePaint: !!(laneMesh && laneMesh.material && laneMesh.material.map),
+          concrete: !!(curbMesh && curbMesh.material && curbMesh.material.map),
+          warningTexture: typeof window.__SG.createWarningPanelMaterial === 'function'
+        }
+        window.__SG.disposeObject(textureSegment)
+      }
       if (window.__SG && window.__SG.createCoin && window.__SG.disposeObject) {
         var detailedCoin = window.__SG.createCoin(1, -12, 0.3)
         var coinShape = detailedCoin.children.find(function(child) { return child.geometry && child.geometry.type === 'ShapeGeometry' })
@@ -824,7 +842,7 @@ app.whenReady().then(async () => {
   check("14j-3. first-person gun view model is upright and aimed up", !!state.gunSystem && !!state.gunSystem.firstPersonGunVisible && !!state.gunSystem.viewModelUpright && !!state.gunSystem.viewModelAimsUp, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
   check("14j-4. gun crosshair is first-person only and pause-aware", !!state.gunSystem && !!state.gunSystem.firstPersonCrosshair && !!state.gunSystem.thirdPersonCrosshairHidden && !!state.gunSystem.pausedCrosshairHidden && !!state.gunSystem.resumedCrosshairVisible, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
   check("14j-5. gun models use multiple non-black colors", !!state.gunSystem && !!state.gunSystem.coloredGunMaterials, state.gunSystem ? `colors=${state.gunSystem.gunMaterialColorCount}` : 'missing')
-  check("14j-6. third-person runner holds the active gun", !!state.gunSystem && !!state.gunSystem.thirdPersonHeldGunVisible && !!state.gunSystem.heldGunFacesForward && !!state.gunSystem.brightBeamParticles, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
+  check("14j-6. third-person runner holds the active gun lower and forward", !!state.gunSystem && !!state.gunSystem.thirdPersonHeldGunVisible && !!state.gunSystem.thirdPersonHeldGunLower && !!state.gunSystem.heldGunFacesForward && !!state.gunSystem.brightBeamParticles, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
   check("14k. obstacle spacing guard exists", !!state.obstacleSpacing)
   check("14l. coin spacing guard exists", !!state.coinSpacing)
   check("14l-1. coin model has centered high-contrast surface detail", !!state.coinDetail && state.coinDetail.children >= 6 && !!state.coinDetail.hasTorus && !!state.coinDetail.hasShape && !!state.coinDetail.centeredShape && !!state.coinDetail.hasBaseY && state.coinDetail.shapeColor === 0x7A3B00 && state.coinDetail.marker === 'high-contrast-centered-detail', state.coinDetail ? JSON.stringify(state.coinDetail) : 'missing')
@@ -840,6 +858,7 @@ app.whenReady().then(async () => {
   check("14m-5a. full-width barrier leaves one lane gap", !!state.fullBarrierCollisionGap, state.fullBarrierGap ? JSON.stringify(state.fullBarrierGap) : 'missing')
   check("14m-6. train roof ramp matches train width", state.trainRampWidth !== null && state.trainRampWidth <= 1.6, `rampWidth=${state.trainRampWidth}`)
   check("14m-7. train obstacles wait for GLB assets", !!state.vehicleSkipsLegacyFallback)
+  check("14m-8. realistic skybox and track textures are active", !!state.realisticMaterials && !!state.realisticMaterials.skyDome && !!state.realisticMaterials.asphalt && !!state.realisticMaterials.lanePaint && !!state.realisticMaterials.concrete && !!state.realisticMaterials.warningTexture, state.realisticMaterials ? JSON.stringify(state.realisticMaterials) : 'missing')
   check("14n. character catalog loaded", state.characterCatalogCount >= 12, String(state.characterCatalogCount))
   check("14o. character selector menu exists", !!state.characterSelector && !!state.charactersButton)
   check("14p. character price follows unlock count", state.characterBuy && state.characterPrice === state.expectedCharacterPrice, `price=${state.characterPrice}, owned=${state.ownedCharacterCount}`)

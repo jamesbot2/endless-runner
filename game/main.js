@@ -84,6 +84,7 @@
         SG.state.cyberMode = false;
         if (SG.scene) {
             if (SG.scene.background) SG.scene.background.setHex(0x87CEEB);
+            if (SG.updateSkyDome) SG.updateSkyDome(0, 'normal');
             if (SG.scene.fog) {
                 SG.scene.fog.color.setHex(0x87CEEB);
                 SG.scene.fog.near = 60;
@@ -602,6 +603,7 @@
         if (inCyber !== SG.state.cyberMode) {
             SG.state.cyberMode = inCyber;
             SG.applyCyberColors(inCyber);
+            if (SG.updateSkyDome) SG.updateSkyDome(SG.state.theme || 0, inCyber ? 'cyber' : 'normal');
         }
         if (inCyber) {
             SG.scene.background.setHex(0x000000);
