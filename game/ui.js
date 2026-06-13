@@ -1061,6 +1061,8 @@
         if (!con) return;
         con.style.display = 'none';
         SG.state.paused = false;
+        if (SG.updateGunCrosshair) SG.updateGunCrosshair();
+        if (SG.updateGunViewModel) SG.updateGunViewModel();
         if (SG.playPendingHomelanderVoice) SG.playPendingHomelanderVoice();
     };
 
@@ -1073,6 +1075,8 @@
         }
         con.style.display = 'flex';
         SG.state.paused = true;
+        if (SG.updateGunCrosshair) SG.updateGunCrosshair();
+        if (SG.updateGunViewModel) SG.updateGunViewModel();
         var ci = document.getElementById('console-input');
         if (ci) {
             ci.value = '';
@@ -1093,6 +1097,8 @@
             SG.pauseBtnEl.textContent = '\u23F8';
             if (SG.clock) SG.clock.getDelta();
         }
+        if (SG.updateGunCrosshair) SG.updateGunCrosshair();
+        if (SG.updateGunViewModel) SG.updateGunViewModel();
     };
 
     SG.toggleMute = function() {

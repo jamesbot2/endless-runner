@@ -192,6 +192,7 @@
         SG.state.gunTimer = 0;
         SG.state.gunShotCooldown = 0;
         if (SG.gunViewModel) SG.gunViewModel.visible = false;
+        if (SG.playerGunModel) SG.playerGunModel.visible = false;
         SG.updateGunCrosshair();
         SG.updateGunHUD();
     };
@@ -212,6 +213,10 @@
             SG.scene.remove(SG.gunViewModel);
             if (SG.disposeObject) SG.disposeObject(SG.gunViewModel);
         }
+        if (SG.playerGunModel && SG.player) {
+            SG.player.remove(SG.playerGunModel);
+            if (SG.disposeObject) SG.disposeObject(SG.playerGunModel);
+        }
         SG.gunViewModel = new THREE.Group();
         SG.gunViewModel.name = 'first-person-gun-viewmodel';
         var def = SG.getGunDef(SG.state.activeGun && SG.state.activeGun.id);
@@ -221,12 +226,28 @@
         SG.gunViewModel.add(model);
         SG.gunViewModel.visible = false;
         SG.scene.add(SG.gunViewModel);
+
+        SG.playerGunModel = new THREE.Group();
+        SG.playerGunModel.name = 'third-person-held-gun';
+        var held = SG.cloneGunModel(def, false);
+        held.position.set(0, 0, 0);
+        held.rotation.set(0.08, Math.PI, 0);
+        held.scale.multiplyScalar(0.82);
+        SG.playerGunModel.add(held);
+        SG.playerGunModel.position.set(-0.34, 0.78, 0.02);
+        SG.playerGunModel.rotation.set(0, 0, 0);
+        SG.playerGunModel.visible = false;
+        if (SG.player) SG.player.add(SG.playerGunModel);
     };
 
     SG.updateGunViewModel = function() {
         if (!SG.gunViewModel || !SG.camera) return;
-        var show = !!(SG.state.firstPerson && SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander && SG.state.started && !SG.state.gameOver);
+        var show = !!(SG.state.firstPerson && SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander && SG.state.started && !SG.state.paused && !SG.state.gameOver);
         SG.gunViewModel.visible = show;
+        if (SG.playerGunModel) {
+            SG.playerGunModel.visible = !!(!SG.state.firstPerson && SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander && SG.state.started && !SG.state.paused && !SG.state.gameOver);
+        }
+        if (SG.updateGunCrosshair) SG.updateGunCrosshair();
         if (!show) return;
         var forward = new THREE.Vector3();
         var right = new THREE.Vector3(1, 0, 0).applyQuaternion(SG.camera.quaternion);
@@ -234,7 +255,7 @@
         SG.camera.getWorldDirection(forward);
         SG.gunViewModel.position.copy(SG.camera.position)
             .add(right.multiplyScalar(0.34))
-            .add(down.multiplyScalar(0.29))
+            .add(down.multiplyScalar(0.36))
             .add(forward.multiplyScalar(0.82));
         SG.gunViewModel.quaternion.copy(SG.camera.quaternion);
     };
@@ -432,7 +453,7 @@
     SG.updateGunCrosshair = function() {
         var el = document.getElementById('gun-crosshair');
         if (!el) return;
-        var show = !!(SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander && SG.state.started && !SG.state.gameOver);
+        var show = !!(SG.state.firstPerson && SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander && SG.state.started && !SG.state.paused && !SG.state.gameOver);
         el.style.display = show ? 'block' : 'none';
         el.style.visibility = show ? 'visible' : 'hidden';
         el.style.opacity = show ? '1' : '0';

@@ -412,6 +412,7 @@ app.whenReady().then(async () => {
           window.__SG.state.homelander = false
           window.__SG.state.activeGun = { id: 'rifle', name: 'Rifle', power: 2.35, fireInterval: 0.2, range: 50, color: 0xffd34e }
           window.__SG.state.gunTimer = 20
+          window.__SG.state.paused = false
           window.__SG.state.firstPerson = true
           window.__SG.refreshGunViewModel()
           window.__SG.updateCamera()
@@ -446,10 +447,24 @@ app.whenReady().then(async () => {
           }
           var crosshair = document.getElementById('gun-crosshair')
           var firstPersonCrosshair = crosshair && crosshair.style.display !== 'none'
+          window.__SG.state.paused = true
+          if (window.__SG.updateGunViewModel) window.__SG.updateGunViewModel()
+          if (window.__SG.updateGunCrosshair) window.__SG.updateGunCrosshair()
+          var pausedCrosshairHidden = crosshair && crosshair.style.display === 'none'
+          window.__SG.state.paused = false
+          if (window.__SG.updateGunViewModel) window.__SG.updateGunViewModel()
+          if (window.__SG.updateGunCrosshair) window.__SG.updateGunCrosshair()
+          var resumedCrosshairVisible = crosshair && crosshair.style.display !== 'none'
           window.__SG.state.firstPerson = false
           if (window.__SG.updateGunViewModel) window.__SG.updateGunViewModel()
           if (window.__SG.updateGunHUD) window.__SG.updateGunHUD()
-          var thirdPersonCrosshair = crosshair && crosshair.style.display !== 'none'
+          var thirdPersonCrosshairHidden = crosshair && crosshair.style.display === 'none'
+          var thirdPersonHeldGunVisible = !!(window.__SG.playerGunModel && window.__SG.playerGunModel.visible)
+          var heldGunFacesForward = false
+          if (window.__SG.playerGunModel && window.__SG.playerGunModel.children[0]) {
+            var heldGun = window.__SG.playerGunModel.children[0]
+            heldGunFacesForward = Math.abs(heldGun.rotation.y - Math.PI) < 0.01 && Math.abs(heldGun.rotation.z) < 0.01
+          }
           r.gunSystem = {
             catalog: window.__SG.gunCatalog.length,
             paths: window.__SG.gunModelPaths,
@@ -468,7 +483,12 @@ app.whenReady().then(async () => {
             viewModelAimsUp,
             coloredGunMaterials,
             gunMaterialColorCount: Object.keys(gunMaterialHexes).length,
-            crosshair: firstPersonCrosshair && thirdPersonCrosshair,
+            firstPersonCrosshair,
+            thirdPersonCrosshairHidden,
+            pausedCrosshairHidden,
+            resumedCrosshairVisible,
+            thirdPersonHeldGunVisible,
+            heldGunFacesForward,
             hud: document.getElementById('gun-hud') !== null
           }
         } finally {
@@ -802,8 +822,9 @@ app.whenReady().then(async () => {
   check("14j-1. gun pickup system supports timed weapon replacement", !!state.gunSystem && state.gunSystem.catalog >= 4 && state.gunSystem.paths.sniper === 'models/guns/sniper-rifle.glb' && !!state.gunSystem.picked && !!state.gunSystem.replaced && !!state.gunSystem.timerStartsAt30 && !!state.gunSystem.timerTicks && !!state.gunSystem.hud, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
   check("14j-2. guns break non-train obstacles only", !!state.gunSystem && !!state.gunSystem.shotBreakable && !!state.gunSystem.breakableDestroyed && !!state.gunSystem.shotTrain && !!state.gunSystem.trainSurvived && !!state.gunSystem.homelanderBlocked, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
   check("14j-3. first-person gun view model is upright and aimed up", !!state.gunSystem && !!state.gunSystem.firstPersonGunVisible && !!state.gunSystem.viewModelUpright && !!state.gunSystem.viewModelAimsUp, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
-  check("14j-4. gun crosshair and bright shots render", !!state.gunSystem && !!state.gunSystem.crosshair && !!state.gunSystem.brightBeamParticles, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
+  check("14j-4. gun crosshair is first-person only and pause-aware", !!state.gunSystem && !!state.gunSystem.firstPersonCrosshair && !!state.gunSystem.thirdPersonCrosshairHidden && !!state.gunSystem.pausedCrosshairHidden && !!state.gunSystem.resumedCrosshairVisible, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
   check("14j-5. gun models use multiple non-black colors", !!state.gunSystem && !!state.gunSystem.coloredGunMaterials, state.gunSystem ? `colors=${state.gunSystem.gunMaterialColorCount}` : 'missing')
+  check("14j-6. third-person runner holds the active gun", !!state.gunSystem && !!state.gunSystem.thirdPersonHeldGunVisible && !!state.gunSystem.heldGunFacesForward && !!state.gunSystem.brightBeamParticles, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
   check("14k. obstacle spacing guard exists", !!state.obstacleSpacing)
   check("14l. coin spacing guard exists", !!state.coinSpacing)
   check("14l-1. coin model has centered high-contrast surface detail", !!state.coinDetail && state.coinDetail.children >= 6 && !!state.coinDetail.hasTorus && !!state.coinDetail.hasShape && !!state.coinDetail.centeredShape && !!state.coinDetail.hasBaseY && state.coinDetail.shapeColor === 0x7A3B00 && state.coinDetail.marker === 'high-contrast-centered-detail', state.coinDetail ? JSON.stringify(state.coinDetail) : 'missing')
