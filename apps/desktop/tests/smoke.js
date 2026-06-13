@@ -180,6 +180,10 @@ app.whenReady().then(async () => {
       r.thirdPersonViewSaved = false
       r.thirdPersonDefault = window.__SG ? window.__SG.state.thirdPersonView : null
       r.thirdPersonButtonFeedback = false
+      r.firstPersonPitchDefault = window.__SG ? window.__SG.state.firstPersonPitchDeg : null
+      r.firstPersonPitchSetting = null
+      r.firstPersonPitchSaved = false
+      r.firstPersonPitchButtons = 0
       r.settingsModalWide = false
       r.thirdPersonCameraViews = window.__SG && window.__SG.thirdPersonCameraViews ? window.__SG.thirdPersonCameraViews : null
       r.speedHud = false
@@ -202,6 +206,14 @@ app.whenReady().then(async () => {
         var mediumStyle = mediumBtn ? getComputedStyle(mediumBtn) : null
         r.thirdPersonViewSaved = window.__SG.state.thirdPersonView === 'medium' && localStorage.getItem('subwayThirdPersonView') === 'medium'
         r.thirdPersonButtonFeedback = !!mediumBtn && mediumBtn.classList.contains('selected') && mediumBtn.getAttribute('aria-pressed') === 'true' && mediumStyle && mediumStyle.boxShadow !== 'none' && mediumStyle.borderColor.indexOf('34') >= 0
+        var fpPitchSlider = document.getElementById('__fp-pitch')
+        r.firstPersonPitchSetting = fpPitchSlider ? parseFloat(fpPitchSlider.value) : null
+        r.firstPersonPitchButtons = document.querySelectorAll('#__fp-pitch-down,#__fp-pitch-up').length
+        if (fpPitchSlider) {
+          fpPitchSlider.value = '-2'
+          fpPitchSlider.dispatchEvent(new Event('input', { bubbles: true }))
+          r.firstPersonPitchSaved = window.__SG.state.firstPersonPitchDeg === -2 && localStorage.getItem('subwayFirstPersonPitchDeg') === '-2'
+        }
         var modal = document.querySelector('#settings-overlay .menu-content')
         r.settingsModalWide = modal ? modal.getBoundingClientRect().width >= 560 : false
         var volumeRows = document.querySelectorAll('#settings-overlay .__vol-slider')
@@ -218,6 +230,8 @@ app.whenReady().then(async () => {
         window.__SG.resetKeyBindings()
         window.__SG.state.thirdPersonView = 'near'
         localStorage.setItem('subwayThirdPersonView', 'near')
+        window.__SG.state.firstPersonPitchDeg = 1
+        localStorage.setItem('subwayFirstPersonPitchDeg', '1')
       }
       r.consoleCommands = window.__SG && window.__SG.consoleCommands ? Object.keys(window.__SG.consoleCommands).sort() : []
       r.executeConsoleCommand = window.__SG ? typeof window.__SG.executeConsoleCommand === 'function' : false
@@ -405,10 +419,30 @@ app.whenReady().then(async () => {
           var firstPersonGunVisible = !!(window.__SG.gunViewModel && window.__SG.gunViewModel.visible)
           var viewModelUpright = false
           var viewModelAimsUp = false
+          var coloredGunMaterials = false
+          var gunMaterialHexes = {}
           if (window.__SG.gunViewModel && window.__SG.gunViewModel.children[0]) {
             var gunChild = window.__SG.gunViewModel.children[0]
             viewModelUpright = Math.abs(gunChild.rotation.y) < 0.01 && Math.abs(gunChild.rotation.z) < 0.01
             viewModelAimsUp = gunChild.rotation.x > 0
+          }
+          if (window.__SG.gunModels) {
+            Object.keys(window.__SG.gunModels).forEach(function(key) {
+              var model = window.__SG.gunModels[key]
+              if (!model || !model.traverse) return
+              model.traverse(function(node) {
+                if (!node || !node.isMesh || !node.material) return
+                var mats = Array.isArray(node.material) ? node.material : [node.material]
+                mats.forEach(function(mat) {
+                  if (!mat || !mat.color) return
+                  var hex = mat.color.getHex()
+                  var c = mat.color
+                  var brightness = (c.r + c.g + c.b) / 3
+                  if (brightness > 0.09) gunMaterialHexes[hex] = true
+                })
+              })
+            })
+            coloredGunMaterials = Object.keys(gunMaterialHexes).length >= 6
           }
           var crosshair = document.getElementById('gun-crosshair')
           var firstPersonCrosshair = crosshair && crosshair.style.display !== 'none'
@@ -432,6 +466,8 @@ app.whenReady().then(async () => {
             firstPersonGunVisible,
             viewModelUpright,
             viewModelAimsUp,
+            coloredGunMaterials,
+            gunMaterialColorCount: Object.keys(gunMaterialHexes).length,
             crosshair: firstPersonCrosshair && thirdPersonCrosshair,
             hud: document.getElementById('gun-hud') !== null
           }
@@ -750,6 +786,7 @@ app.whenReady().then(async () => {
   check("14e-8. third-person camera defaults to closest", state.thirdPersonDefault === 'near', String(state.thirdPersonDefault))
   check("14e-9. third-person camera buttons give selected feedback", !!state.thirdPersonButtonFeedback)
   check("14e-10. third-person speed HUD follows runner", !!state.speedHud, state.speedHudText || state.speedHudBackground || 'missing')
+  check("14e-11. first-person pitch setting defaults lower and saves", state.firstPersonPitchDefault === 1 && state.firstPersonPitchSetting === 1 && state.firstPersonPitchButtons === 2 && !!state.firstPersonPitchSaved, `default=${state.firstPersonPitchDefault}, slider=${state.firstPersonPitchSetting}, buttons=${state.firstPersonPitchButtons}`)
   check("14f. restart keeps player facing forward", Math.abs(state.restartRotationY - Math.PI) < 0.001, String(state.restartRotationY))
   check("14g. console command runner exists", !!state.executeConsoleCommand)
   check("14h. console includes Homelander easter egg", state.consoleCommands && state.consoleCommands.includes('homelander'), state.consoleCommands ? state.consoleCommands.join(', ') : 'none')
@@ -766,6 +803,7 @@ app.whenReady().then(async () => {
   check("14j-2. guns break non-train obstacles only", !!state.gunSystem && !!state.gunSystem.shotBreakable && !!state.gunSystem.breakableDestroyed && !!state.gunSystem.shotTrain && !!state.gunSystem.trainSurvived && !!state.gunSystem.homelanderBlocked, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
   check("14j-3. first-person gun view model is upright and aimed up", !!state.gunSystem && !!state.gunSystem.firstPersonGunVisible && !!state.gunSystem.viewModelUpright && !!state.gunSystem.viewModelAimsUp, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
   check("14j-4. gun crosshair and bright shots render", !!state.gunSystem && !!state.gunSystem.crosshair && !!state.gunSystem.brightBeamParticles, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
+  check("14j-5. gun models use multiple non-black colors", !!state.gunSystem && !!state.gunSystem.coloredGunMaterials, state.gunSystem ? `colors=${state.gunSystem.gunMaterialColorCount}` : 'missing')
   check("14k. obstacle spacing guard exists", !!state.obstacleSpacing)
   check("14l. coin spacing guard exists", !!state.coinSpacing)
   check("14l-1. coin model has centered high-contrast surface detail", !!state.coinDetail && state.coinDetail.children >= 6 && !!state.coinDetail.hasTorus && !!state.coinDetail.hasShape && !!state.coinDetail.centeredShape && !!state.coinDetail.hasBaseY && state.coinDetail.shapeColor === 0x7A3B00 && state.coinDetail.marker === 'high-contrast-centered-detail', state.coinDetail ? JSON.stringify(state.coinDetail) : 'missing')

@@ -36,7 +36,8 @@
             var eyeY = camTarget.y + 1.3 + rollDrop;
             var eyeZ = camTarget.z + 0.5;
             SG.camera.position.set(camTarget.x, eyeY, eyeZ);
-            var pitchUp = Math.tan(5 * Math.PI / 180) * 30;
+            var pitchDeg = Math.max(-5, Math.min(5, typeof SG.state.firstPersonPitchDeg === 'number' ? SG.state.firstPersonPitchDeg : 1));
+            var pitchUp = Math.tan(pitchDeg * Math.PI / 180) * 30;
             SG.camera.lookAt(camTarget.x, camTarget.y + 0.3 + pitchUp, camTarget.z - 30);
             if (SG.player) SG.player.visible = false;
             if (SG.homelanderGroup) SG.homelanderGroup.visible = false;

@@ -48,6 +48,7 @@
         sfxVolume: parseFloat(localStorage.getItem('subwaySfxVol') || '0.8'),
         rollReleaseDelay: parseInt(localStorage.getItem('subwayRollReleaseDelay') || '200'),
         thirdPersonView: localStorage.getItem('subwayThirdPersonView') || 'near',
+        firstPersonPitchDeg: Math.max(-5, Math.min(5, parseFloat(localStorage.getItem('subwayFirstPersonPitchDeg') || '1'))),
         lastPlayedCoin: 0,
         credits: parseInt(localStorage.getItem('subwayCredits') || '0'),
         totalCoins: parseInt(localStorage.getItem('subwayTotalCoins') || '0'),

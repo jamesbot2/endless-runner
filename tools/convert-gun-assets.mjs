@@ -24,10 +24,10 @@ const packDir = process.argv[2] || process.env.GUN_PACK_DIR || 'D:\\ac_project\\
 const sourceDir = path.join(packDir, 'OBJ')
 
 const jobs = [
-  { source: 'Pistol', file: 'pistol', target: { width: 0.42, height: 0.26, depth: 0.96 }, accent: 0x4be7ff },
-  { source: 'LongPistol', file: 'long-pistol', target: { width: 0.42, height: 0.28, depth: 1.12 }, accent: 0x86ff7a },
-  { source: 'Rifle', file: 'rifle', target: { width: 0.5, height: 0.34, depth: 1.52 }, accent: 0xffd34e },
-  { source: 'Sniper rifle', file: 'sniper-rifle', target: { width: 0.54, height: 0.36, depth: 1.82 }, accent: 0xff5fd7 }
+  { source: 'Pistol', file: 'pistol', target: { width: 0.42, height: 0.26, depth: 0.96 }, primary: 0x4f6378, accent: 0xc84a4a, dark: 0x202733 },
+  { source: 'LongPistol', file: 'long-pistol', target: { width: 0.42, height: 0.28, depth: 1.12 }, primary: 0x7d2f28, accent: 0xd66b3f, dark: 0x261818 },
+  { source: 'Rifle', file: 'rifle', target: { width: 0.5, height: 0.34, depth: 1.52 }, primary: 0x2e6b70, accent: 0xd3a63f, dark: 0x17282d },
+  { source: 'Sniper rifle', file: 'sniper-rifle', target: { width: 0.54, height: 0.36, depth: 1.82 }, primary: 0x607a95, accent: 0x8d5ca8, dark: 0x1b2130 }
 ]
 
 function normalizeModel(object, target) {
@@ -50,9 +50,13 @@ function normalizeModel(object, target) {
   object.position.y -= box.min.y
 }
 
-function materialFor(mat, accent) {
+function materialFor(mat, job) {
   const name = (mat && mat.name ? mat.name : '').toLowerCase()
   let color = mat && mat.color ? mat.color.clone() : new THREE.Color(0x9aa4b2)
+  const brightness = (color.r + color.g + color.b) / 3
+  if (/main/.test(name)) color = new THREE.Color(job.primary)
+  else if (/detail|barrel|scope|glass/.test(name)) color = new THREE.Color(job.accent)
+  else if (/handle|grip|dark/.test(name) || brightness < 0.06) color = new THREE.Color(job.dark)
   return new THREE.MeshStandardMaterial({
     name: mat && mat.name ? mat.name : 'GunMaterial',
     color,
@@ -85,7 +89,7 @@ async function convert(job) {
   model.traverse((node) => {
     if (!node.isMesh) return
     const mats = Array.isArray(node.material) ? node.material : [node.material]
-    const converted = mats.map((mat) => materialFor(mat, job.accent))
+    const converted = mats.map((mat) => materialFor(mat, job))
     node.material = Array.isArray(node.material) ? converted : converted[0]
     node.castShadow = true
     node.receiveShadow = true

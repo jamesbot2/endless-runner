@@ -98,6 +98,7 @@
         sfxVolume: parseFloat(localStorage.getItem('subwaySfxVol') || '0.8'),
         rollReleaseDelay: parseInt(localStorage.getItem('subwayRollReleaseDelay') || '200'),
         thirdPersonView: localStorage.getItem('subwayThirdPersonView') || 'near',
+        firstPersonPitchDeg: Math.max(-5, Math.min(5, parseFloat(localStorage.getItem('subwayFirstPersonPitchDeg') || '1'))),
         lastPlayedCoin: 0,
         credits: parseInt(localStorage.getItem('subwayCredits') || '0'),
         totalCoins: parseInt(localStorage.getItem('subwayTotalCoins') || '0'),
@@ -3154,10 +3155,12 @@
         var rollDelay = Math.max(0, Math.min(1000, parseInt(localStorage.getItem('subwayRollReleaseDelay') || String(SG.state.rollReleaseDelay || 200))));
         var bindings = SG.getKeyBindings ? SG.getKeyBindings() : { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown' };
         var thirdPersonView = localStorage.getItem('subwayThirdPersonView') || SG.state.thirdPersonView || 'near';
+        var fpPitch = Math.max(-5, Math.min(5, parseFloat(localStorage.getItem('subwayFirstPersonPitchDeg') || String(typeof SG.state.firstPersonPitchDeg === 'number' ? SG.state.firstPersonPitchDeg : 1))));
         SG.state.musicVolume = music;
         SG.state.sfxVolume = sfx;
         SG.state.rollReleaseDelay = rollDelay;
         SG.state.thirdPersonView = thirdPersonView;
+        SG.state.firstPersonPitchDeg = fpPitch;
 
         var actionOrder = ['up', 'down', 'left', 'right'];
         var viewOptions = [
@@ -3184,6 +3187,10 @@
         html += '<div style="margin:14px 0 10px;">';
         html += '<div style="display:flex;justify-content:space-between;align-items:end;gap:10px;margin-bottom:6px;"><div><div class="s-label">Crouch Release Delay / 蹲起延迟</div><div style="color:#aaa;font-size:12px;text-align:left;">How long the character stays crouched after releasing Down</div></div><span id="__roll-delay-val" class="vol-pct">' + rollDelay + 'ms</span></div>';
         html += '<input type="range" min="0" max="1000" step="50" value="' + rollDelay + '" id="__roll-delay" style="width:100%;">';
+        html += '</div>';
+        html += '<div style="margin:14px 0 10px;">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:end;gap:10px;margin-bottom:6px;"><div><div class="s-label">First-Person View Height / 第一人称视角高度</div><div style="color:#aaa;font-size:12px;text-align:left;">Adjust camera pitch from -5° to +5°</div></div><span id="__fp-pitch-val" class="vol-pct">' + fpPitch.toFixed(0) + '°</span></div>';
+        html += '<div style="display:grid;grid-template-columns:42px 1fr 42px;align-items:center;gap:8px;"><button class="diff-btn" id="__fp-pitch-down" style="min-width:42px;padding:8px;">-</button><input type="range" min="-5" max="5" step="1" value="' + fpPitch + '" id="__fp-pitch" style="width:100%;"><button class="diff-btn" id="__fp-pitch-up" style="min-width:42px;padding:8px;">+</button></div>';
         html += '</div>';
         html += '<div style="margin:14px 0 10px;">';
         html += '<div class="s-label" style="margin-bottom:8px;">Third-Person Camera</div>';
@@ -3246,6 +3253,22 @@
                 if (out) out.textContent = val + 'ms';
             };
         }
+        var fpPitchSlider = document.getElementById('__fp-pitch');
+        function setFirstPersonPitch(val) {
+            val = Math.max(-5, Math.min(5, parseFloat(val || '1')));
+            SG.state.firstPersonPitchDeg = val;
+            localStorage.setItem('subwayFirstPersonPitchDeg', String(val));
+            if (fpPitchSlider) fpPitchSlider.value = String(val);
+            var out = document.getElementById('__fp-pitch-val');
+            if (out) out.textContent = val.toFixed(0) + '°';
+        }
+        if (fpPitchSlider) {
+            fpPitchSlider.oninput = function() { setFirstPersonPitch(this.value); };
+        }
+        var fpPitchDown = document.getElementById('__fp-pitch-down');
+        var fpPitchUp = document.getElementById('__fp-pitch-up');
+        if (fpPitchDown) fpPitchDown.onclick = function(e) { e.preventDefault(); setFirstPersonPitch((SG.state.firstPersonPitchDeg || 1) - 1); };
+        if (fpPitchUp) fpPitchUp.onclick = function(e) { e.preventDefault(); setFirstPersonPitch((SG.state.firstPersonPitchDeg || 1) + 1); };
         function refreshViewButtons() {
             var btns = overlay.querySelectorAll('.__view-btn');
             for (var vi = 0; vi < btns.length; vi++) {
@@ -4973,7 +4996,8 @@
             var eyeY = camTarget.y + 1.3 + rollDrop;
             var eyeZ = camTarget.z + 0.5;
             SG.camera.position.set(camTarget.x, eyeY, eyeZ);
-            var pitchUp = Math.tan(5 * Math.PI / 180) * 30;
+            var pitchDeg = Math.max(-5, Math.min(5, typeof SG.state.firstPersonPitchDeg === 'number' ? SG.state.firstPersonPitchDeg : 1));
+            var pitchUp = Math.tan(pitchDeg * Math.PI / 180) * 30;
             SG.camera.lookAt(camTarget.x, camTarget.y + 0.3 + pitchUp, camTarget.z - 30);
             if (SG.player) SG.player.visible = false;
             if (SG.homelanderGroup) SG.homelanderGroup.visible = false;
