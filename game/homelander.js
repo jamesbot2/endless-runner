@@ -15,8 +15,8 @@
         modelRotationY: 0,
         modelYOffset: -0.16,
         eyeOffsetX: 0.055,
-        eyeOffsetY: 1.56,
-        eyeOffsetZ: -0.34
+        eyeOffsetY: 1.63,
+        eyeOffsetZ: -0.50
     };
 
     function normalizeHomelanderModel(model) {

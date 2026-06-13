@@ -189,6 +189,7 @@ app.whenReady().then(async () => {
       r.speedHud = false
       r.speedHudText = ''
       r.speedHudBackground = ''
+      r.speedHudVector = false
       if (window.__SG && window.__SG.setKeyBinding && window.__SG.resetKeyBindings && window.__SG.showSettings) {
         window.__SG.setKeyBinding('up', 'k')
         r.keyBindingActionAfter = window.__SG.getInputActionForKey ? window.__SG.getInputActionForKey('k') : null
@@ -306,6 +307,7 @@ app.whenReady().then(async () => {
         window.__SG.state.firstPerson = false
         window.__SG.state.homelander = false
         window.__SG.state.speed = window.__SG.speedForLevel ? window.__SG.speedForLevel(20) : 1
+        window.__SG.state.instantSpeedMps = Math.sqrt(12 * 12 + 5 * 5)
         if (window.__SG.updateCamera) window.__SG.updateCamera()
         window.__SG.updateSpeedHUD()
         var speedHud = document.getElementById('third-person-speed-hud')
@@ -313,12 +315,14 @@ app.whenReady().then(async () => {
           r.speedHudText = speedHud.textContent
           r.speedHudBackground = getComputedStyle(speedHud).backgroundColor
           r.speedHud = speedHud.style.display !== 'none' && /km\\/h/.test(speedHud.textContent)
+          r.speedHudVector = /47 km\\/h/.test(speedHud.textContent)
         }
         window.__SG.state.started = prevStarted
         window.__SG.state.gameOver = prevGameOver
         window.__SG.state.firstPerson = prevFirstPerson
         window.__SG.state.homelander = prevHomelander
         window.__SG.state.speed = prevSpeed
+        delete window.__SG.state.instantSpeedMps
         window.__SG.updateSpeedHUD()
       }
       r.homelanderModelPath = window.__SG ? window.__SG.homelanderModelPath : null
@@ -621,6 +625,15 @@ app.whenReady().then(async () => {
         }
         window.__SG.disposeObject(textureSegment)
       }
+      r.skyDomeThemeSwap = false
+      if (window.__SG && window.__SG.updateSkyDome && window.__SG.skyDome) {
+        window.__SG.updateSkyDome(0, 'normal')
+        var skyBefore = window.__SG.skyDome.userData ? window.__SG.skyDome.userData.skyKey : ''
+        window.__SG.updateSkyDome(1, 'normal')
+        var skyAfter = window.__SG.skyDome.userData ? window.__SG.skyDome.userData.skyKey : ''
+        r.skyDomeThemeSwap = skyBefore === 'normal-0' && skyAfter === 'normal-1'
+        window.__SG.updateSkyDome(window.__SG.state.theme || 0, window.__SG.state.cyberMode ? 'cyber' : 'normal')
+      }
       if (window.__SG && window.__SG.createCoin && window.__SG.disposeObject) {
         var detailedCoin = window.__SG.createCoin(1, -12, 0.3)
         var coinShape = detailedCoin.children.find(function(child) { return child.geometry && child.geometry.type === 'ShapeGeometry' })
@@ -688,6 +701,7 @@ app.whenReady().then(async () => {
         window.__SG.disposeObject(gapBarrier)
       }
       r.trainRampWidth = null
+      r.trainRampTextured = false
       r.vehicleSkipsLegacyFallback = false
       if (window.__SG && window.__SG.createTrain && window.__SG.disposeObject) {
         var originalRandom = Math.random
@@ -695,6 +709,13 @@ app.whenReady().then(async () => {
           Math.random = function() { return 0.1 }
           var rampTrain = window.__SG.createTrain(1, -42, false)
           r.trainRampWidth = rampTrain ? rampTrain.userData.rampWidth || null : null
+          if (rampTrain) {
+            rampTrain.traverse(function(node) {
+              if (!r.trainRampTextured && node && node.isMesh && node.userData && node.userData.rampSurface) {
+                r.trainRampTextured = !!(node.material && node.material.map)
+              }
+            })
+          }
           if (rampTrain) window.__SG.disposeObject(rampTrain)
         } finally {
           Math.random = originalRandom
@@ -823,7 +844,7 @@ app.whenReady().then(async () => {
   check("14e-7. third-person camera presets move closer", !!state.thirdPersonCameraViews && state.thirdPersonCameraViews.far.z === 7 && state.thirdPersonCameraViews.medium.z < state.thirdPersonCameraViews.far.z && state.thirdPersonCameraViews.near.z < state.thirdPersonCameraViews.medium.z, state.thirdPersonCameraViews ? JSON.stringify(state.thirdPersonCameraViews) : 'missing')
   check("14e-8. third-person camera defaults to closest", state.thirdPersonDefault === 'near', String(state.thirdPersonDefault))
   check("14e-9. third-person camera buttons give selected feedback", !!state.thirdPersonButtonFeedback)
-  check("14e-10. third-person speed HUD follows runner", !!state.speedHud, state.speedHudText || state.speedHudBackground || 'missing')
+  check("14e-10. third-person speed HUD shows instant vector speed", !!state.speedHud && !!state.speedHudVector, state.speedHudText || state.speedHudBackground || 'missing')
   check("14e-11. first-person pitch setting defaults lower and saves", state.firstPersonPitchDefault === 1 && state.firstPersonPitchSetting === 1 && state.firstPersonPitchButtons === 2 && !!state.firstPersonPitchSaved, `default=${state.firstPersonPitchDefault}, slider=${state.firstPersonPitchSetting}, buttons=${state.firstPersonPitchButtons}`)
   check("14f. restart keeps player facing forward", Math.abs(state.restartRotationY - Math.PI) < 0.001, String(state.restartRotationY))
   check("14g. console command runner exists", !!state.executeConsoleCommand)
@@ -832,9 +853,9 @@ app.whenReady().then(async () => {
   check("14h-2. console closes with Escape", !!state.consoleEscapeClose)
   check("14h-3. console help does not reveal Homelander", !!state.consoleHelpHidesHomelander)
   check("14h-4. Homelander voice plays once after console closes", !!state.homelanderVoiceAfterConsoleClose, state.homelanderAudio ? JSON.stringify(state.homelanderAudio) : 'missing audio')
-  check("14h-5. Homelander theme loops below amplified voice", !!state.homelanderAudio && state.homelanderAudio.theme === 'audio/homelander-theme.mp3' && state.homelanderAudio.voice === 'audio/im-better-homelander.mp3' && !!state.homelanderAudio.themeLoop && !!state.homelanderAudio.voiceLoop && state.homelanderAudio.voiceVolume >= 1 && state.homelanderAudio.voiceGain > 1.8, state.homelanderAudio ? JSON.stringify(state.homelanderAudio) : 'missing audio')
+  check("14h-5. Homelander theme loops below louder amplified voice", !!state.homelanderAudio && state.homelanderAudio.theme === 'audio/homelander-theme.mp3' && state.homelanderAudio.voice === 'audio/im-better-homelander.mp3' && !!state.homelanderAudio.themeLoop && !!state.homelanderAudio.voiceLoop && state.homelanderAudio.voiceVolume >= 1 && state.homelanderAudio.voiceGain > 3.2, state.homelanderAudio ? JSON.stringify(state.homelanderAudio) : 'missing audio')
   check("14i. Homelander GLB loader exists", !!state.homelanderLoader && state.homelanderModelPath === 'models/homelander.glb', state.homelanderModelPath || 'missing path')
-  check("14i-1. Homelander GLB tuning faces forward with eye lasers", !!state.homelanderTuning && Math.abs(state.homelanderTuning.modelRotationY) < 0.001 && state.homelanderTuning.modelYOffset <= -0.15 && state.homelanderTuning.eyeOffsetY > 1.5 && state.homelanderTuning.eyeOffsetZ < 0, state.homelanderTuning ? JSON.stringify(state.homelanderTuning) : 'missing tuning')
+  check("14i-1. Homelander GLB tuning faces forward with eye lasers", !!state.homelanderTuning && Math.abs(state.homelanderTuning.modelRotationY) < 0.001 && state.homelanderTuning.modelYOffset <= -0.15 && state.homelanderTuning.eyeOffsetY > 1.6 && state.homelanderTuning.eyeOffsetY < 1.78 && state.homelanderTuning.eyeOffsetZ <= -0.45, state.homelanderTuning ? JSON.stringify(state.homelanderTuning) : 'missing tuning')
   check("14i-2. Homelander GLB loads into scene", !!state.homelanderModelLoaded && state.homelanderModelHeight > 1.7, `height=${state.homelanderModelHeight}`)
   check("14j. vehicle model loader exists", !!state.vehicleLoader, state.vehicleTrainPath || 'missing train path')
   check("14j-1. gun pickup system supports timed weapon replacement", !!state.gunSystem && state.gunSystem.catalog >= 4 && state.gunSystem.paths.sniper === 'models/guns/sniper-rifle.glb' && !!state.gunSystem.picked && !!state.gunSystem.replaced && !!state.gunSystem.timerStartsAt30 && !!state.gunSystem.timerTicks && !!state.gunSystem.hud, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
@@ -856,9 +877,9 @@ app.whenReady().then(async () => {
   check("14m-4. city scenery spawn avoids duplicate overlap", !!state.citySceneryNoDuplicateSpawn)
   check("14m-5. roll-under obstacle is narrower and lower", !!state.rollUnderSize && state.rollUnderSize.width <= 1.35 && state.rollUnderSize.height <= 0.28 && state.rollUnderSize.yOffset <= 1.2, state.rollUnderSize ? JSON.stringify(state.rollUnderSize) : 'missing')
   check("14m-5a. full-width barrier leaves one lane gap", !!state.fullBarrierCollisionGap, state.fullBarrierGap ? JSON.stringify(state.fullBarrierGap) : 'missing')
-  check("14m-6. train roof ramp matches train width", state.trainRampWidth !== null && state.trainRampWidth <= 1.6, `rampWidth=${state.trainRampWidth}`)
+  check("14m-6. train roof ramp matches train width and has warning texture", state.trainRampWidth !== null && state.trainRampWidth <= 1.6 && !!state.trainRampTextured, `rampWidth=${state.trainRampWidth}, textured=${state.trainRampTextured}`)
   check("14m-7. train obstacles wait for GLB assets", !!state.vehicleSkipsLegacyFallback)
-  check("14m-8. realistic skybox and track textures are active", !!state.realisticMaterials && !!state.realisticMaterials.skyDome && !!state.realisticMaterials.asphalt && !!state.realisticMaterials.lanePaint && !!state.realisticMaterials.concrete && !!state.realisticMaterials.warningTexture, state.realisticMaterials ? JSON.stringify(state.realisticMaterials) : 'missing')
+  check("14m-8. realistic skybox and track textures are active", !!state.realisticMaterials && !!state.realisticMaterials.skyDome && !!state.realisticMaterials.asphalt && !!state.realisticMaterials.lanePaint && !!state.realisticMaterials.concrete && !!state.realisticMaterials.warningTexture && !!state.skyDomeThemeSwap, state.realisticMaterials ? JSON.stringify({ materials: state.realisticMaterials, themeSwap: state.skyDomeThemeSwap }) : 'missing')
   check("14n. character catalog loaded", state.characterCatalogCount >= 12, String(state.characterCatalogCount))
   check("14o. character selector menu exists", !!state.characterSelector && !!state.charactersButton)
   check("14p. character price follows unlock count", state.characterBuy && state.characterPrice === state.expectedCharacterPrice, `price=${state.characterPrice}, owned=${state.ownedCharacterCount}`)

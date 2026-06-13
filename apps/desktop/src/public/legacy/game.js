@@ -67,6 +67,8 @@
         running: true,
         playerHeight: SG.PLAYER_Y || 0.15,
         targetPlayerHeight: SG.PLAYER_Y || 0.15,
+        instantSpeedMps: 0,
+        _speedSample: null,
         lastObstacleZ: 0,
         minObstacleGap: 30,
         obstacleTimer: 0,
@@ -152,7 +154,7 @@
     SG.homelanderVoiceAudio = null;
     SG.homelanderVoiceSource = null;
     SG.homelanderVoiceGain = null;
-    SG.HOMELANDER_VOICE_GAIN = 2.55;
+    SG.HOMELANDER_VOICE_GAIN = 4.4;
     SG.pendingHomelanderVoice = false;
 
     SG.initAudio = function() {
@@ -357,7 +359,7 @@
             SG.homelanderVoiceAudio.volume = SG.state.muted ? 0 : 1;
         }
         if (SG.homelanderVoiceGain) {
-            SG.homelanderVoiceGain.gain.value = SG.state.muted ? 0 : Math.min(3.2, Math.max(1.9, sfx * SG.HOMELANDER_VOICE_GAIN));
+            SG.homelanderVoiceGain.gain.value = SG.state.muted ? 0 : Math.min(5.0, Math.max(2.8, sfx * SG.HOMELANDER_VOICE_GAIN));
         }
     };
 
@@ -750,6 +752,7 @@
         });
         SG.skyDome = new THREE.Mesh(geo, mat);
         SG.skyDome.name = 'realistic-sky-dome';
+        SG.skyDome.userData.skyKey = 'normal-' + (SG.state ? SG.state.theme : 0);
         SG.skyDome.renderOrder = -1000;
         SG.scene.add(SG.skyDome);
     };
@@ -759,6 +762,7 @@
         var oldMap = SG.skyDome.material.map;
         SG.skyDome.material.map = SG.createSkyDomeTexture(themeIndex || 0, mode || 'normal');
         SG.skyDome.material.needsUpdate = true;
+        SG.skyDome.userData.skyKey = (mode || 'normal') + '-' + (themeIndex || 0);
         if (oldMap && oldMap.dispose) oldMap.dispose();
     };
 
@@ -1865,12 +1869,13 @@
 
         var hasRamp = Math.random() < 0.3;
         if (hasRamp) {
-            var rampMat = new THREE.MeshLambertMaterial({ color: 0xFF6600 });
+            var rampMat = SG.createWarningPanelMaterial ? SG.createWarningPanelMaterial() : new THREE.MeshLambertMaterial({ color: 0xFF6600 });
             var ramp = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.07, 2.35), rampMat);
             ramp.position.set(0, 0.9, 4.5);
             ramp.rotation.x = 0.65;
+            ramp.userData.rampSurface = true;
             group.add(ramp);
-            var railMat = new THREE.MeshLambertMaterial({ color: 0xDD4400 });
+            var railMat = SG.createDarkMetalMaterial ? SG.createDarkMetalMaterial() : new THREE.MeshLambertMaterial({ color: 0xDD4400 });
             for (var side3 = -1; side3 <= 1; side3 += 2) {
                 var r = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.36, 2.35), railMat);
                 r.position.set(side3 * 0.78, 1.12, 4.5);
@@ -3402,7 +3407,9 @@
     };
 
     SG.getSpeedKmh = function() {
-        var metersPerSecond = SG.getDistanceRate ? SG.getDistanceRate(SG.state.speed) : ((SG.state.speed || 0) * 10);
+        var metersPerSecond = typeof SG.state.instantSpeedMps === 'number'
+            ? SG.state.instantSpeedMps
+            : (SG.getDistanceRate ? SG.getDistanceRate(SG.state.speed) : ((SG.state.speed || 0) * 10));
         return Math.max(0, Math.round(metersPerSecond * 3.6));
     };
 
@@ -4568,8 +4575,8 @@
         modelRotationY: 0,
         modelYOffset: -0.16,
         eyeOffsetX: 0.055,
-        eyeOffsetY: 1.56,
-        eyeOffsetZ: -0.34
+        eyeOffsetY: 1.63,
+        eyeOffsetZ: -0.50
     };
 
     function normalizeHomelanderModel(model) {
@@ -5369,6 +5376,8 @@
         SG.state.jumpVelocity = 0;
         SG.state.playerHeight = SG.PLAYER_Y;
         SG.state.targetPlayerHeight = SG.PLAYER_Y;
+        SG.state.instantSpeedMps = 0;
+        SG.state._speedSample = null;
         SG.state.lastObstacleZ = 0;
         SG.state.gameTime = 0;
         SG.state.scoreTimer = 0;
@@ -5441,6 +5450,8 @@
         SG.state.jumpVelocity = 0;
         SG.state.playerHeight = SG.PLAYER_Y;
         SG.state.targetPlayerHeight = SG.PLAYER_Y;
+        SG.state.instantSpeedMps = 0;
+        SG.state._speedSample = null;
         SG.state.lastObstacleZ = 0;
         SG.state.gameTime = 0;
         SG.state.scoreTimer = 0;
@@ -5795,6 +5806,23 @@
         if (!SG.state.isJumping && !SG.state.isRolling) {
             SG.player.position.y += Math.sin(runCycle) * 0.04;
         }
+
+        var forwardMps = SG.getDistanceRate ? SG.getDistanceRate(SG.state.speed) : ((SG.state.speed || 0) * 10);
+        var lateralMps = 0;
+        var verticalMps = 0;
+        if (SG.state._speedSample) {
+            lateralMps = (SG.player.position.x - SG.state._speedSample.x) / delta;
+            verticalMps = ((SG.state.playerHeight || 0) - SG.state._speedSample.height) / delta;
+        }
+        SG.state.instantSpeedMps = Math.sqrt(
+            forwardMps * forwardMps +
+            lateralMps * lateralMps +
+            verticalMps * verticalMps
+        );
+        SG.state._speedSample = {
+            x: SG.player.position.x,
+            height: SG.state.playerHeight || 0
+        };
 
         if (SG.playerLeftArm && SG.playerRightArm) {
             SG.playerLeftArm.rotation.x = Math.sin(runCycle) * 0.4;

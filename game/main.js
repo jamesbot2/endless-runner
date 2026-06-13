@@ -112,6 +112,8 @@
         SG.state.jumpVelocity = 0;
         SG.state.playerHeight = SG.PLAYER_Y;
         SG.state.targetPlayerHeight = SG.PLAYER_Y;
+        SG.state.instantSpeedMps = 0;
+        SG.state._speedSample = null;
         SG.state.lastObstacleZ = 0;
         SG.state.gameTime = 0;
         SG.state.scoreTimer = 0;
@@ -184,6 +186,8 @@
         SG.state.jumpVelocity = 0;
         SG.state.playerHeight = SG.PLAYER_Y;
         SG.state.targetPlayerHeight = SG.PLAYER_Y;
+        SG.state.instantSpeedMps = 0;
+        SG.state._speedSample = null;
         SG.state.lastObstacleZ = 0;
         SG.state.gameTime = 0;
         SG.state.scoreTimer = 0;
@@ -538,6 +542,23 @@
         if (!SG.state.isJumping && !SG.state.isRolling) {
             SG.player.position.y += Math.sin(runCycle) * 0.04;
         }
+
+        var forwardMps = SG.getDistanceRate ? SG.getDistanceRate(SG.state.speed) : ((SG.state.speed || 0) * 10);
+        var lateralMps = 0;
+        var verticalMps = 0;
+        if (SG.state._speedSample) {
+            lateralMps = (SG.player.position.x - SG.state._speedSample.x) / delta;
+            verticalMps = ((SG.state.playerHeight || 0) - SG.state._speedSample.height) / delta;
+        }
+        SG.state.instantSpeedMps = Math.sqrt(
+            forwardMps * forwardMps +
+            lateralMps * lateralMps +
+            verticalMps * verticalMps
+        );
+        SG.state._speedSample = {
+            x: SG.player.position.x,
+            height: SG.state.playerHeight || 0
+        };
 
         if (SG.playerLeftArm && SG.playerRightArm) {
             SG.playerLeftArm.rotation.x = Math.sin(runCycle) * 0.4;

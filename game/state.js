@@ -17,6 +17,8 @@
         running: true,
         playerHeight: SG.PLAYER_Y || 0.15,
         targetPlayerHeight: SG.PLAYER_Y || 0.15,
+        instantSpeedMps: 0,
+        _speedSample: null,
         lastObstacleZ: 0,
         minObstacleGap: 30,
         obstacleTimer: 0,

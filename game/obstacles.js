@@ -178,12 +178,13 @@
 
         var hasRamp = Math.random() < 0.3;
         if (hasRamp) {
-            var rampMat = new THREE.MeshLambertMaterial({ color: 0xFF6600 });
+            var rampMat = SG.createWarningPanelMaterial ? SG.createWarningPanelMaterial() : new THREE.MeshLambertMaterial({ color: 0xFF6600 });
             var ramp = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.07, 2.35), rampMat);
             ramp.position.set(0, 0.9, 4.5);
             ramp.rotation.x = 0.65;
+            ramp.userData.rampSurface = true;
             group.add(ramp);
-            var railMat = new THREE.MeshLambertMaterial({ color: 0xDD4400 });
+            var railMat = SG.createDarkMetalMaterial ? SG.createDarkMetalMaterial() : new THREE.MeshLambertMaterial({ color: 0xDD4400 });
             for (var side3 = -1; side3 <= 1; side3 += 2) {
                 var r = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.36, 2.35), railMat);
                 r.position.set(side3 * 0.78, 1.12, 4.5);

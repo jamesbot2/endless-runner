@@ -259,6 +259,7 @@
         });
         SG.skyDome = new THREE.Mesh(geo, mat);
         SG.skyDome.name = 'realistic-sky-dome';
+        SG.skyDome.userData.skyKey = 'normal-' + (SG.state ? SG.state.theme : 0);
         SG.skyDome.renderOrder = -1000;
         SG.scene.add(SG.skyDome);
     };
@@ -268,6 +269,7 @@
         var oldMap = SG.skyDome.material.map;
         SG.skyDome.material.map = SG.createSkyDomeTexture(themeIndex || 0, mode || 'normal');
         SG.skyDome.material.needsUpdate = true;
+        SG.skyDome.userData.skyKey = (mode || 'normal') + '-' + (themeIndex || 0);
         if (oldMap && oldMap.dispose) oldMap.dispose();
     };
 

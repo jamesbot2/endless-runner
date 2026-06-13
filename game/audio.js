@@ -13,7 +13,7 @@
     SG.homelanderVoiceAudio = null;
     SG.homelanderVoiceSource = null;
     SG.homelanderVoiceGain = null;
-    SG.HOMELANDER_VOICE_GAIN = 2.55;
+    SG.HOMELANDER_VOICE_GAIN = 4.4;
     SG.pendingHomelanderVoice = false;
 
     SG.initAudio = function() {
@@ -218,7 +218,7 @@
             SG.homelanderVoiceAudio.volume = SG.state.muted ? 0 : 1;
         }
         if (SG.homelanderVoiceGain) {
-            SG.homelanderVoiceGain.gain.value = SG.state.muted ? 0 : Math.min(3.2, Math.max(1.9, sfx * SG.HOMELANDER_VOICE_GAIN));
+            SG.homelanderVoiceGain.gain.value = SG.state.muted ? 0 : Math.min(5.0, Math.max(2.8, sfx * SG.HOMELANDER_VOICE_GAIN));
         }
     };
 

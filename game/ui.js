@@ -285,7 +285,9 @@
     };
 
     SG.getSpeedKmh = function() {
-        var metersPerSecond = SG.getDistanceRate ? SG.getDistanceRate(SG.state.speed) : ((SG.state.speed || 0) * 10);
+        var metersPerSecond = typeof SG.state.instantSpeedMps === 'number'
+            ? SG.state.instantSpeedMps
+            : (SG.getDistanceRate ? SG.getDistanceRate(SG.state.speed) : ((SG.state.speed || 0) * 10));
         return Math.max(0, Math.round(metersPerSecond * 3.6));
     };
 
