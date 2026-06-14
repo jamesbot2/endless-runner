@@ -4,11 +4,9 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const PORT = 3000;
-const DATA_DIR = path.join(__dirname, 'data');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const { getUsers, saveUsers, getAuthUser, defaultGameData, normalizeGameData, readDB, writeDB } = require('./auth.js');
 
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+const PORT = 3000;
 
 // In-memory verification codes (email -> {code, expires})
 var verifyCodes = {};
@@ -58,12 +56,7 @@ setInterval(function() {
     }
 }, 300000);
 
-function readDB(file) {
-    try { if (!fs.existsSync(file)) return {}; return JSON.parse(fs.readFileSync(file, 'utf8')); } catch(e) { return {}; }
-}
-function writeDB(file, data) { fs.writeFileSync(file, JSON.stringify(data, null, 2)); }
-function getUsers() { return readDB(USERS_FILE); }
-function saveUsers(users) { writeDB(USERS_FILE, users); }
+
 
 function hashPassword(password, salt) {
     if (!salt) salt = crypto.randomBytes(16).toString('hex');
@@ -117,18 +110,7 @@ function parseBody(req) {
     });
 }
 
-function getAuthUser(headers) {
-    const auth = headers['authorization'] || '';
-    const token = auth.replace('Bearer ', '');
-    if (!token) return null;
-    const users = getUsers();
-    for (const email in users) {
-        if (users[email].sessionToken === token && users[email].sessionExpires > Date.now()) {
-            return email;
-        }
-    }
-    return null;
-}
+
 
 const ADMIN_USER = 'admin', ADMIN_PASS = 'admin123';
 function checkAdminAuth(headers) {
@@ -164,31 +146,7 @@ function getServerIP() {
     return 'localhost';
 }
 
-function defaultGameData() {
-    return { coins: 0, credits: 0, equippedAbility: 0, ownedAbilities: [0], maxDistance: 0, maxEasy: 0, maxMedium: 0, maxHard: 0, maxEasyAbility: 0, maxMediumAbility: 0, maxHardAbility: 0, runCount: 0, highScore: 0, totalCoins: 0 };
-}
 
-function normalizeGameData(g) {
-    if (!g || typeof g !== 'object') return defaultGameData();
-    var total = Math.max(g.totalCoins || 0, g.coins || 0);
-    var dist = Math.max(g.maxDistance || 0, g.highScore || 0, g.maxEasy || 0, g.maxMedium || 0, g.maxHard || 0);
-    return {
-        coins: g.coins || 0,
-        credits: g.credits || 0,
-        totalCoins: total,
-        equippedAbility: g.equippedAbility || 0,
-        ownedAbilities: Array.isArray(g.ownedAbilities) ? g.ownedAbilities : [0],
-        maxDistance: dist,
-        maxEasy: g.maxEasy || 0,
-        maxMedium: g.maxMedium || 0,
-        maxHard: g.maxHard || 0,
-        maxEasyAbility: g.maxEasyAbility || 0,
-        maxMediumAbility: g.maxMediumAbility || 0,
-        maxHardAbility: g.maxHardAbility || 0,
-        runCount: g.runCount || 0,
-        highScore: dist
-    };
-}
 
 function sendEmail(to, subject, body) {
     return new Promise(function(resolve) {
