@@ -296,7 +296,7 @@ function createStatusBar(apiUrl: string): void {
   bar.innerHTML = [
     '<span id="es-status-icon">⏳</span>',
     '<span id="es-status-text">Checking server…</span>',
-    '<span id="es-url" style="color:rgba(255,255,255,0.35)">' + apiUrl + '</span>',
+    '<span id="es-pvp-status" style="display:none;color:rgba(255,255,255,0.5)">PVP offline</span>',
     '<span id="es-save-status" style="color:rgba(255,255,255,0.35)">local save ✓</span>',
   ].join('')
 

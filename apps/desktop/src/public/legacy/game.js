@@ -7583,6 +7583,8 @@ case'error':console.log('[PVP]',msg.error);break;
 case'room:list':SG.setPvpRoomsFromServer(msg.rooms);if(SG.renderPvpLobby)SG.renderPvpLobby();break;
 case'room:update':SG.setPvpRoomFromServer(msg.room);if(SG.renderPvpLobby)SG.renderPvpLobby();if(msg.room&&SG.account){if(msg.room.players.some(function(p){return p.id===SG.account.email;}))roomId=msg.room.id;}break;
 case'match:start':roomId=(msg.room&&msg.room.id)||msg.roomId;SG.state.pvpSeed=msg.seed||'';SG.state.pvpRoom=msg.room||msg;stopSnap();startSnap();
+ // Bypass localHost check — server already validated start
+ if(SG.state.pvpRoom)SG.state.pvpRoom.localHost=true;
  if(typeof SG._originalStartPvpRace==='function'){SG._originalStartPvpRace();}break;
 case'match:snapshot':
  if(msg.players&&Array.isArray(msg.players))for(var i=0;i<msg.players.length;i++)SG.upsertPvpOpponentFromServer(msg.players[i]);
