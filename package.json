@@ -1,16 +1,16 @@
 {
   "scripts": {
-    "server:account": "node server/account-server.js",
-    "server:static": "node server/static-server.js",
-    "server:pvp": "node server/pvp-server.js",
-    "pvp:smoke": "node server/pvp-smoke.js",
     "desktop:dev": "npm --prefix apps/desktop run dev",
     "desktop:build": "npm --prefix apps/desktop run build",
     "desktop:pack": "npm --prefix apps/desktop run pack",
     "desktop:dist": "npm --prefix apps/desktop run dist",
     "desktop:test:smoke": "npm --prefix apps/desktop run test:smoke",
     "desktop:test:smoke:headless": "ELECTRON_HEADLESS_CI=1 xvfb-run -a npm --prefix apps/desktop run test:smoke",
-    "desktop:dev:headless": "ELECTRON_HEADLESS_CI=1 xvfb-run -a npm --prefix apps/desktop run dev:headless"
+    "desktop:dev:headless": "ELECTRON_HEADLESS_CI=1 xvfb-run -a npm --prefix apps/desktop run dev:headless",
+    "server:account": "node server/account-server.js",
+    "server:pvp": "node server/pvp-server.js",
+    "pvp:smoke": "node server/pvp-smoke.js",
+    "build:game": "node game/build.js"
   },
   "dependencies": {
     "nodemailer": "^8.0.10",
