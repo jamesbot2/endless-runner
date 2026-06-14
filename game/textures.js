@@ -220,16 +220,27 @@
             ctx.fillStyle = sun;
             ctx.fillRect(0, 0, w, h);
 
-            ctx.globalAlpha = mode === 'cyber' ? 0.22 : 0.36;
-            ctx.fillStyle = '#ffffff';
-            for (var c = 0; c < 22; c++) {
+            var cloudTint = mode === 'cyber' ? '#7fd7ff' : (themeIndex === 2 ? '#ffe7c0' : '#ffffff');
+            ctx.fillStyle = cloudTint;
+            for (var c = 0; c < 26; c++) {
                 var cx = hashNoise(c, 1, themeIndex) * w;
-                var cy = h * (0.18 + hashNoise(c, 2, themeIndex) * 0.32);
-                var cw = 80 + hashNoise(c, 3, themeIndex) * 160;
-                var ch = 14 + hashNoise(c, 4, themeIndex) * 28;
+                var cy = h * (0.14 + hashNoise(c, 2, themeIndex) * 0.36);
+                var cw = 64 + hashNoise(c, 3, themeIndex) * 150;
+                var ch = 12 + hashNoise(c, 4, themeIndex) * 24;
+                ctx.globalAlpha = mode === 'cyber' ? 0.16 : 0.28;
                 ctx.beginPath();
                 ctx.ellipse(cx, cy, cw, ch, 0, 0, Math.PI * 2);
+                ctx.ellipse(cx - cw * 0.35, cy + ch * 0.1, cw * 0.55, ch * 0.9, 0, 0, Math.PI * 2);
+                ctx.ellipse(cx + cw * 0.32, cy - ch * 0.04, cw * 0.5, ch * 0.82, 0, 0, Math.PI * 2);
                 ctx.fill();
+                if (mode !== 'cyber') {
+                    ctx.globalAlpha = themeIndex === 3 ? 0.12 : 0.18;
+                    ctx.fillStyle = themeIndex === 2 ? '#c6864b' : '#8fb5d3';
+                    ctx.beginPath();
+                    ctx.ellipse(cx + cw * 0.08, cy + ch * 0.48, cw * 0.72, ch * 0.35, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = cloudTint;
+                }
             }
             ctx.globalAlpha = mode === 'cyber' ? 0.65 : 0.2;
             ctx.fillStyle = mode === 'cyber' ? '#9de9ff' : '#ffffff';
@@ -260,6 +271,7 @@
         SG.skyDome = new THREE.Mesh(geo, mat);
         SG.skyDome.name = 'realistic-sky-dome';
         SG.skyDome.userData.skyKey = 'normal-' + (SG.state ? SG.state.theme : 0);
+        SG.skyDome.userData.clouds = true;
         SG.skyDome.renderOrder = -1000;
         SG.scene.add(SG.skyDome);
     };

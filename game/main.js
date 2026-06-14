@@ -95,6 +95,7 @@
 
     // ===== QUIT TO MENU =====
     SG.quitToMenu = function() {
+        if (SG.cancelStartCountdown) SG.cancelStartCountdown();
         SG.stopPoliceChase();
         SG.resetCyberMode();
         SG.resetAllGameObjects();
@@ -103,6 +104,7 @@
         SG.state.speed = SG.START_SPEED;
         SG.state.gameOver = false;
         SG.state.started = false;
+        SG.state.countdownActive = false;
         SG.state.paused = false;
         SG.state.currentLane = 1;
         SG.state.targetLane = 1;
@@ -167,6 +169,7 @@
 
     // ===== RESTART GAME =====
     SG.restartGame = function() {
+        if (SG.cancelStartCountdown) SG.cancelStartCountdown();
         SG.stopPoliceChase();
         SG.resetCyberMode();
         SG.resetAllGameObjects();
@@ -175,7 +178,8 @@
         SG.state.coins = 0;
         SG.state.speed = SG.START_SPEED;
         SG.state.gameOver = false;
-        SG.state.started = true;
+        SG.state.started = false;
+        SG.state.countdownActive = false;
         SG.state.paused = false;
         SG.state.onRoof = false;
         SG.state.currentLane = 1;
@@ -213,7 +217,7 @@
         }
 
         if (SG.pauseBtnEl) {
-            SG.pauseBtnEl.style.display = 'block';
+            SG.pauseBtnEl.style.display = 'none';
             SG.pauseBtnEl.textContent = '\u23F8';
         }
         if (SG.gameOverEl) SG.gameOverEl.classList.remove('visible');
@@ -232,6 +236,8 @@
         SG.spawnInitialTrack();
         SG.spawnBuildings();
         SG.spawnObstacles();
+        if (SG.beginRunWithCountdown) SG.beginRunWithCountdown();
+        else SG.state.started = true;
     };
 
     // ===== GAME OVER =====

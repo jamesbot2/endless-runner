@@ -126,24 +126,60 @@
         return coin;
     };
 
+    SG.vehicleColorPalette = SG.vehicleColorPalette || [
+        0xE53935, 0x1E88E5, 0x43A047, 0xFB8C00,
+        0x8E24AA, 0x00ACC1, 0xFDD835, 0x6D4C41
+    ];
+
+    SG.pickVehicleColor = function() {
+        var palette = SG.vehicleColorPalette || [0xE53935];
+        SG.vehicleColorIndex = (SG.vehicleColorIndex || 0) + 1;
+        return palette[(SG.vehicleColorIndex - 1) % palette.length];
+    };
+
+    SG.tintVehicleModel = function(model, color) {
+        if (!model || !model.traverse || !THREE || !THREE.Color) return;
+        var tint = new THREE.Color(color);
+        model.traverse(function(node) {
+            if (!node || !node.isMesh || !node.material) return;
+            var mats = Array.isArray(node.material) ? node.material : [node.material];
+            var tinted = mats.map(function(mat) {
+                if (!mat || !mat.clone) return mat;
+                var clone = mat.clone();
+                if (clone.color) {
+                    var base = clone.color.clone();
+                    var brightness = (base.r + base.g + base.b) / 3;
+                    if (brightness > 0.16) {
+                        clone.color.copy(base.lerp(tint, 0.58));
+                    }
+                }
+                clone.needsUpdate = true;
+                return clone;
+            });
+            node.material = Array.isArray(node.material) ? tinted : tinted[0];
+        });
+    };
+
     SG.createTrain = function(lane, zPos, isMoving) {
         var group = new THREE.Group();
         var laneX = SG.LANE_POSITIONS[lane];
         var moving = (isMoving !== false) && Math.random() < 0.18;
-        var colors = [0xE53935, 0x1E88E5, 0x43A047, 0xFB8C00, 0x8E24AA];
-        var mainColor = colors[Math.floor(Math.random() * colors.length)];
+        var mainColor = SG.pickVehicleColor();
         var model = SG.cloneVehicleModel('train');
 
         if (model) {
             model.rotation.y = Math.PI;
+            SG.tintVehicleModel(model, mainColor);
             group.add(model);
             group.userData.assetModel = 'train.glb';
+            group.userData.vehicleColor = mainColor;
         } else {
             if (SG.vehicleModelPaths.train) return null;
             var body = new THREE.Mesh(
                 new THREE.BoxGeometry(2.4, 1.8, 6),
                 new THREE.MeshLambertMaterial({ color: mainColor })
             );
+            group.userData.vehicleColor = mainColor;
             body.position.set(0, 0.9, 0);
             group.add(body);
 

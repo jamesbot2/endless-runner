@@ -793,6 +793,12 @@
 
         document.body.appendChild(SG.uiOverlay);
 
+        var countdownDiv = document.createElement('div');
+        countdownDiv.id = 'start-countdown';
+        countdownDiv.style.cssText = 'display:none;position:fixed;inset:0;align-items:center;justify-content:center;z-index:99999;pointer-events:none;font-family:Arial Black,Impact,sans-serif;font-size:clamp(78px,18vw,220px);font-weight:900;letter-spacing:0;color:#fff3a6;text-shadow:0 0 24px rgba(255,190,40,.95),0 8px 0 rgba(0,0,0,.38),0 0 2px #111;transform:translateY(-3vh);';
+        document.body.appendChild(countdownDiv);
+        SG.countdownOverlay = countdownDiv;
+
         // ===== EVENT LISTENERS =====
         SG.restartBtnEl.addEventListener('click', SG.restartGame);
         SG.restartBtnEl.addEventListener('touchend', function(e) { e.preventDefault(); SG.restartGame(); });
@@ -1039,11 +1045,90 @@
     };
 
     // ===== Toggle functions (on SG for cross-module access) =====
+    SG.countdownSequence = ['3', '2', '1', 'RUN!'];
+    SG.COUNTDOWN_STEP_MS = SG.COUNTDOWN_STEP_MS || 720;
+    SG.COUNTDOWN_RUN_MS = SG.COUNTDOWN_RUN_MS || 560;
+
+    SG.cancelStartCountdown = function() {
+        if (SG.countdownTimer) {
+            clearTimeout(SG.countdownTimer);
+            SG.countdownTimer = null;
+        }
+        SG.state.countdownActive = false;
+        if (SG.countdownOverlay) SG.countdownOverlay.style.display = 'none';
+    };
+
+    SG.runStartCountdown = function(done) {
+        if (SG.skipCountdownForTests) {
+            SG.state.countdownActive = false;
+            if (SG.countdownOverlay) SG.countdownOverlay.style.display = 'none';
+            if (done) done();
+            return;
+        }
+        if (SG.state.countdownActive) return;
+        SG.state.countdownActive = true;
+        SG.state.started = false;
+        SG.state.paused = false;
+        var seq = SG.countdownSequence || ['3', '2', '1', 'RUN!'];
+        var index = 0;
+        var overlay = SG.countdownOverlay || document.getElementById('start-countdown');
+        function showNext() {
+            if (!overlay) {
+                SG.state.countdownActive = false;
+                if (done) done();
+                return;
+            }
+            overlay.textContent = seq[index];
+            overlay.style.display = 'flex';
+            overlay.style.transform = 'translateY(-3vh) scale(1.08)';
+            overlay.style.opacity = '1';
+            requestAnimationFrame(function() {
+                overlay.style.transition = 'transform 180ms ease-out, opacity 180ms ease-out';
+                overlay.style.transform = 'translateY(-3vh) scale(1)';
+            });
+            index++;
+            var delay = seq[index - 1] === 'RUN!' ? SG.COUNTDOWN_RUN_MS : SG.COUNTDOWN_STEP_MS;
+            SG.countdownTimer = setTimeout(function() {
+                if (index >= seq.length) {
+                    overlay.style.opacity = '0';
+                    SG.countdownTimer = setTimeout(function() {
+                        overlay.style.display = 'none';
+                        overlay.style.transition = '';
+                        SG.state.countdownActive = false;
+                        SG.countdownTimer = null;
+                        if (done) done();
+                    }, 140);
+                    return;
+                }
+                showNext();
+            }, delay);
+        }
+        showNext();
+    };
+
+    SG.beginRunWithCountdown = function() {
+        SG.state.started = false;
+        SG.state.paused = false;
+        if (SG.pauseBtnEl) SG.pauseBtnEl.style.display = 'none';
+        SG.runStartCountdown(function() {
+            SG.state.started = true;
+            SG.state.paused = false;
+            if (SG.pauseBtnEl) {
+                SG.pauseBtnEl.style.display = 'block';
+                SG.pauseBtnEl.textContent = '\u23F8';
+            }
+            var cb = document.getElementById('con-btn');
+            if (cb) cb.style.display = 'block';
+            var f = document.getElementById('fpv-btn');
+            if (f) f.style.display = 'block';
+            if (SG.clock) SG.clock.getDelta();
+            SG.startBgMusic();
+        });
+    };
+
     SG.startGameFromMenu = function() {
-        if (SG.state.started) return;
-        SG.state.started = true;
+        if (SG.state.started || SG.state.countdownActive) return;
         SG.menuOverlay.style.display = 'none';
-        SG.pauseBtnEl.style.display = 'block';
         var cb = document.getElementById('con-btn');
         if (cb) cb.style.display = 'block';
         var audioBtns = ['mute-btn'];
@@ -1052,10 +1137,7 @@
             if (el) el.style.display = 'flex';
         });
         if (!SG.audioCtx) SG.initAudio();
-        if (SG.clock) SG.clock.getDelta();
-        var f = document.getElementById('fpv-btn');
-        if (f) f.style.display = 'block';
-        SG.startBgMusic();
+        SG.beginRunWithCountdown();
     };
 
     SG.closeConsole = function() {

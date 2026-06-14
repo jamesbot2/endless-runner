@@ -85,6 +85,7 @@
         instructionTimer: 8,
         hasStartedTouch: false,
         started: false,
+        countdownActive: false,
         paused: false,
         startLaneX: 0,
         bestScore: parseInt(localStorage.getItem('subwayBest') || '0'),
@@ -747,16 +748,27 @@
             ctx.fillStyle = sun;
             ctx.fillRect(0, 0, w, h);
 
-            ctx.globalAlpha = mode === 'cyber' ? 0.22 : 0.36;
-            ctx.fillStyle = '#ffffff';
-            for (var c = 0; c < 22; c++) {
+            var cloudTint = mode === 'cyber' ? '#7fd7ff' : (themeIndex === 2 ? '#ffe7c0' : '#ffffff');
+            ctx.fillStyle = cloudTint;
+            for (var c = 0; c < 26; c++) {
                 var cx = hashNoise(c, 1, themeIndex) * w;
-                var cy = h * (0.18 + hashNoise(c, 2, themeIndex) * 0.32);
-                var cw = 80 + hashNoise(c, 3, themeIndex) * 160;
-                var ch = 14 + hashNoise(c, 4, themeIndex) * 28;
+                var cy = h * (0.14 + hashNoise(c, 2, themeIndex) * 0.36);
+                var cw = 64 + hashNoise(c, 3, themeIndex) * 150;
+                var ch = 12 + hashNoise(c, 4, themeIndex) * 24;
+                ctx.globalAlpha = mode === 'cyber' ? 0.16 : 0.28;
                 ctx.beginPath();
                 ctx.ellipse(cx, cy, cw, ch, 0, 0, Math.PI * 2);
+                ctx.ellipse(cx - cw * 0.35, cy + ch * 0.1, cw * 0.55, ch * 0.9, 0, 0, Math.PI * 2);
+                ctx.ellipse(cx + cw * 0.32, cy - ch * 0.04, cw * 0.5, ch * 0.82, 0, 0, Math.PI * 2);
                 ctx.fill();
+                if (mode !== 'cyber') {
+                    ctx.globalAlpha = themeIndex === 3 ? 0.12 : 0.18;
+                    ctx.fillStyle = themeIndex === 2 ? '#c6864b' : '#8fb5d3';
+                    ctx.beginPath();
+                    ctx.ellipse(cx + cw * 0.08, cy + ch * 0.48, cw * 0.72, ch * 0.35, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = cloudTint;
+                }
             }
             ctx.globalAlpha = mode === 'cyber' ? 0.65 : 0.2;
             ctx.fillStyle = mode === 'cyber' ? '#9de9ff' : '#ffffff';
@@ -787,6 +799,7 @@
         SG.skyDome = new THREE.Mesh(geo, mat);
         SG.skyDome.name = 'realistic-sky-dome';
         SG.skyDome.userData.skyKey = 'normal-' + (SG.state ? SG.state.theme : 0);
+        SG.skyDome.userData.clouds = true;
         SG.skyDome.renderOrder = -1000;
         SG.scene.add(SG.skyDome);
     };
@@ -894,18 +907,18 @@
         SG.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
         SG.renderer.outputEncoding = THREE.sRGBEncoding;
         SG.renderer.toneMapping = THREE.ReinhardToneMapping;
-        SG.renderer.toneMappingExposure = 1.08;
+        SG.renderer.toneMappingExposure = 0.96;
         SG.renderer.shadowMap.enabled = true;
         SG.renderer.shadowMap.type = THREE.BasicShadowMap;
         document.body.appendChild(SG.renderer.domElement);
 
-        SG.ambientLight = new THREE.AmbientLight(0xffffff, 0.48);
+        SG.ambientLight = new THREE.AmbientLight(0xffffff, 0.38);
         SG.scene.add(SG.ambientLight);
 
-        SG.hemiLight = new THREE.HemisphereLight(0xbfe7ff, 0x4b4033, 0.72);
+        SG.hemiLight = new THREE.HemisphereLight(0xbfe7ff, 0x4b4033, 0.62);
         SG.scene.add(SG.hemiLight);
 
-        SG.dirLight = new THREE.DirectionalLight(0xfff2d2, 0.95);
+        SG.dirLight = new THREE.DirectionalLight(0xfff2d2, 0.82);
         SG.dirLight.position.set(-8, 16, 10);
         SG.dirLight.castShadow = true;
         SG.dirLight.shadow.mapSize.width = 1024;
@@ -936,13 +949,13 @@
     SG.updateLightRigForTheme = function(themeIndex) {
         if (!SG.ambientLight || !SG.hemiLight || !SG.dirLight) return;
         var presets = [
-            { hemiSky: 0xbfe7ff, hemiGround: 0x4b4033, hemi: 0.72, sun: 0xfff2d2, sunPower: 0.95, pos: [-8, 16, 10], exposure: 1.08 },
-            { hemiSky: 0xd9f6d0, hemiGround: 0x314626, hemi: 0.78, sun: 0xf5ffd8, sunPower: 0.82, pos: [-6, 14, 8], exposure: 1.0 },
-            { hemiSky: 0xffd08a, hemiGround: 0x6a4726, hemi: 0.62, sun: 0xffcf7a, sunPower: 1.12, pos: [-10, 13, 5], exposure: 1.12 },
-            { hemiSky: 0xb5e7ff, hemiGround: 0x345066, hemi: 0.76, sun: 0xe9fbff, sunPower: 0.9, pos: [-7, 15, 12], exposure: 1.04 }
+            { hemiSky: 0xbfe7ff, hemiGround: 0x4b4033, hemi: 0.62, sun: 0xfff2d2, sunPower: 0.82, pos: [-8, 16, 10], exposure: 0.96 },
+            { hemiSky: 0xd9f6d0, hemiGround: 0x314626, hemi: 0.66, sun: 0xf5ffd8, sunPower: 0.72, pos: [-6, 14, 8], exposure: 0.92 },
+            { hemiSky: 0xffd08a, hemiGround: 0x6a4726, hemi: 0.54, sun: 0xffcf7a, sunPower: 0.96, pos: [-10, 13, 5], exposure: 0.98 },
+            { hemiSky: 0xb5e7ff, hemiGround: 0x345066, hemi: 0.64, sun: 0xe9fbff, sunPower: 0.78, pos: [-7, 15, 12], exposure: 0.94 }
         ];
         var p = presets[Math.max(0, Math.min(3, themeIndex || 0))];
-        SG.ambientLight.intensity = 0.42;
+        SG.ambientLight.intensity = 0.34;
         SG.hemiLight.color.setHex(p.hemiSky);
         SG.hemiLight.groundColor.setHex(p.hemiGround);
         SG.hemiLight.intensity = p.hemi;
@@ -1901,24 +1914,60 @@
         return coin;
     };
 
+    SG.vehicleColorPalette = SG.vehicleColorPalette || [
+        0xE53935, 0x1E88E5, 0x43A047, 0xFB8C00,
+        0x8E24AA, 0x00ACC1, 0xFDD835, 0x6D4C41
+    ];
+
+    SG.pickVehicleColor = function() {
+        var palette = SG.vehicleColorPalette || [0xE53935];
+        SG.vehicleColorIndex = (SG.vehicleColorIndex || 0) + 1;
+        return palette[(SG.vehicleColorIndex - 1) % palette.length];
+    };
+
+    SG.tintVehicleModel = function(model, color) {
+        if (!model || !model.traverse || !THREE || !THREE.Color) return;
+        var tint = new THREE.Color(color);
+        model.traverse(function(node) {
+            if (!node || !node.isMesh || !node.material) return;
+            var mats = Array.isArray(node.material) ? node.material : [node.material];
+            var tinted = mats.map(function(mat) {
+                if (!mat || !mat.clone) return mat;
+                var clone = mat.clone();
+                if (clone.color) {
+                    var base = clone.color.clone();
+                    var brightness = (base.r + base.g + base.b) / 3;
+                    if (brightness > 0.16) {
+                        clone.color.copy(base.lerp(tint, 0.58));
+                    }
+                }
+                clone.needsUpdate = true;
+                return clone;
+            });
+            node.material = Array.isArray(node.material) ? tinted : tinted[0];
+        });
+    };
+
     SG.createTrain = function(lane, zPos, isMoving) {
         var group = new THREE.Group();
         var laneX = SG.LANE_POSITIONS[lane];
         var moving = (isMoving !== false) && Math.random() < 0.18;
-        var colors = [0xE53935, 0x1E88E5, 0x43A047, 0xFB8C00, 0x8E24AA];
-        var mainColor = colors[Math.floor(Math.random() * colors.length)];
+        var mainColor = SG.pickVehicleColor();
         var model = SG.cloneVehicleModel('train');
 
         if (model) {
             model.rotation.y = Math.PI;
+            SG.tintVehicleModel(model, mainColor);
             group.add(model);
             group.userData.assetModel = 'train.glb';
+            group.userData.vehicleColor = mainColor;
         } else {
             if (SG.vehicleModelPaths.train) return null;
             var body = new THREE.Mesh(
                 new THREE.BoxGeometry(2.4, 1.8, 6),
                 new THREE.MeshLambertMaterial({ color: mainColor })
             );
+            group.userData.vehicleColor = mainColor;
             body.position.set(0, 0.9, 0);
             group.add(body);
 
@@ -3999,6 +4048,12 @@
 
         document.body.appendChild(SG.uiOverlay);
 
+        var countdownDiv = document.createElement('div');
+        countdownDiv.id = 'start-countdown';
+        countdownDiv.style.cssText = 'display:none;position:fixed;inset:0;align-items:center;justify-content:center;z-index:99999;pointer-events:none;font-family:Arial Black,Impact,sans-serif;font-size:clamp(78px,18vw,220px);font-weight:900;letter-spacing:0;color:#fff3a6;text-shadow:0 0 24px rgba(255,190,40,.95),0 8px 0 rgba(0,0,0,.38),0 0 2px #111;transform:translateY(-3vh);';
+        document.body.appendChild(countdownDiv);
+        SG.countdownOverlay = countdownDiv;
+
         // ===== EVENT LISTENERS =====
         SG.restartBtnEl.addEventListener('click', SG.restartGame);
         SG.restartBtnEl.addEventListener('touchend', function(e) { e.preventDefault(); SG.restartGame(); });
@@ -4245,11 +4300,90 @@
     };
 
     // ===== Toggle functions (on SG for cross-module access) =====
+    SG.countdownSequence = ['3', '2', '1', 'RUN!'];
+    SG.COUNTDOWN_STEP_MS = SG.COUNTDOWN_STEP_MS || 720;
+    SG.COUNTDOWN_RUN_MS = SG.COUNTDOWN_RUN_MS || 560;
+
+    SG.cancelStartCountdown = function() {
+        if (SG.countdownTimer) {
+            clearTimeout(SG.countdownTimer);
+            SG.countdownTimer = null;
+        }
+        SG.state.countdownActive = false;
+        if (SG.countdownOverlay) SG.countdownOverlay.style.display = 'none';
+    };
+
+    SG.runStartCountdown = function(done) {
+        if (SG.skipCountdownForTests) {
+            SG.state.countdownActive = false;
+            if (SG.countdownOverlay) SG.countdownOverlay.style.display = 'none';
+            if (done) done();
+            return;
+        }
+        if (SG.state.countdownActive) return;
+        SG.state.countdownActive = true;
+        SG.state.started = false;
+        SG.state.paused = false;
+        var seq = SG.countdownSequence || ['3', '2', '1', 'RUN!'];
+        var index = 0;
+        var overlay = SG.countdownOverlay || document.getElementById('start-countdown');
+        function showNext() {
+            if (!overlay) {
+                SG.state.countdownActive = false;
+                if (done) done();
+                return;
+            }
+            overlay.textContent = seq[index];
+            overlay.style.display = 'flex';
+            overlay.style.transform = 'translateY(-3vh) scale(1.08)';
+            overlay.style.opacity = '1';
+            requestAnimationFrame(function() {
+                overlay.style.transition = 'transform 180ms ease-out, opacity 180ms ease-out';
+                overlay.style.transform = 'translateY(-3vh) scale(1)';
+            });
+            index++;
+            var delay = seq[index - 1] === 'RUN!' ? SG.COUNTDOWN_RUN_MS : SG.COUNTDOWN_STEP_MS;
+            SG.countdownTimer = setTimeout(function() {
+                if (index >= seq.length) {
+                    overlay.style.opacity = '0';
+                    SG.countdownTimer = setTimeout(function() {
+                        overlay.style.display = 'none';
+                        overlay.style.transition = '';
+                        SG.state.countdownActive = false;
+                        SG.countdownTimer = null;
+                        if (done) done();
+                    }, 140);
+                    return;
+                }
+                showNext();
+            }, delay);
+        }
+        showNext();
+    };
+
+    SG.beginRunWithCountdown = function() {
+        SG.state.started = false;
+        SG.state.paused = false;
+        if (SG.pauseBtnEl) SG.pauseBtnEl.style.display = 'none';
+        SG.runStartCountdown(function() {
+            SG.state.started = true;
+            SG.state.paused = false;
+            if (SG.pauseBtnEl) {
+                SG.pauseBtnEl.style.display = 'block';
+                SG.pauseBtnEl.textContent = '\u23F8';
+            }
+            var cb = document.getElementById('con-btn');
+            if (cb) cb.style.display = 'block';
+            var f = document.getElementById('fpv-btn');
+            if (f) f.style.display = 'block';
+            if (SG.clock) SG.clock.getDelta();
+            SG.startBgMusic();
+        });
+    };
+
     SG.startGameFromMenu = function() {
-        if (SG.state.started) return;
-        SG.state.started = true;
+        if (SG.state.started || SG.state.countdownActive) return;
         SG.menuOverlay.style.display = 'none';
-        SG.pauseBtnEl.style.display = 'block';
         var cb = document.getElementById('con-btn');
         if (cb) cb.style.display = 'block';
         var audioBtns = ['mute-btn'];
@@ -4258,10 +4392,7 @@
             if (el) el.style.display = 'flex';
         });
         if (!SG.audioCtx) SG.initAudio();
-        if (SG.clock) SG.clock.getDelta();
-        var f = document.getElementById('fpv-btn');
-        if (f) f.style.display = 'block';
-        SG.startBgMusic();
+        SG.beginRunWithCountdown();
     };
 
     SG.closeConsole = function() {
@@ -5443,6 +5574,7 @@
 
     // ===== QUIT TO MENU =====
     SG.quitToMenu = function() {
+        if (SG.cancelStartCountdown) SG.cancelStartCountdown();
         SG.stopPoliceChase();
         SG.resetCyberMode();
         SG.resetAllGameObjects();
@@ -5451,6 +5583,7 @@
         SG.state.speed = SG.START_SPEED;
         SG.state.gameOver = false;
         SG.state.started = false;
+        SG.state.countdownActive = false;
         SG.state.paused = false;
         SG.state.currentLane = 1;
         SG.state.targetLane = 1;
@@ -5515,6 +5648,7 @@
 
     // ===== RESTART GAME =====
     SG.restartGame = function() {
+        if (SG.cancelStartCountdown) SG.cancelStartCountdown();
         SG.stopPoliceChase();
         SG.resetCyberMode();
         SG.resetAllGameObjects();
@@ -5523,7 +5657,8 @@
         SG.state.coins = 0;
         SG.state.speed = SG.START_SPEED;
         SG.state.gameOver = false;
-        SG.state.started = true;
+        SG.state.started = false;
+        SG.state.countdownActive = false;
         SG.state.paused = false;
         SG.state.onRoof = false;
         SG.state.currentLane = 1;
@@ -5561,7 +5696,7 @@
         }
 
         if (SG.pauseBtnEl) {
-            SG.pauseBtnEl.style.display = 'block';
+            SG.pauseBtnEl.style.display = 'none';
             SG.pauseBtnEl.textContent = '\u23F8';
         }
         if (SG.gameOverEl) SG.gameOverEl.classList.remove('visible');
@@ -5580,6 +5715,8 @@
         SG.spawnInitialTrack();
         SG.spawnBuildings();
         SG.spawnObstacles();
+        if (SG.beginRunWithCountdown) SG.beginRunWithCountdown();
+        else SG.state.started = true;
     };
 
     // ===== GAME OVER =====

@@ -35,6 +35,7 @@
         instructionTimer: 8,
         hasStartedTouch: false,
         started: false,
+        countdownActive: false,
         paused: false,
         startLaneX: 0,
         bestScore: parseInt(localStorage.getItem('subwayBest') || '0'),

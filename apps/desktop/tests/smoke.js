@@ -622,6 +622,7 @@ app.whenReady().then(async () => {
         r.realisticMaterials = {
           skyDome: !!(window.__SG.skyDome && window.__SG.skyDome.material && window.__SG.skyDome.material.map),
           skyDomeName: window.__SG.skyDome ? window.__SG.skyDome.name : null,
+          skyClouds: !!(window.__SG.skyDome && window.__SG.skyDome.userData && window.__SG.skyDome.userData.clouds),
           asphalt: !!(groundMesh && groundMesh.material && groundMesh.material.map),
           lanePaint: !!(laneMesh && laneMesh.material && laneMesh.material.map),
           concrete: !!(curbMesh && curbMesh.material && curbMesh.material.map),
@@ -663,6 +664,34 @@ app.whenReady().then(async () => {
         var skyAfter = window.__SG.skyDome.userData ? window.__SG.skyDome.userData.skyKey : ''
         r.skyDomeThemeSwap = skyBefore === 'normal-0' && skyAfter === 'normal-1'
         window.__SG.updateSkyDome(window.__SG.state.theme || 0, window.__SG.state.cyberMode ? 'cyber' : 'normal')
+      }
+      r.startCountdown = null
+      if (window.__SG && window.__SG.runStartCountdown && window.__SG.cancelStartCountdown) {
+        var savedCountdownStarted = window.__SG.state.started
+        var savedCountdownPaused = window.__SG.state.paused
+        var savedCountdownActive = window.__SG.state.countdownActive
+        var savedCountdownStep = window.__SG.COUNTDOWN_STEP_MS
+        var savedCountdownRun = window.__SG.COUNTDOWN_RUN_MS
+        var countdownDone = false
+        window.__SG.cancelStartCountdown()
+        window.__SG.COUNTDOWN_STEP_MS = 15
+        window.__SG.COUNTDOWN_RUN_MS = 15
+        window.__SG.runStartCountdown(function() { countdownDone = true })
+        await new Promise(function(resolve) { setTimeout(resolve, 520) })
+        r.startCountdown = {
+          overlay: !!window.__SG.countdownOverlay,
+          sequence: window.__SG.countdownSequence ? window.__SG.countdownSequence.join(',') : '',
+          done: countdownDone,
+          active: !!window.__SG.state.countdownActive,
+          display: window.__SG.countdownOverlay ? window.__SG.countdownOverlay.style.display : '',
+          text: window.__SG.countdownOverlay ? window.__SG.countdownOverlay.textContent : ''
+        }
+        window.__SG.COUNTDOWN_STEP_MS = savedCountdownStep
+        window.__SG.COUNTDOWN_RUN_MS = savedCountdownRun
+        window.__SG.state.started = savedCountdownStarted
+        window.__SG.state.paused = savedCountdownPaused
+        window.__SG.state.countdownActive = savedCountdownActive
+        window.__SG.cancelStartCountdown()
       }
       if (window.__SG && window.__SG.createCoin && window.__SG.disposeObject) {
         var detailedCoin = window.__SG.createCoin(1, -12, 0.3)
@@ -733,8 +762,10 @@ app.whenReady().then(async () => {
       r.trainRampWidth = null
       r.trainRampTextured = false
       r.vehicleSkipsLegacyFallback = false
+      r.vehicleColorVariety = null
       if (window.__SG && window.__SG.createTrain && window.__SG.disposeObject) {
         var originalRandom = Math.random
+        var savedVehicleColorIndex = window.__SG.vehicleColorIndex || 0
         try {
           Math.random = function() { return 0.1 }
           var rampTrain = window.__SG.createTrain(1, -42, false)
@@ -750,6 +781,21 @@ app.whenReady().then(async () => {
         } finally {
           Math.random = originalRandom
         }
+        window.__SG.vehicleColorIndex = 0
+        var trainColors = []
+        for (var vc = 0; vc < 4; vc++) {
+          var colorTrain = window.__SG.createTrain(1, -60 - vc * 8, false)
+          if (colorTrain) {
+            trainColors.push(colorTrain.userData.vehicleColor)
+            window.__SG.disposeObject(colorTrain)
+          }
+        }
+        r.vehicleColorVariety = {
+          colors: trainColors,
+          unique: Array.from(new Set(trainColors)).length,
+          paletteSize: window.__SG.vehicleColorPalette ? window.__SG.vehicleColorPalette.length : 0
+        }
+        window.__SG.vehicleColorIndex = savedVehicleColorIndex
         var savedTrainModel = window.__SG.vehicleModels ? window.__SG.vehicleModels.train : null
         if (window.__SG.vehicleModels) delete window.__SG.vehicleModels.train
         var legacyTrain = window.__SG.createTrain(1, -52, false)
@@ -792,8 +838,10 @@ app.whenReady().then(async () => {
         if (overlay) overlay.style.display = 'none'
       }
       if (window.__SG && window.__SG.restartGame && window.__SG.player) {
+        window.__SG.skipCountdownForTests = true
         window.__SG.restartGame()
         r.restartRotationY = window.__SG.player.rotation.y
+        window.__SG.skipCountdownForTests = false
       }
       if (window.__SG && window.__SG.applyGameData && window.__SG.selectCharacter) {
         window.__SG.applyGameData({ credits: 10000, ownedCharacters: ['runner', 'adventurer'], selectedCharacter: 'adventurer' })
@@ -877,6 +925,7 @@ app.whenReady().then(async () => {
   check("14e-9. third-person camera buttons give selected feedback", !!state.thirdPersonButtonFeedback)
   check("14e-10. third-person speed HUD shows instant vector speed", !!state.speedHud && !!state.speedHudVector, state.speedHudText || state.speedHudBackground || 'missing')
   check("14e-11. first-person pitch setting defaults lower and saves", state.firstPersonPitchDefault === 1 && state.firstPersonPitchSetting === 1 && state.firstPersonPitchButtons === 2 && !!state.firstPersonPitchSaved, `default=${state.firstPersonPitchDefault}, slider=${state.firstPersonPitchSetting}, buttons=${state.firstPersonPitchButtons}`)
+  check("14e-12. start countdown overlays 3-2-1-RUN before movement", !!state.startCountdown && !!state.startCountdown.overlay && state.startCountdown.sequence === '3,2,1,RUN!' && !!state.startCountdown.done && !state.startCountdown.active && state.startCountdown.display === 'none' && state.startCountdown.text === 'RUN!', state.startCountdown ? JSON.stringify(state.startCountdown) : 'missing')
   check("14f. restart keeps player facing forward", Math.abs(state.restartRotationY - Math.PI) < 0.001, String(state.restartRotationY))
   check("14g. console command runner exists", !!state.executeConsoleCommand)
   check("14h. console includes Homelander easter egg", state.consoleCommands && state.consoleCommands.includes('homelander'), state.consoleCommands ? state.consoleCommands.join(', ') : 'none')
@@ -910,8 +959,9 @@ app.whenReady().then(async () => {
   check("14m-5a. full-width barrier leaves one lane gap", !!state.fullBarrierCollisionGap, state.fullBarrierGap ? JSON.stringify(state.fullBarrierGap) : 'missing')
   check("14m-6. train roof ramp matches train width and has warning texture", state.trainRampWidth !== null && state.trainRampWidth <= 1.6 && !!state.trainRampTextured, `rampWidth=${state.trainRampWidth}, textured=${state.trainRampTextured}`)
   check("14m-7. train obstacles wait for GLB assets", !!state.vehicleSkipsLegacyFallback)
-  check("14m-8. realistic skybox and track textures are active", !!state.realisticMaterials && !!state.realisticMaterials.skyDome && !!state.realisticMaterials.asphalt && !!state.realisticMaterials.lanePaint && !!state.realisticMaterials.concrete && !!state.realisticMaterials.groundReceivesShadow && !!state.realisticMaterials.warningTexture && !!state.skyDomeThemeSwap, state.realisticMaterials ? JSON.stringify({ materials: state.realisticMaterials, themeSwap: state.skyDomeThemeSwap }) : 'missing')
-  check("14m-9. lightweight realistic lighting is active", !!state.realisticLighting && !!state.realisticLighting.shadows && !!state.realisticLighting.dirCastsShadow && state.realisticLighting.shadowMapWidth <= 1024 && !!state.realisticLighting.outputEncoding && !!state.realisticLighting.toneMapping, state.realisticLighting ? JSON.stringify(state.realisticLighting) : 'missing')
+  check("14m-7a. train obstacles cycle through multiple carriage colors", !!state.vehicleColorVariety && state.vehicleColorVariety.paletteSize >= 6 && state.vehicleColorVariety.unique >= 3, state.vehicleColorVariety ? JSON.stringify(state.vehicleColorVariety) : 'missing')
+  check("14m-8. realistic skybox, lightweight clouds, and track textures are active", !!state.realisticMaterials && !!state.realisticMaterials.skyDome && !!state.realisticMaterials.skyClouds && !!state.realisticMaterials.asphalt && !!state.realisticMaterials.lanePaint && !!state.realisticMaterials.concrete && !!state.realisticMaterials.groundReceivesShadow && !!state.realisticMaterials.warningTexture && !!state.skyDomeThemeSwap, state.realisticMaterials ? JSON.stringify({ materials: state.realisticMaterials, themeSwap: state.skyDomeThemeSwap }) : 'missing')
+  check("14m-9. lightweight darker realistic lighting is active", !!state.realisticLighting && !!state.realisticLighting.shadows && !!state.realisticLighting.dirCastsShadow && state.realisticLighting.shadowMapWidth <= 1024 && !!state.realisticLighting.outputEncoding && !!state.realisticLighting.toneMapping && state.realisticLighting.exposure <= 1, state.realisticLighting ? JSON.stringify(state.realisticLighting) : 'missing')
   check("14m-10. scene theme distances are shorter", !!state.themeThresholds && state.themeThresholds.forest <= 300 && state.themeThresholds.desert <= 800 && state.themeThresholds.arctic <= 1400 && !!state.themeThresholdSwitch, state.themeThresholds ? JSON.stringify({ thresholds: state.themeThresholds, switch: state.themeThresholdSwitch }) : 'missing')
   check("14m-11. rhythm music profile has layered beat parts", !!state.rhythmMusicProfile && state.rhythmMusicProfile.baseBpm >= 100 && state.rhythmMusicProfile.maxBpm >= 200 && !!state.rhythmMusicProfile.hasBackbeatSnare && !!state.rhythmMusicProfile.hasSyncopatedHats && !!state.rhythmMusicProfile.hasBassline && !!state.rhythmMusicProfile.hasLeadArp, state.rhythmMusicProfile ? JSON.stringify(state.rhythmMusicProfile) : 'missing')
   check("14n. character catalog loaded", state.characterCatalogCount >= 12, String(state.characterCatalogCount))
