@@ -189,20 +189,27 @@
         return new THREE.MeshLambertMaterial({ color: 0xb8c0c8, map: SG.createMetalTexture(1, 2) });
     };
 
+    SG.skyCloudProfile = {
+        inSkyDome: true,
+        cloudCount: 34,
+        contrast: 'high',
+        runtimeMeshes: 0
+    };
+
     SG.createSkyDomeTexture = function(themeIndex, mode) {
         var key = 'sky-' + (mode || 'normal') + '-' + (themeIndex || 0);
         var canvas = makeCanvas(key, 1024, 512, function(ctx, w, h) {
-            var top = '#67b9f0';
-            var mid = '#bfe7ff';
-            var low = '#f4d9b8';
+            var top = '#3f9be0';
+            var mid = '#89cdf5';
+            var low = '#f2c992';
             if (mode === 'cyber') {
-                top = '#05060a'; mid = '#1c2130'; low = '#3b1d2d';
+                top = '#03040a'; mid = '#111829'; low = '#371530';
             } else if (themeIndex === 1) {
-                top = '#76b7e6'; mid = '#d8efff'; low = '#d9e7c8';
+                top = '#438fca'; mid = '#8bc7ed'; low = '#bad7aa';
             } else if (themeIndex === 2) {
-                top = '#7a5a36'; mid = '#f1a551'; low = '#ffdd86';
+                top = '#5c3d22'; mid = '#c77938'; low = '#f1b85f';
             } else if (themeIndex === 3) {
-                top = '#10172a'; mid = '#263b58'; low = '#596f82';
+                top = '#080e1d'; mid = '#1a314d'; low = '#4a6173';
             }
             var grad = ctx.createLinearGradient(0, 0, 0, h);
             grad.addColorStop(0, top);
@@ -220,27 +227,48 @@
             ctx.fillStyle = sun;
             ctx.fillRect(0, 0, w, h);
 
-            var cloudTint = mode === 'cyber' ? '#7fd7ff' : (themeIndex === 2 ? '#ffe7c0' : '#ffffff');
-            ctx.fillStyle = cloudTint;
-            for (var c = 0; c < 26; c++) {
+            var cloudTint = mode === 'cyber' ? '#c9f7ff' : (themeIndex === 2 ? '#fff0cf' : '#ffffff');
+            var cloudShadow = mode === 'cyber' ? '#472a72' : (themeIndex === 2 ? '#9a5d32' : '#5a91b7');
+            var cloudHighlight = mode === 'cyber' ? '#ff7df7' : '#ffffff';
+            var cloudCount = SG.skyCloudProfile.cloudCount;
+            for (var c = 0; c < cloudCount; c++) {
                 var cx = hashNoise(c, 1, themeIndex) * w;
-                var cy = h * (0.14 + hashNoise(c, 2, themeIndex) * 0.36);
-                var cw = 64 + hashNoise(c, 3, themeIndex) * 150;
-                var ch = 12 + hashNoise(c, 4, themeIndex) * 24;
-                ctx.globalAlpha = mode === 'cyber' ? 0.16 : 0.28;
+                var cy = h * (0.12 + hashNoise(c, 2, themeIndex) * 0.34);
+                var cw = 76 + hashNoise(c, 3, themeIndex) * 170;
+                var ch = 16 + hashNoise(c, 4, themeIndex) * 30;
+                ctx.globalAlpha = mode === 'cyber' ? 0.34 : 0.5;
+                ctx.fillStyle = cloudShadow;
+                ctx.beginPath();
+                ctx.ellipse(cx + cw * 0.08, cy + ch * 0.42, cw * 0.82, ch * 0.5, 0, 0, Math.PI * 2);
+                ctx.ellipse(cx - cw * 0.34, cy + ch * 0.48, cw * 0.44, ch * 0.42, 0, 0, Math.PI * 2);
+                ctx.ellipse(cx + cw * 0.42, cy + ch * 0.4, cw * 0.42, ch * 0.38, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.globalAlpha = mode === 'cyber' ? 0.56 : 0.74;
+                ctx.fillStyle = cloudTint;
                 ctx.beginPath();
                 ctx.ellipse(cx, cy, cw, ch, 0, 0, Math.PI * 2);
-                ctx.ellipse(cx - cw * 0.35, cy + ch * 0.1, cw * 0.55, ch * 0.9, 0, 0, Math.PI * 2);
-                ctx.ellipse(cx + cw * 0.32, cy - ch * 0.04, cw * 0.5, ch * 0.82, 0, 0, Math.PI * 2);
+                ctx.ellipse(cx - cw * 0.35, cy + ch * 0.02, cw * 0.58, ch * 0.9, 0, 0, Math.PI * 2);
+                ctx.ellipse(cx + cw * 0.32, cy - ch * 0.08, cw * 0.54, ch * 0.86, 0, 0, Math.PI * 2);
+                ctx.ellipse(cx - cw * 0.05, cy - ch * 0.28, cw * 0.36, ch * 0.7, 0, 0, Math.PI * 2);
                 ctx.fill();
-                if (mode !== 'cyber') {
-                    ctx.globalAlpha = themeIndex === 3 ? 0.12 : 0.18;
-                    ctx.fillStyle = themeIndex === 2 ? '#c6864b' : '#8fb5d3';
-                    ctx.beginPath();
-                    ctx.ellipse(cx + cw * 0.08, cy + ch * 0.48, cw * 0.72, ch * 0.35, 0, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.fillStyle = cloudTint;
-                }
+
+                ctx.globalAlpha = mode === 'cyber' ? 0.22 : 0.34;
+                ctx.fillStyle = cloudHighlight;
+                ctx.beginPath();
+                ctx.ellipse(cx - cw * 0.18, cy - ch * 0.32, cw * 0.36, ch * 0.38, 0, 0, Math.PI * 2);
+                ctx.ellipse(cx + cw * 0.2, cy - ch * 0.26, cw * 0.3, ch * 0.34, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = mode === 'cyber' ? 0.18 : 0.22;
+            ctx.fillStyle = mode === 'cyber' ? '#ff69f5' : (themeIndex === 2 ? '#ffd99a' : '#dcefff');
+            for (var band = 0; band < 9; band++) {
+                var bx = hashNoise(band, 20, themeIndex) * w;
+                var by = h * (0.5 + hashNoise(band, 21, themeIndex) * 0.16);
+                var bw = 190 + hashNoise(band, 22, themeIndex) * 250;
+                ctx.beginPath();
+                ctx.ellipse(bx, by, bw, 9 + hashNoise(band, 23, themeIndex) * 10, 0, 0, Math.PI * 2);
+                ctx.fill();
             }
             ctx.globalAlpha = mode === 'cyber' ? 0.65 : 0.2;
             ctx.fillStyle = mode === 'cyber' ? '#9de9ff' : '#ffffff';
@@ -272,6 +300,7 @@
         SG.skyDome.name = 'realistic-sky-dome';
         SG.skyDome.userData.skyKey = 'normal-' + (SG.state ? SG.state.theme : 0);
         SG.skyDome.userData.clouds = true;
+        SG.skyDome.userData.cloudProfile = SG.skyCloudProfile;
         SG.skyDome.renderOrder = -1000;
         SG.scene.add(SG.skyDome);
     };
