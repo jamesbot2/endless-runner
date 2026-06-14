@@ -856,6 +856,57 @@ app.whenReady().then(async () => {
             if (node && node.userData && (node.userData.pvpNeonEdge || node.userData.pvpNeonGlow)) neonEdges++
           })
         }
+        if (window.__SG.updatePvpVisualStyle) window.__SG.updatePvpVisualStyle()
+        var pvpObstacleNeon = false
+        var pvpBuildingNeon = false
+        var ghostOpacityOk = true
+        var ghostOffsets = []
+        ;(window.__SG.state.obstacles || []).forEach(function(obs) {
+          if (pvpObstacleNeon) return
+          obs.traverse(function(node) {
+            if (!node.isMesh || !node.material) return
+            var mats = Array.isArray(node.material) ? node.material : [node.material]
+            mats.forEach(function(mat) {
+              if (!mat || !mat.color) return
+              var c = mat.color
+              if (Math.abs(c.r - c.g) > 0.04 || Math.abs(c.g - c.b) > 0.04) pvpObstacleNeon = true
+            })
+          })
+        })
+        ;(window.__SG.state.buildings || []).forEach(function(building) {
+          if (pvpBuildingNeon) return
+          building.traverse(function(node) {
+            if (!node.isMesh || !node.material) return
+            var mats = Array.isArray(node.material) ? node.material : [node.material]
+            mats.forEach(function(mat) {
+              if (!mat) return
+              if (mat.emissive && mat.emissiveIntensity >= 0.45) pvpBuildingNeon = true
+            })
+          })
+        })
+        ;(window.__SG.state.pvpGhosts || []).forEach(function(ghost) {
+          ghostOffsets.push(ghost.group ? Math.round(ghost.group.position.z) : 0)
+          if (ghost.group) {
+            ghost.group.traverse(function(node) {
+              if (!node.isMesh || !node.material) return
+              var mats = Array.isArray(node.material) ? node.material : [node.material]
+              mats.forEach(function(mat) {
+                if (mat && mat.transparent && mat.opacity < 0.68) ghostOpacityOk = false
+              })
+            })
+          }
+        })
+        var savedPvpObstacles = window.__SG.state.obstacles
+        window.__SG.state.obstacles = []
+        if (window.__SG.player && window.__SG.camera && window.__SG.update) {
+          window.__SG.player.position.x = window.__SG.LANE_POSITIONS[2]
+          window.__SG.state.currentLane = 2
+          window.__SG.state.targetLane = 2
+          window.__SG.camera.position.x = 0
+          window.__SG.update()
+        }
+        var pvpCameraFollows = !!(window.__SG.camera && window.__SG.camera.position.x > 0.05)
+        window.__SG.state.obstacles = savedPvpObstacles
         var countdownSeq = window.__SG.getCountdownSequence ? window.__SG.getCountdownSequence().join(',') : ''
         var pausedBefore = window.__SG.state.paused
         window.__SG.togglePause()
@@ -877,6 +928,12 @@ app.whenReady().then(async () => {
           ghosts: window.__SG.state.pvpGhosts ? window.__SG.state.pvpGhosts.length : 0,
           track: !!(firstPvpTrack && firstPvpTrack.userData && firstPvpTrack.userData.pvpTrack),
           neonEdges: neonEdges,
+          obstacleNeon: pvpObstacleNeon,
+          buildingNeon: pvpBuildingNeon,
+          playerAura: !!(window.__SG.pvpPlayerAura && window.__SG.pvpPlayerAura.visible),
+          ghostOpacityOk: ghostOpacityOk,
+          ghostOffsetsUnique: Array.from(new Set(ghostOffsets)).length === ghostOffsets.length,
+          cameraFollows: pvpCameraFollows,
           pvpHud: !!(window.__SG.pvpHudEl && window.__SG.pvpHudEl.style.display === 'block'),
           pauseDisabled: pauseDisabled,
           consoleDisabled: consoleDisabled,
@@ -975,7 +1032,7 @@ app.whenReady().then(async () => {
   check("14e-10. third-person speed HUD shows instant vector speed", !!state.speedHud && !!state.speedHudVector, state.speedHudText || state.speedHudBackground || 'missing')
   check("14e-11. first-person pitch setting defaults lower and saves", state.firstPersonPitchDefault === 1 && state.firstPersonPitchSetting === 1 && state.firstPersonPitchButtons === 2 && !!state.firstPersonPitchSaved, `default=${state.firstPersonPitchDefault}, slider=${state.firstPersonPitchSetting}, buttons=${state.firstPersonPitchButtons}`)
   check("14e-12. start countdown overlays 3-2-1-RUN before movement", !!state.startCountdown && !!state.startCountdown.overlay && state.startCountdown.sequence === '3,2,1,RUN!' && !!state.startCountdown.done && !state.startCountdown.active && state.startCountdown.display === 'none' && state.startCountdown.text === 'RUN!', state.startCountdown ? JSON.stringify(state.startCountdown) : 'missing')
-  check("14e-13. PVP Phase 1 local rooms launch cyber ghost race", !!state.pvpPhase1 && !!state.pvpPhase1.menuButton && !!state.pvpPhase1.overlay && !!state.pvpPhase1.localHost && !!state.pvpPhase1.roomReady && state.pvpPhase1.countdownSeq === '10,9,8,7,6,5,4,3,2,1,RUN!' && !!state.pvpPhase1.mode && state.pvpPhase1.difficulty === 1 && !!state.pvpPhase1.started && state.pvpPhase1.ghosts === 2 && !!state.pvpPhase1.track && state.pvpPhase1.neonEdges >= 4 && !!state.pvpPhase1.pvpHud && !!state.pvpPhase1.pauseDisabled && !!state.pvpPhase1.consoleDisabled && state.pvpPhase1.resultCount === 3, state.pvpPhase1 ? JSON.stringify(state.pvpPhase1) : 'missing')
+  check("14e-13. PVP Phase 1 local rooms launch neon cyber ghost race", !!state.pvpPhase1 && !!state.pvpPhase1.menuButton && !!state.pvpPhase1.overlay && !!state.pvpPhase1.localHost && !!state.pvpPhase1.roomReady && state.pvpPhase1.countdownSeq === '10,9,8,7,6,5,4,3,2,1,RUN!' && !!state.pvpPhase1.mode && state.pvpPhase1.difficulty === 1 && !!state.pvpPhase1.started && state.pvpPhase1.ghosts === 2 && !!state.pvpPhase1.track && state.pvpPhase1.neonEdges >= 4 && !!state.pvpPhase1.obstacleNeon && !!state.pvpPhase1.buildingNeon && !!state.pvpPhase1.playerAura && !!state.pvpPhase1.ghostOpacityOk && !!state.pvpPhase1.ghostOffsetsUnique && !!state.pvpPhase1.cameraFollows && !!state.pvpPhase1.pvpHud && !!state.pvpPhase1.pauseDisabled && !!state.pvpPhase1.consoleDisabled && state.pvpPhase1.resultCount === 3, state.pvpPhase1 ? JSON.stringify(state.pvpPhase1) : 'missing')
   check("14f. restart keeps player facing forward", Math.abs(state.restartRotationY - Math.PI) < 0.001, String(state.restartRotationY))
   check("14g. console command runner exists", !!state.executeConsoleCommand)
   check("14h. console includes Homelander easter egg", state.consoleCommands && state.consoleCommands.includes('homelander'), state.consoleCommands ? state.consoleCommands.join(', ') : 'none')

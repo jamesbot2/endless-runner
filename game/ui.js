@@ -1081,9 +1081,9 @@
             host: SG.getLocalPvpName(),
             localHost: true,
             players: [
-                { name: SG.getLocalPvpName(), ready: true, local: true, lane: 1 },
-                { name: 'Echo', ready: false, invited: false, bot: true, lane: 0 },
-                { name: 'Vector', ready: false, invited: false, bot: true, lane: 2 }
+                { name: SG.getLocalPvpName(), ready: true, local: true, lane: 1, startOffset: 0 },
+                { name: 'Echo', ready: false, invited: false, bot: true, lane: 0, startOffset: -4 },
+                { name: 'Vector', ready: false, invited: false, bot: true, lane: 2, startOffset: -8 }
             ],
             maxPlayers: 3,
             locked: false
@@ -1104,7 +1104,7 @@
             host: room.host,
             localHost: false,
             players: room.players.slice(0, 2).map(function(p, idx) {
-                return { name: p.name, ready: !!p.ready, bot: true, lane: idx === 0 ? 0 : 2 };
+                return { name: p.name, ready: !!p.ready, bot: true, lane: idx === 0 ? 0 : 2, startOffset: idx === 0 ? -4 : -8 };
             }),
             maxPlayers: 3,
             locked: room.locked
@@ -1218,19 +1218,47 @@
         group.userData.pvpGhost = true;
         group.userData.name = name;
         group.userData.lane = lane;
-        var mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.34, depthWrite: false });
+        var mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.74, depthWrite: false, blending: THREE.AdditiveBlending });
         var coreGeo = THREE.CapsuleGeometry ? new THREE.CapsuleGeometry(0.28, 0.9, 4, 8) : new THREE.CylinderGeometry(0.28, 0.28, 1.25, 12);
         var core = new THREE.Mesh(coreGeo, mat);
         core.position.y = 0.85;
+        core.renderOrder = 80;
         group.add(core);
         var head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12), mat);
         head.position.y = 1.62;
+        head.renderOrder = 80;
         group.add(head);
-        var halo = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.5, 24), new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false }));
+        var chest = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.018, 8, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.68, depthWrite: false, blending: THREE.AdditiveBlending }));
+        chest.position.y = 1.12;
+        chest.rotation.x = Math.PI / 2;
+        chest.renderOrder = 82;
+        group.add(chest);
+        var halo = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.62, 32), new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.78, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
         halo.position.y = 0.05;
         halo.rotation.x = Math.PI / 2;
+        halo.renderOrder = 81;
         group.add(halo);
+        var labelCanvas = document.createElement('canvas');
+        labelCanvas.width = 256;
+        labelCanvas.height = 64;
+        var labelCtx = labelCanvas.getContext('2d');
+        labelCtx.fillStyle = 'rgba(0,0,0,0.2)';
+        labelCtx.fillRect(0, 0, 256, 64);
+        labelCtx.font = '700 28px Arial';
+        labelCtx.textAlign = 'center';
+        labelCtx.textBaseline = 'middle';
+        labelCtx.fillStyle = '#ffffff';
+        labelCtx.shadowColor = '#' + color.toString(16).padStart(6, '0');
+        labelCtx.shadowBlur = 14;
+        labelCtx.fillText(name, 128, 32);
+        var labelTex = new THREE.CanvasTexture(labelCanvas);
+        var label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex, transparent: true, depthWrite: false }));
+        label.position.y = 2.1;
+        label.scale.set(1.6, 0.4, 1);
+        label.renderOrder = 83;
+        group.add(label);
         group.position.set(SG.LANE_POSITIONS[lane], SG.PLAYER_Y, -2);
+        group.renderOrder = 80;
         return group;
     };
 
@@ -1246,8 +1274,10 @@
                 lane: typeof p.lane === 'number' ? p.lane : (i % 3),
                 distance: 0,
                 speedBias: 0.9 + i * 0.18,
+                startOffset: typeof p.startOffset === 'number' ? p.startOffset : (-4 - SG.state.pvpGhosts.length * 4),
                 group: SG.createPvpGhostGroup(p.name, typeof p.lane === 'number' ? p.lane : (i % 3), colors[i % colors.length])
             };
+            ghost.group.position.z = ghost.startOffset;
             SG.scene.add(ghost.group);
             SG.state.pvpGhosts.push(ghost);
         }
@@ -1259,7 +1289,7 @@
         for (var i = 0; i < SG.state.pvpGhosts.length; i++) {
             var ghost = SG.state.pvpGhosts[i];
             ghost.distance += (SG.getDistanceRate ? SG.getDistanceRate(SG.state.speed) : 8) * ghost.speedBias * delta;
-            var lead = Math.max(-6, Math.min(10, (ghost.distance - playerDistance) * 0.22));
+            var lead = Math.max(-12, Math.min(8, ghost.startOffset + (ghost.distance - playerDistance) * 0.22));
             if (ghost.group) {
                 ghost.group.position.x += (SG.LANE_POSITIONS[ghost.lane] - ghost.group.position.x) * 0.12;
                 ghost.group.position.z += (lead - ghost.group.position.z) * 0.12;
@@ -1353,6 +1383,7 @@
         SG.spawnBuildings();
         SG.spawnObstacles();
         SG.spawnPvpGhosts(room);
+        if (SG.updatePvpVisualStyle) SG.updatePvpVisualStyle();
         SG.beginRunWithCountdown();
     };
 

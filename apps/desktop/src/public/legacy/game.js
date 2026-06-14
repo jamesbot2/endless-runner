@@ -4389,9 +4389,9 @@
             host: SG.getLocalPvpName(),
             localHost: true,
             players: [
-                { name: SG.getLocalPvpName(), ready: true, local: true, lane: 1 },
-                { name: 'Echo', ready: false, invited: false, bot: true, lane: 0 },
-                { name: 'Vector', ready: false, invited: false, bot: true, lane: 2 }
+                { name: SG.getLocalPvpName(), ready: true, local: true, lane: 1, startOffset: 0 },
+                { name: 'Echo', ready: false, invited: false, bot: true, lane: 0, startOffset: -4 },
+                { name: 'Vector', ready: false, invited: false, bot: true, lane: 2, startOffset: -8 }
             ],
             maxPlayers: 3,
             locked: false
@@ -4412,7 +4412,7 @@
             host: room.host,
             localHost: false,
             players: room.players.slice(0, 2).map(function(p, idx) {
-                return { name: p.name, ready: !!p.ready, bot: true, lane: idx === 0 ? 0 : 2 };
+                return { name: p.name, ready: !!p.ready, bot: true, lane: idx === 0 ? 0 : 2, startOffset: idx === 0 ? -4 : -8 };
             }),
             maxPlayers: 3,
             locked: room.locked
@@ -4526,19 +4526,47 @@
         group.userData.pvpGhost = true;
         group.userData.name = name;
         group.userData.lane = lane;
-        var mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.34, depthWrite: false });
+        var mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.74, depthWrite: false, blending: THREE.AdditiveBlending });
         var coreGeo = THREE.CapsuleGeometry ? new THREE.CapsuleGeometry(0.28, 0.9, 4, 8) : new THREE.CylinderGeometry(0.28, 0.28, 1.25, 12);
         var core = new THREE.Mesh(coreGeo, mat);
         core.position.y = 0.85;
+        core.renderOrder = 80;
         group.add(core);
         var head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12), mat);
         head.position.y = 1.62;
+        head.renderOrder = 80;
         group.add(head);
-        var halo = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.5, 24), new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false }));
+        var chest = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.018, 8, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.68, depthWrite: false, blending: THREE.AdditiveBlending }));
+        chest.position.y = 1.12;
+        chest.rotation.x = Math.PI / 2;
+        chest.renderOrder = 82;
+        group.add(chest);
+        var halo = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.62, 32), new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.78, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
         halo.position.y = 0.05;
         halo.rotation.x = Math.PI / 2;
+        halo.renderOrder = 81;
         group.add(halo);
+        var labelCanvas = document.createElement('canvas');
+        labelCanvas.width = 256;
+        labelCanvas.height = 64;
+        var labelCtx = labelCanvas.getContext('2d');
+        labelCtx.fillStyle = 'rgba(0,0,0,0.2)';
+        labelCtx.fillRect(0, 0, 256, 64);
+        labelCtx.font = '700 28px Arial';
+        labelCtx.textAlign = 'center';
+        labelCtx.textBaseline = 'middle';
+        labelCtx.fillStyle = '#ffffff';
+        labelCtx.shadowColor = '#' + color.toString(16).padStart(6, '0');
+        labelCtx.shadowBlur = 14;
+        labelCtx.fillText(name, 128, 32);
+        var labelTex = new THREE.CanvasTexture(labelCanvas);
+        var label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex, transparent: true, depthWrite: false }));
+        label.position.y = 2.1;
+        label.scale.set(1.6, 0.4, 1);
+        label.renderOrder = 83;
+        group.add(label);
         group.position.set(SG.LANE_POSITIONS[lane], SG.PLAYER_Y, -2);
+        group.renderOrder = 80;
         return group;
     };
 
@@ -4554,8 +4582,10 @@
                 lane: typeof p.lane === 'number' ? p.lane : (i % 3),
                 distance: 0,
                 speedBias: 0.9 + i * 0.18,
+                startOffset: typeof p.startOffset === 'number' ? p.startOffset : (-4 - SG.state.pvpGhosts.length * 4),
                 group: SG.createPvpGhostGroup(p.name, typeof p.lane === 'number' ? p.lane : (i % 3), colors[i % colors.length])
             };
+            ghost.group.position.z = ghost.startOffset;
             SG.scene.add(ghost.group);
             SG.state.pvpGhosts.push(ghost);
         }
@@ -4567,7 +4597,7 @@
         for (var i = 0; i < SG.state.pvpGhosts.length; i++) {
             var ghost = SG.state.pvpGhosts[i];
             ghost.distance += (SG.getDistanceRate ? SG.getDistanceRate(SG.state.speed) : 8) * ghost.speedBias * delta;
-            var lead = Math.max(-6, Math.min(10, (ghost.distance - playerDistance) * 0.22));
+            var lead = Math.max(-12, Math.min(8, ghost.startOffset + (ghost.distance - playerDistance) * 0.22));
             if (ghost.group) {
                 ghost.group.position.x += (SG.LANE_POSITIONS[ghost.lane] - ghost.group.position.x) * 0.12;
                 ghost.group.position.z += (lead - ghost.group.position.z) * 0.12;
@@ -4661,6 +4691,7 @@
         SG.spawnBuildings();
         SG.spawnObstacles();
         SG.spawnPvpGhosts(room);
+        if (SG.updatePvpVisualStyle) SG.updatePvpVisualStyle();
         SG.beginRunWithCountdown();
     };
 
@@ -5960,7 +5991,6 @@
         if (!SG.scene) return;
         if (active) {
             SG.state.cyberMode = true;
-            if (SG.applyCyberColors) SG.applyCyberColors(true);
             if (SG.scene.background) SG.scene.background.setHex(0x02030a);
             if (SG.scene.fog) {
                 SG.scene.fog.color.setHex(0x05000a);
@@ -5972,6 +6002,86 @@
             return;
         }
         SG.resetCyberMode();
+    };
+
+    SG.applyPvpNeonStyleToObject = function(obj, kind, colorIndex) {
+        if (!obj || obj.userData.pvpNeonStyled) return;
+        var palettes = {
+            obstacle: [0xff2ccf, 0x8d35ff, 0x22e7ff, 0xffd84d],
+            building: [0x14051f, 0x1b0730, 0x071b2e, 0x23071a],
+            player: [0xffffff, 0x9ffcff],
+            ghost: [0xff2ccf, 0x8d35ff, 0x22e7ff]
+        };
+        var palette = palettes[kind] || palettes.obstacle;
+        var color = palette[Math.abs(colorIndex || 0) % palette.length];
+        var emissive = kind === 'building' ? (colorIndex % 2 ? 0x8d35ff : 0xff2ccf) : color;
+        obj.traverse(function(child) {
+            if (!child.isMesh || !child.material) return;
+            var mats = Array.isArray(child.material) ? child.material : [child.material];
+            var styled = mats.map(function(mat) {
+                if (!mat || !mat.clone) return mat;
+                var clone = mat.clone();
+                clone.userData = clone.userData || {};
+                if (clone.color) {
+                    if (kind === 'building') clone.color.setHex(color);
+                    else if (kind === 'obstacle') clone.color.lerp(new THREE.Color(color), 0.62);
+                }
+                if (clone.emissive) {
+                    clone.emissive.setHex(emissive);
+                    clone.emissiveIntensity = kind === 'building' ? 0.5 : 0.42;
+                }
+                if (kind === 'ghost') {
+                    clone.transparent = true;
+                    clone.opacity = 0.74;
+                    clone.depthWrite = false;
+                    clone.blending = THREE.AdditiveBlending;
+                }
+                clone.needsUpdate = true;
+                return clone;
+            });
+            child.material = Array.isArray(child.material) ? styled : styled[0];
+            if (kind === 'ghost') child.renderOrder = 80;
+        });
+        obj.userData.pvpNeonStyled = true;
+    };
+
+    SG.updatePvpVisualStyle = function() {
+        if (!SG.state.pvpMode) return;
+        var i;
+        for (i = 0; i < SG.state.obstacles.length; i++) SG.applyPvpNeonStyleToObject(SG.state.obstacles[i], 'obstacle', i);
+        for (i = 0; i < SG.state.buildings.length; i++) SG.applyPvpNeonStyleToObject(SG.state.buildings[i], 'building', i);
+        if (SG.updatePvpPlayerAura) SG.updatePvpPlayerAura();
+        for (i = 0; i < SG.state.pvpGhosts.length; i++) {
+            if (SG.state.pvpGhosts[i].group) SG.applyPvpNeonStyleToObject(SG.state.pvpGhosts[i].group, 'ghost', i);
+        }
+    };
+
+    SG.updatePvpPlayerAura = function() {
+        if (!SG.player || !THREE) return;
+        if (!SG.pvpPlayerAura) {
+            var aura = new THREE.Group();
+            aura.name = 'pvp-player-neon-aura';
+            aura.userData.pvpPlayerAura = true;
+            var ring = new THREE.Mesh(
+                new THREE.RingGeometry(0.58, 0.72, 36),
+                new THREE.MeshBasicMaterial({ color: 0x22e7ff, transparent: true, opacity: 0.72, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+            );
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = 0.03;
+            ring.renderOrder = 78;
+            aura.add(ring);
+            var spine = new THREE.Mesh(
+                new THREE.BoxGeometry(0.05, 1.55, 0.05),
+                new THREE.MeshBasicMaterial({ color: 0xff2ccf, transparent: true, opacity: 0.42, depthWrite: false, blending: THREE.AdditiveBlending })
+            );
+            spine.position.y = 0.95;
+            spine.position.z = -0.12;
+            spine.renderOrder = 78;
+            aura.add(spine);
+            SG.pvpPlayerAura = aura;
+            SG.player.add(aura);
+        }
+        SG.pvpPlayerAura.visible = !!SG.state.pvpMode;
     };
 
     SG.resetCyberMode = function() {
@@ -5995,6 +6105,7 @@
         SG.state.pvpMode = false;
         SG.state.pvpRoom = null;
         SG.state.pvpResult = null;
+        if (SG.pvpPlayerAura) SG.pvpPlayerAura.visible = false;
         if (SG.pvpHudEl) SG.pvpHudEl.style.display = 'none';
         SG.resetCyberMode();
         SG.resetAllGameObjects();
@@ -6551,6 +6662,11 @@
         var inCyber = speedLvl >= 48;
         if (SG.state.pvpMode) {
             SG.applyPvpScene(true);
+            if (SG.updatePvpVisualStyle) SG.updatePvpVisualStyle();
+            SG.updateBgMusic(delta);
+            if (SG.updateAbilityHUD) SG.updateAbilityHUD();
+            SG.updateCamera();
+            if (SG.updateGunViewModel) SG.updateGunViewModel();
             return;
         }
         if (inCyber !== SG.state.cyberMode) {

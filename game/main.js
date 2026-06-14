@@ -92,7 +92,6 @@
         if (!SG.scene) return;
         if (active) {
             SG.state.cyberMode = true;
-            if (SG.applyCyberColors) SG.applyCyberColors(true);
             if (SG.scene.background) SG.scene.background.setHex(0x02030a);
             if (SG.scene.fog) {
                 SG.scene.fog.color.setHex(0x05000a);
@@ -104,6 +103,86 @@
             return;
         }
         SG.resetCyberMode();
+    };
+
+    SG.applyPvpNeonStyleToObject = function(obj, kind, colorIndex) {
+        if (!obj || obj.userData.pvpNeonStyled) return;
+        var palettes = {
+            obstacle: [0xff2ccf, 0x8d35ff, 0x22e7ff, 0xffd84d],
+            building: [0x14051f, 0x1b0730, 0x071b2e, 0x23071a],
+            player: [0xffffff, 0x9ffcff],
+            ghost: [0xff2ccf, 0x8d35ff, 0x22e7ff]
+        };
+        var palette = palettes[kind] || palettes.obstacle;
+        var color = palette[Math.abs(colorIndex || 0) % palette.length];
+        var emissive = kind === 'building' ? (colorIndex % 2 ? 0x8d35ff : 0xff2ccf) : color;
+        obj.traverse(function(child) {
+            if (!child.isMesh || !child.material) return;
+            var mats = Array.isArray(child.material) ? child.material : [child.material];
+            var styled = mats.map(function(mat) {
+                if (!mat || !mat.clone) return mat;
+                var clone = mat.clone();
+                clone.userData = clone.userData || {};
+                if (clone.color) {
+                    if (kind === 'building') clone.color.setHex(color);
+                    else if (kind === 'obstacle') clone.color.lerp(new THREE.Color(color), 0.62);
+                }
+                if (clone.emissive) {
+                    clone.emissive.setHex(emissive);
+                    clone.emissiveIntensity = kind === 'building' ? 0.5 : 0.42;
+                }
+                if (kind === 'ghost') {
+                    clone.transparent = true;
+                    clone.opacity = 0.74;
+                    clone.depthWrite = false;
+                    clone.blending = THREE.AdditiveBlending;
+                }
+                clone.needsUpdate = true;
+                return clone;
+            });
+            child.material = Array.isArray(child.material) ? styled : styled[0];
+            if (kind === 'ghost') child.renderOrder = 80;
+        });
+        obj.userData.pvpNeonStyled = true;
+    };
+
+    SG.updatePvpVisualStyle = function() {
+        if (!SG.state.pvpMode) return;
+        var i;
+        for (i = 0; i < SG.state.obstacles.length; i++) SG.applyPvpNeonStyleToObject(SG.state.obstacles[i], 'obstacle', i);
+        for (i = 0; i < SG.state.buildings.length; i++) SG.applyPvpNeonStyleToObject(SG.state.buildings[i], 'building', i);
+        if (SG.updatePvpPlayerAura) SG.updatePvpPlayerAura();
+        for (i = 0; i < SG.state.pvpGhosts.length; i++) {
+            if (SG.state.pvpGhosts[i].group) SG.applyPvpNeonStyleToObject(SG.state.pvpGhosts[i].group, 'ghost', i);
+        }
+    };
+
+    SG.updatePvpPlayerAura = function() {
+        if (!SG.player || !THREE) return;
+        if (!SG.pvpPlayerAura) {
+            var aura = new THREE.Group();
+            aura.name = 'pvp-player-neon-aura';
+            aura.userData.pvpPlayerAura = true;
+            var ring = new THREE.Mesh(
+                new THREE.RingGeometry(0.58, 0.72, 36),
+                new THREE.MeshBasicMaterial({ color: 0x22e7ff, transparent: true, opacity: 0.72, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+            );
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = 0.03;
+            ring.renderOrder = 78;
+            aura.add(ring);
+            var spine = new THREE.Mesh(
+                new THREE.BoxGeometry(0.05, 1.55, 0.05),
+                new THREE.MeshBasicMaterial({ color: 0xff2ccf, transparent: true, opacity: 0.42, depthWrite: false, blending: THREE.AdditiveBlending })
+            );
+            spine.position.y = 0.95;
+            spine.position.z = -0.12;
+            spine.renderOrder = 78;
+            aura.add(spine);
+            SG.pvpPlayerAura = aura;
+            SG.player.add(aura);
+        }
+        SG.pvpPlayerAura.visible = !!SG.state.pvpMode;
     };
 
     SG.resetCyberMode = function() {
@@ -127,6 +206,7 @@
         SG.state.pvpMode = false;
         SG.state.pvpRoom = null;
         SG.state.pvpResult = null;
+        if (SG.pvpPlayerAura) SG.pvpPlayerAura.visible = false;
         if (SG.pvpHudEl) SG.pvpHudEl.style.display = 'none';
         SG.resetCyberMode();
         SG.resetAllGameObjects();
@@ -683,6 +763,11 @@
         var inCyber = speedLvl >= 48;
         if (SG.state.pvpMode) {
             SG.applyPvpScene(true);
+            if (SG.updatePvpVisualStyle) SG.updatePvpVisualStyle();
+            SG.updateBgMusic(delta);
+            if (SG.updateAbilityHUD) SG.updateAbilityHUD();
+            SG.updateCamera();
+            if (SG.updateGunViewModel) SG.updateGunViewModel();
             return;
         }
         if (inCyber !== SG.state.cyberMode) {
