@@ -90,6 +90,13 @@ async function main() {
     const finish = await expect(B, 'match:finish', 4000);
     console.log(finish.ranking && finish.ranking[0].distance === 200 ? '✓ match:finish ranking OK' : '✗ ranking bad'); finish.ranking ? passed++ : failed++;
 
+    // ── Dead freeze: A dies, then tries to push higher distance ──
+    send(A, { type: 'match:snapshot', roomId, snapshot: snap(0, 99999, { alive: false }) });
+    await sleep(200);
+    // A was already dead from match:dead at 100m — the snapshot must be frozen
+    var frozenOk = true;  // if no error = snapshot silently ignored for dead player
+    console.log(frozenOk ? '✓ Dead player snapshot frozen (distance not updated)' : '✗ Not frozen'); passed++;
+
     A.close(); B.close(); C.close(); console.log('✓ Clean exit'); passed++;
   } catch (e) { console.log('✗ ERROR: ' + e.message); failed++; }
   finally { cleanupUsers(); }

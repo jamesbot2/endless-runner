@@ -137,6 +137,11 @@ handlers['match:snapshot'] = (ws, msg) => {
   const room = rooms.get(roomId); if (!room) { send(ws,{type:'error',error:'room not found'}); return; }
   if (room.status!=='running') { send(ws,{type:'error',error:'game not running'}); return; }
   const player = room.players.get(userId); if (!player) { send(ws,{type:'error',error:'not in this room'}); return; }
+  // Freeze dead/forfeit players — only spectating can change
+  if (!player.alive || player.forfeit) {
+    if (player.snapshot) { player.snapshot.spectating = !!(snapshot.spectating); player.snapshotTime = Date.now(); }
+    return;
+  }
   const { lane, distance, isJumping, isRolling, alive, spectating, characterId, timestamp } = snapshot;
   if (typeof lane!=='number'||![0,1,2].includes(lane)) { send(ws,{type:'error',error:'invalid lane'}); return; }
   if (typeof distance!=='number'||distance<0||!Number.isFinite(distance)) { send(ws,{type:'error',error:'invalid distance'}); return; }

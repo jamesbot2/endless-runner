@@ -28,16 +28,16 @@ function stopSnap(){_active=false;if(snapTimer){clearInterval(snapTimer);snapTim
 
 SG.connectPvp=function(){if(ws&&ws.readyState===WebSocket.OPEN)return;if(!SG.account||!SG.account.token)return;
 try{ws=new WebSocket(getWsUrl())}catch(e){setTimeout(SG.connectPvp,3000);return;}
-ws.onopen=function(){send({type:'hello',token:SG.account.token});};
+ws.onopen=function(){send({type:'hello',token:SG.account.token});if(SG.updatePvpStatusBar)SG.updatePvpStatusBar('reconnecting');};
 ws.onmessage=function(e){try{handle(JSON.parse(e.data))}catch(err){}};
-ws.onclose=function(e){ws=null;stopSnap();_active=false;if(e.code!==4001&&e.code!==1000)setTimeout(SG.connectPvp,3000);};
+ws.onclose=function(e){ws=null;stopSnap();_active=false;if(e.code!==4001&&e.code!==1000){if(SG.updatePvpStatusBar)SG.updatePvpStatusBar('reconnecting');setTimeout(SG.connectPvp,3000);}else{if(SG.updatePvpStatusBar)SG.updatePvpStatusBar('offline');}};
 };
 
-SG.disconnectPvp=function(){_active=false;if(ws){ws.close(1000);ws=null;}stopSnap();roomId=null;SG.pvpRooms=[];SG.state.pvpRoom=null;};
+SG.disconnectPvp=function(){_active=false;if(ws){ws.close(1000);ws=null;}stopSnap();roomId=null;SG.pvpRooms=[];SG.state.pvpRoom=null;if(SG.updatePvpStatusBar)SG.updatePvpStatusBar('offline');};
 
 function handle(msg){
 switch(msg.type){
-case'hello:ok':break;
+case'hello:ok':if(SG.updatePvpStatusBar)SG.updatePvpStatusBar('online');break;
 case'error':console.log('[PVP]',msg.error);break;
 case'room:list':SG.setPvpRoomsFromServer(msg.rooms);if(SG.renderPvpLobby)SG.renderPvpLobby();break;
 case'room:update':SG.setPvpRoomFromServer(msg.room);if(SG.renderPvpLobby)SG.renderPvpLobby();if(msg.room&&SG.account){if(msg.room.players.some(function(p){return p.id===SG.account.email;}))roomId=msg.room.id;}break;
