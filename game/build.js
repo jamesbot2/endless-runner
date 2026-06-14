@@ -5,9 +5,10 @@ const ORDER=['constants','state','audio','textures','scene','player','track','bu
 let out='';
 for(const name of ORDER){
   const fp=path.join(GAME_DIR,name+'.js');
-  if(!fs.existsSync(fp)){console.log('SKIP:',name);continue;}
+  if(!fs.existsSync(fp)){continue;}
+  let c=fs.readFileSync(fp,'utf8').replace(/\n+$/,'\n');
   out+='// ===== ENDLESS RUNNER - '+name.charAt(0).toUpperCase()+name.slice(1).replace(/([A-Z])/g,' $1')+' =====\n';
-  out+=fs.readFileSync(fp,'utf8')+'\n';
+  out+=c+'\n';
 }
+out=out.replace(/\n+$/, '\n');
 fs.writeFileSync(path.join(GAME_DIR,'..','game.js'),out);
-console.log('Built game.js ('+out.length+' bytes, '+ORDER.length+' modules)');

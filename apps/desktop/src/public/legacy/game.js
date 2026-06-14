@@ -7543,18 +7543,22 @@
 (function(){'use strict';var SG=window.__SG=window.__SG||{};
 var ws=null,roomId=null,snapTimer=null,_active=false;
 
-// ─── Bridges (called by network / called by game) ────
+// Immediately clear fake rooms so Phase 1 doesn't show them
+SG.pvpRooms=[];
+
+// ─── Bridges ───────────────────────────────────────
 
 SG.setPvpRoomsFromServer=function(rooms){SG.pvpRooms=rooms||[];};
 SG.setPvpRoomFromServer=function(room){SG.state.pvpRoom=room;};
 SG.upsertPvpOpponentFromServer=function(data){
   if(!data||(!data.id&&!data.playerId))return;
   var pid=data.id||data.playerId;
-  for(var i=0;i<(SG.state.pvpOpponents||[]).length;i++){
-    var o=SG.state.pvpOpponents[i];
+  var ops=SG.state.pvpOpponents||[];
+  for(var i=0;i<ops.length;i++){
+    var o=ops[i];
     if(o.id===pid||o.name===data.name){o.distance=data.distance||(data.snapshot?data.snapshot.distance:0);o.lane=data.lane!==undefined?data.lane:(data.snapshot?data.snapshot.lane:1);o.isJumping=data.isJumping||(data.snapshot?data.snapshot.isJumping:false);o.isRolling=data.isRolling||(data.snapshot?data.snapshot.isRolling:false);o.alive=data.alive!==undefined?data.alive:(data.snapshot?data.snapshot.alive!==false:true);return;}
 }};
-SG.getLocalPvpSnapshot=function(){if(!_active||!SG.state.started||SG.state.gameOver)return null;return{lane:SG.state.currentLane,distance:Math.floor(SG.state.score),isJumping:SG.state.isJumping,isRolling:SG.state.isRolling,alive:!SG.state.gameOver,spectating:false,characterId:'runner',timestamp:Date.now()};};
+SG.getLocalPvpSnapshot=function(){if(!_active||!SG.state.started||SG.state.gameOver)return null;return{lane:SG.state.currentLane,distance:Math.floor(SG.state.score),isJumping:SG.state.isJumping,isRolling:SG.state.isRolling,alive:!SG.state.gameOver,spectating:false,characterId:((SG.state||{}).selectedCharacter||'runner'),timestamp:Date.now()};};
 
 // ─── Connection ────────────────────────────────────
 
@@ -7579,8 +7583,7 @@ case'error':console.log('[PVP]',msg.error);break;
 case'room:list':SG.setPvpRoomsFromServer(msg.rooms);if(SG.renderPvpLobby)SG.renderPvpLobby();break;
 case'room:update':SG.setPvpRoomFromServer(msg.room);if(SG.renderPvpLobby)SG.renderPvpLobby();if(msg.room&&SG.account){if(msg.room.players.some(function(p){return p.id===SG.account.email;}))roomId=msg.room.id;}break;
 case'match:start':roomId=(msg.room&&msg.room.id)||msg.roomId;SG.state.pvpSeed=msg.seed||'';SG.state.pvpRoom=msg.room||msg;stopSnap();startSnap();
- // Let existing Phase 1 startPvpRace handle the game start
- if(typeof SG.startPvpRace==='function'){SG.startPvpRace();}break;
+ if(typeof SG._originalStartPvpRace==='function'){SG._originalStartPvpRace();}break;
 case'match:snapshot':
  if(msg.players&&Array.isArray(msg.players))for(var i=0;i<msg.players.length;i++)SG.upsertPvpOpponentFromServer(msg.players[i]);
  else if(msg.playerId||msg.id)SG.upsertPvpOpponentFromServer(msg);
@@ -7592,42 +7595,74 @@ case'match:finish':stopSnap();_active=false;SG.state.pvpRoom=null;SG.state.pvpRe
  var old=SG.gameOverEl.querySelector('.pvp-ranks');if(old)old.remove();var d=document.createElement('div');d.className='pvp-ranks';d.innerHTML=ranks;SG.gameOverEl.appendChild(d);SG.gameOverEl.classList.add('visible');} break;
 }}
 
-// ─── Override Phase 1 functions (deferred to after UI loads) ──
+// ─── Override Phase 1 AFTER UI loads ───────────────
 
 setTimeout(function(){
-  // Intercept showPvpLobby to connect+fetch server rooms
+  // ── Save originals ──
   var _origShow=SG.showPvpLobby;
-  SG.showPvpLobby=function(){SG.connectPvp();_origShow.apply(this,arguments);setTimeout(function(){send({type:'room:list'});},300);};
-
-  // Route all PVP room ops through WebSocket
-  SG.pvpListRooms=function(){send({type:'room:list'});};
-  var _origCreate=SG.createLocalPvpRoom;SG.createLocalPvpRoom=null;
-  SG.pvpCreateRoom=function(name){send({type:'room:create',name:name||'Sprint'});};
-  var _origJoin=SG.joinLocalPvpRoom;SG.joinLocalPvpRoom=null;
-  SG.pvpJoinRoom=function(id){send({type:'room:join',roomId:id});};
-
-  // Override ready toggle to go through WebSocket
+  SG._originalStartPvpRace=SG.startPvpRace; // preserve original
   var _origToggle=SG.togglePvpReady;
-  SG.togglePvpReady=function(){if(roomId){var r=SG.state.pvpRoom;if(!r)return;var myId=SG.account?SG.account.email:'';for(var i=0;i<r.players.length;i++)if(r.players[i].id===myId||r.players[i].local){var nr=!r.players[i].ready;r.players[i].ready=nr;send({type:'room:ready',roomId:roomId,ready:nr});if(SG.renderPvpLobby)SG.renderPvpLobby();return;}}else _origToggle&&_origToggle.apply(this,arguments);};
+  var _origGO=SG.gameOver;
 
-  // Override start to go through WebSocket
-  var _origStart=SG.startPvpRace;
-  SG.startPvpRace=function(){
-    if(roomId){send({type:'room:start',roomId:roomId});return;}
-    _origStart.apply(this,arguments);
+  // ── showPvpLobby: connect + pull server rooms ──
+  SG.showPvpLobby=function(){
+    SG.connectPvp();
+    _origShow.apply(this,arguments);
+    setTimeout(function(){send({type:'room:list'});},300);
   };
 
-  // Override isPvpRoomReady to check server data too
-  var _origReady=SG.isPvpRoomReady;
-  SG.isPvpRoomReady=function(room){var r=room||SG.state.pvpRoom;return r&&r.players&&r.players.length>=2&&r.players.every(function(p){return p.ready;});};
+  // ── room:list request ──
+  SG.pvpListRooms=function(){send({type:'room:list'});};
 
-  // Hook game over to send match:dead
-  var _origGO=SG.gameOver;
-  SG.gameOver=function(){if(_active&&roomId)send({type:'match:dead',roomId:roomId,distance:Math.floor(SG.state.score)});if(_origGO)_origGO.apply(this,arguments);};
+  // ── createLocalPvpRoom → WebSocket (keep name so renderPvpLobby buttons work) ──
+  SG.createLocalPvpRoom=function(name){
+    send({type:'room:create',name:(name||'Sprint').trim()||'Sprint'});
+  };
 
-  // Re-render lobby when server sends data
+  // ── joinLocalPvpRoom → WebSocket (keep name so renderPvpLobby buttons work) ──
+  SG.joinLocalPvpRoom=function(id){
+    send({type:'room:join',roomId:id});
+  };
+
+  // ── pvpCreateRoom / pvpJoinRoom: convenience aliases ──
+  SG.pvpCreateRoom=function(name){SG.createLocalPvpRoom(name);};
+  SG.pvpJoinRoom=function(id){SG.joinLocalPvpRoom(id);};
+
+  // ── togglePvpReady → WebSocket ──
+  SG.togglePvpReady=function(){
+    if(roomId){
+      var r=SG.state.pvpRoom;if(!r)return;
+      var myId=SG.account?SG.account.email:'';
+      for(var i=0;i<r.players.length;i++){
+        if(r.players[i].id===myId||r.players[i].local){
+          var nr=!r.players[i].ready;r.players[i].ready=nr;
+          send({type:'room:ready',roomId:roomId,ready:nr});
+          if(SG.renderPvpLobby)SG.renderPvpLobby();return;
+        }
+      }
+    }else if(_origToggle){_origToggle.apply(this,arguments);}
+  };
+
+  // ── startPvpRace: user click → room:start; server reply → originalStartPvpRace ──
+  SG.startPvpRace=function(){
+    if(roomId){send({type:'room:start',roomId:roomId});return;}
+    if(SG._originalStartPvpRace)SG._originalStartPvpRace.apply(this,arguments);
+  };
+
+  // ── isPvpRoomReady: check server data ──
+  SG.isPvpRoomReady=function(room){
+    var r=room||SG.state.pvpRoom;
+    return r&&r.players&&r.players.length>=2&&r.players.every(function(p){return p.ready;});
+  };
+
+  // ── gameOver: send match:dead during PVP ──
+  SG.gameOver=function(){
+    if(_active&&roomId)send({type:'match:dead',roomId:roomId,distance:Math.floor(SG.state.score)});
+    if(_origGO)_origGO.apply(this,arguments);
+  };
+
+  // ── Re-render ──
   if(SG.renderPvpLobby)SG.renderPvpLobby();
 },1500);
 
 })();
-

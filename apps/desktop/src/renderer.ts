@@ -58,14 +58,14 @@ if (window.desktopAPI) {
         s2.offlineMode = false
       }
       console.log('[Endless Runner] Server online:', resp.ok)
-      document.title = `Endless Runner [${apiUrl}] ✓`
+      document.title = 'Endless Runner'
     } catch {
       if (s2) {
         s2.serverOnline = false
         s2.offlineMode = true
       }
       console.warn('[Endless Runner] Server unreachable — offline mode')
-      document.title = `Endless Runner [offline]`
+      document.title = 'Endless Runner · offline'
     }
 
     // Update status bar
@@ -310,13 +310,22 @@ function updateStatusBar(el: HTMLElement, online: boolean | undefined, _apiUrl: 
     if (online) {
       icon.textContent = '●'
       icon.setAttribute('style', 'color:#4CAF50')
-      text.textContent = 'API online'
+      text.textContent = 'online'
     } else {
       icon.textContent = '○'
       icon.setAttribute('style', 'color:#FF9800')
-      text.textContent = 'offline — local save only'
+      text.textContent = 'offline'
     }
   }
+}
+
+// PVP status updater
+var _s4=SG(); if(_s4) _s4.updatePvpStatusBar=function(state){
+  var el=document.getElementById('es-pvp-status');if(!el)return;
+  if(state==='online'){el.textContent='PVP online';el.style.color='#4CAF50';}
+  else if(state==='reconnecting'){el.textContent='reconnecting';el.style.color='#FFA500';}
+  else{el.textContent='PVP offline';el.style.color='rgba(255,255,255,0.5)';}
+  el.style.display='inline';
 }
 
 // ── Desktop Key Bindings ─────────────────────────────────
