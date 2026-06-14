@@ -106,6 +106,10 @@
         pvpRoom: null,
         pvpCountdownSeconds: 10,
         pvpGhosts: [],
+        pvpOpponents: [],
+        pvpSpectating: false,
+        pvpSpectateIndex: 0,
+        pvpLocalDead: false,
         pvpResult: null,
         lastPlayedCoin: 0,
         credits: parseInt(localStorage.getItem('subwayCredits') || '0'),
@@ -4521,14 +4525,62 @@
         SG.pvpOverlay.style.display = 'flex';
     };
 
+    SG.playPvpOpponentAnimation = function(opponent, name) {
+        if (!opponent || !opponent.actions) return;
+        var next = opponent.actions[String(name || '').toLowerCase()];
+        if (!next || opponent.action === next) return;
+        if (opponent.action) opponent.action.fadeOut(0.12);
+        next.reset().fadeIn(0.12).play();
+        opponent.action = next;
+    };
+
+    SG.loadPvpOpponentModel = function(opponent, characterId) {
+        if (!opponent || !opponent.group || opponent.modelRequested || !THREE || !THREE.GLTFLoader) return;
+        opponent.modelRequested = true;
+        var character = SG.getCharacterById ? SG.getCharacterById(characterId || 'runner') : null;
+        var path = character && character.path ? character.path : 'models/player.glb';
+        var loader = new THREE.GLTFLoader();
+        loader.load(path, function(gltf) {
+            if (!opponent.group) return;
+            var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+            if (!model) return;
+            model.name = 'PvpOpponentModel-' + (character ? character.id : 'runner');
+            if (SG.normalizePlayerModel) SG.normalizePlayerModel(model);
+            model.traverse(function(node) {
+                if (node && node.isMesh) {
+                    node.castShadow = true;
+                    node.receiveShadow = true;
+                }
+            });
+            var placeholder = opponent.group.getObjectByName('pvp-opponent-placeholder');
+            if (placeholder) placeholder.visible = false;
+            opponent.model = model;
+            opponent.group.add(model);
+            opponent.actions = {};
+            if (gltf.animations && gltf.animations.length && THREE.AnimationMixer) {
+                opponent.mixer = new THREE.AnimationMixer(model);
+                for (var i = 0; i < gltf.animations.length; i++) {
+                    var clip = gltf.animations[i];
+                    opponent.actions[String(clip.name || '').toLowerCase()] = opponent.mixer.clipAction(clip);
+                }
+                SG.playPvpOpponentAnimation(opponent, 'Run');
+            }
+            if (SG.applyPvpNeonStyleToObject) SG.applyPvpNeonStyleToObject(opponent.group, 'opponent', opponent.colorIndex || 0);
+        }, undefined, function() {
+            opponent.modelError = true;
+        });
+    };
+
     SG.createPvpGhostGroup = function(name, lane, color) {
         var group = new THREE.Group();
         group.userData.pvpGhost = true;
+        group.userData.pvpOpponent = true;
         group.userData.name = name;
         group.userData.lane = lane;
-        var mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.74, depthWrite: false, blending: THREE.AdditiveBlending });
+        var mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.46, depthWrite: false });
         var coreGeo = THREE.CapsuleGeometry ? new THREE.CapsuleGeometry(0.28, 0.9, 4, 8) : new THREE.CylinderGeometry(0.28, 0.28, 1.25, 12);
         var core = new THREE.Mesh(coreGeo, mat);
+        core.name = 'pvp-opponent-placeholder';
         core.position.y = 0.85;
         core.renderOrder = 80;
         group.add(core);
@@ -4572,23 +4624,107 @@
 
     SG.spawnPvpGhosts = function(room) {
         SG.state.pvpGhosts = [];
+        SG.state.pvpOpponents = [];
         if (!room || !SG.scene) return;
         var colors = [0xff2ccf, 0x8d35ff, 0x42f5ff];
+        var characterIds = ['punk', 'swat', 'adventurer'];
         for (var i = 0; i < room.players.length; i++) {
             var p = room.players[i];
             if (p.local) continue;
-            var ghost = {
+            var opponent = {
                 name: p.name,
                 lane: typeof p.lane === 'number' ? p.lane : (i % 3),
+                targetLane: typeof p.lane === 'number' ? p.lane : (i % 3),
                 distance: 0,
                 speedBias: 0.9 + i * 0.18,
                 startOffset: typeof p.startOffset === 'number' ? p.startOffset : (-4 - SG.state.pvpGhosts.length * 4),
+                isJumping: false,
+                isRolling: false,
+                jumpTimer: 0,
+                rollTimer: 0,
+                laneTimer: 0.9 + i * 0.55,
+                alive: true,
+                status: 'RUN',
+                colorIndex: i,
                 group: SG.createPvpGhostGroup(p.name, typeof p.lane === 'number' ? p.lane : (i % 3), colors[i % colors.length])
             };
-            ghost.group.position.z = ghost.startOffset;
-            SG.scene.add(ghost.group);
-            SG.state.pvpGhosts.push(ghost);
+            opponent.group.position.z = opponent.startOffset;
+            SG.scene.add(opponent.group);
+            SG.state.pvpGhosts.push(opponent);
+            SG.state.pvpOpponents.push(opponent);
+            SG.loadPvpOpponentModel(opponent, p.characterId || characterIds[SG.state.pvpOpponents.length % characterIds.length]);
         }
+    };
+
+    SG.updatePvpOpponentState = function(opponent, index, delta) {
+        if (!opponent || !opponent.alive) return;
+        opponent.laneTimer -= delta;
+        if (opponent.laneTimer <= 0) {
+            opponent.laneTimer = 1.0 + ((index + Math.floor(SG.state.gameTime * 2)) % 3) * 0.45;
+            var nextLane = (opponent.targetLane + (index % 2 ? 1 : 2)) % 3;
+            opponent.targetLane = nextLane;
+        }
+        var phase = SG.state.gameTime + index * 1.7;
+        if (!opponent.isJumping && !opponent.isRolling && Math.sin(phase * 1.15) > 0.985) {
+            opponent.isJumping = true;
+            opponent.jumpTimer = 0.72;
+        }
+        if (!opponent.isJumping && !opponent.isRolling && Math.cos(phase * 1.35) > 0.985) {
+            opponent.isRolling = true;
+            opponent.rollTimer = 0.62;
+        }
+        if (opponent.isJumping) {
+            opponent.jumpTimer -= delta;
+            if (opponent.jumpTimer <= 0) opponent.isJumping = false;
+        }
+        if (opponent.isRolling) {
+            opponent.rollTimer -= delta;
+            if (opponent.rollTimer <= 0) opponent.isRolling = false;
+        }
+        opponent.status = opponent.isJumping ? 'JUMP' : (opponent.isRolling ? 'ROLL' : (opponent.lane !== opponent.targetLane ? 'LANE' : 'RUN'));
+        if (opponent.distance > 520 + index * 110) {
+            opponent.alive = false;
+            opponent.status = 'OUT';
+            if (opponent.group) opponent.group.visible = false;
+        }
+    };
+
+    SG.applyPvpOpponentSnapshot = function(opponent, snapshot) {
+        if (!opponent || !snapshot) return;
+        if (typeof snapshot.lane === 'number') opponent.targetLane = Math.max(0, Math.min(2, snapshot.lane));
+        if (typeof snapshot.distance === 'number') opponent.distance = Math.max(opponent.distance || 0, snapshot.distance);
+        if (typeof snapshot.isJumping === 'boolean') {
+            opponent.isJumping = snapshot.isJumping;
+            if (snapshot.isJumping && opponent.jumpTimer <= 0) opponent.jumpTimer = 0.5;
+        }
+        if (typeof snapshot.isRolling === 'boolean') {
+            opponent.isRolling = snapshot.isRolling;
+            if (snapshot.isRolling && opponent.rollTimer <= 0) opponent.rollTimer = 0.45;
+        }
+        if (typeof snapshot.alive === 'boolean') opponent.alive = snapshot.alive;
+        opponent.status = !opponent.alive ? 'OUT' : (opponent.isJumping ? 'JUMP' : (opponent.isRolling ? 'ROLL' : (opponent.targetLane !== opponent.lane ? 'LANE' : 'RUN')));
+    };
+
+    SG.getLocalPvpSnapshot = function() {
+        return {
+            lane: SG.state.targetLane,
+            distance: Math.floor(SG.state.score || 0),
+            isJumping: !!SG.state.isJumping,
+            isRolling: !!SG.state.isRolling,
+            alive: !SG.state.pvpLocalDead,
+            spectating: !!SG.state.pvpSpectating,
+            characterId: SG.state.selectedCharacter || 'runner',
+            timestamp: Date.now()
+        };
+    };
+
+    SG.pvpPhase2Protocol = {
+        transport: 'websocket',
+        clientSendHz: 20,
+        serverBroadcastHz: 20,
+        snapshotFields: ['lane', 'distance', 'isJumping', 'isRolling', 'alive', 'spectating', 'characterId', 'timestamp'],
+        noPlayerCollision: true,
+        spectatorCamera: true
     };
 
     SG.updatePvpGhosts = function(delta) {
@@ -4596,23 +4732,36 @@
         var playerDistance = SG.state.score || 0;
         for (var i = 0; i < SG.state.pvpGhosts.length; i++) {
             var ghost = SG.state.pvpGhosts[i];
+            SG.updatePvpOpponentState(ghost, i, delta);
+            if (ghost.mixer) ghost.mixer.update(delta);
+            if (!ghost.alive) continue;
             ghost.distance += (SG.getDistanceRate ? SG.getDistanceRate(SG.state.speed) : 8) * ghost.speedBias * delta;
             var lead = Math.max(-12, Math.min(8, ghost.startOffset + (ghost.distance - playerDistance) * 0.22));
             if (ghost.group) {
-                ghost.group.position.x += (SG.LANE_POSITIONS[ghost.lane] - ghost.group.position.x) * 0.12;
+                ghost.group.position.x += (SG.LANE_POSITIONS[ghost.targetLane] - ghost.group.position.x) * 0.12;
                 ghost.group.position.z += (lead - ghost.group.position.z) * 0.12;
-                ghost.group.position.y = SG.PLAYER_Y + Math.sin(SG.state.gameTime * 9 + i) * 0.035;
+                var jumpY = ghost.isJumping ? Math.sin((1 - ghost.jumpTimer / 0.72) * Math.PI) * 1.0 : 0;
+                var rollScaleY = ghost.isRolling ? 0.58 : 1;
+                ghost.group.position.y = SG.PLAYER_Y + jumpY + Math.sin(SG.state.gameTime * 9 + i) * 0.025;
+                ghost.group.scale.y += (rollScaleY - ghost.group.scale.y) * 0.18;
                 ghost.group.rotation.y = Math.PI;
                 ghost.group.visible = true;
+                SG.playPvpOpponentAnimation(ghost, ghost.isRolling ? 'Slide' : (ghost.isJumping ? 'Jump' : (ghost.status === 'LANE' ? (ghost.targetLane < ghost.lane ? 'StrafeLeft' : 'StrafeRight') : 'Run')));
+                if (Math.abs(ghost.group.position.x - SG.LANE_POSITIONS[ghost.targetLane]) < 0.08) ghost.lane = ghost.targetLane;
             }
         }
         if (SG.pvpHudEl) {
             var lines = ['PVP ROOM ' + (SG.state.pvpRoom ? SG.state.pvpRoom.id : 'LOCAL')];
-            lines.push('You ' + Math.floor(playerDistance) + 'm');
+            lines.push((SG.state.pvpLocalDead ? 'You OUT' : 'You RUN') + ' ' + Math.floor(playerDistance) + 'm');
             for (var g = 0; g < SG.state.pvpGhosts.length; g++) {
-                lines.push(SG.state.pvpGhosts[g].name + ' ' + Math.floor(SG.state.pvpGhosts[g].distance) + 'm');
+                var op = SG.state.pvpGhosts[g];
+                lines.push(op.name + ' ' + op.status + ' L' + (op.targetLane + 1) + ' ' + Math.floor(op.distance) + 'm');
             }
+            if (SG.state.pvpSpectating) lines.push('SPECTATING: ' + (SG.getPvpSpectateTargetName ? SG.getPvpSpectateTargetName() : 'PLAYER'));
             SG.pvpHudEl.innerHTML = lines.join('<br>');
+        }
+        if (SG.state.pvpLocalDead && SG.getAlivePvpOpponents && SG.getAlivePvpOpponents().length === 0 && SG.finishPvpMatch) {
+            SG.finishPvpMatch();
         }
     };
 
@@ -4625,12 +4774,86 @@
         return rows;
     };
 
+    SG.getAlivePvpOpponents = function() {
+        return (SG.state.pvpOpponents || SG.state.pvpGhosts || []).filter(function(op) {
+            return op && op.alive !== false && op.group;
+        });
+    };
+
+    SG.getPvpSpectateTarget = function() {
+        var alive = SG.getAlivePvpOpponents ? SG.getAlivePvpOpponents() : [];
+        if (!alive.length) return null;
+        SG.state.pvpSpectateIndex = Math.max(0, Math.min(alive.length - 1, SG.state.pvpSpectateIndex || 0));
+        return alive[SG.state.pvpSpectateIndex].group;
+    };
+
+    SG.getPvpSpectateTargetName = function() {
+        var alive = SG.getAlivePvpOpponents ? SG.getAlivePvpOpponents() : [];
+        if (!alive.length) return 'NONE';
+        SG.state.pvpSpectateIndex = Math.max(0, Math.min(alive.length - 1, SG.state.pvpSpectateIndex || 0));
+        return alive[SG.state.pvpSpectateIndex].name;
+    };
+
+    SG.cyclePvpSpectateTarget = function(dir) {
+        if (!SG.state.pvpSpectating) return;
+        var alive = SG.getAlivePvpOpponents ? SG.getAlivePvpOpponents() : [];
+        if (!alive.length) return;
+        SG.state.pvpSpectateIndex = (SG.state.pvpSpectateIndex + dir + alive.length) % alive.length;
+        if (SG.updatePvpGhosts) SG.updatePvpGhosts(0);
+    };
+
+    SG.enterPvpSpectator = function() {
+        SG.state.pvpLocalDead = true;
+        SG.state.pvpSpectating = true;
+        SG.state.pvpSpectateIndex = 0;
+        SG.state.gameOver = false;
+        SG.state.started = true;
+        SG.state.paused = false;
+        SG.state.firstPerson = false;
+        SG.state.isJumping = false;
+        SG.state.isRolling = false;
+        if (SG.player) SG.player.visible = false;
+        if (SG.pvpPlayerAura) SG.pvpPlayerAura.visible = false;
+        if (SG.gameOverEl) SG.gameOverEl.classList.remove('visible');
+        if (SG.pvpHudEl) {
+            SG.pvpHudEl.style.display = 'block';
+            SG.pvpHudEl.innerHTML = 'SPECTATING: ' + SG.getPvpSpectateTargetName();
+        }
+    };
+
+    SG.finishPvpMatch = function() {
+        if (!SG.state.pvpMode) return;
+        SG.state.pvpSpectating = false;
+        SG.state.gameOver = true;
+        SG.state.started = false;
+        SG.state.pvpResult = SG.buildPvpResult ? SG.buildPvpResult(SG.state.score || 0) : null;
+        if (SG.gameOverEl) {
+            var title = SG.gameOverEl.querySelector('h1');
+            if (title) title.textContent = 'PVP FINISHED';
+            var oldRanks = document.getElementById('pvp-results');
+            if (oldRanks) oldRanks.remove();
+            if (SG.state.pvpResult) {
+                var ranks = document.createElement('div');
+                ranks.id = 'pvp-results';
+                ranks.style.cssText = 'margin:12px auto 16px;max-width:320px;text-align:left;font:700 13px/1.5 Arial,sans-serif;color:#f7eaff;background:rgba(14,4,24,.55);border:1px solid rgba(255,44,207,.3);border-radius:8px;padding:10px 12px;';
+                ranks.innerHTML = SG.state.pvpResult.map(function(row, idx) {
+                    return '<div>' + (idx + 1) + '. ' + row.name + ' - ' + Math.floor(row.distance) + 'm</div>';
+                }).join('');
+                SG.gameOverEl.insertBefore(ranks, SG.restartBtnEl || null);
+            }
+            SG.gameOverEl.classList.add('visible');
+        }
+    };
+
     SG.exitPvpToLobby = function() {
         SG.stopBgMusic();
         SG.state.pvpMode = false;
         SG.state.started = false;
         SG.state.gameOver = false;
         SG.state.countdownActive = false;
+        SG.state.pvpSpectating = false;
+        SG.state.pvpLocalDead = false;
+        SG.state.pvpSpectateIndex = 0;
         if (SG.pvpHudEl) SG.pvpHudEl.style.display = 'none';
         if (SG.gameOverEl) {
             SG.gameOverEl.classList.remove('visible');
@@ -4665,6 +4888,9 @@
         SG.state.gameOver = false;
         SG.state.started = false;
         SG.state.paused = false;
+        SG.state.pvpSpectating = false;
+        SG.state.pvpLocalDead = false;
+        SG.state.pvpSpectateIndex = 0;
         SG.state.currentLane = 1;
         SG.state.targetLane = 1;
         SG.state.laneLerp = 1;
@@ -5069,6 +5295,20 @@
         document.addEventListener('keydown', function(e) {
             SG.keys[e.key] = true;
             if (e.keyCode) { SG.keys['_kc_' + e.keyCode] = true; }
+
+            if (SG.state.pvpSpectating) {
+                var spectateAction = SG.getInputActionForKey ? SG.getInputActionForKey(e.key) : null;
+                if (spectateAction === 'left') {
+                    if (SG.cyclePvpSpectateTarget) SG.cyclePvpSpectateTarget(-1);
+                    e.preventDefault();
+                    return;
+                }
+                if (spectateAction === 'right') {
+                    if (SG.cyclePvpSpectateTarget) SG.cyclePvpSpectateTarget(1);
+                    e.preventDefault();
+                    return;
+                }
+            }
 
             if (SG.state.homelander && SG.homelanderGroup) {
                 var hlSpeed = 0.25;
@@ -5924,6 +6164,10 @@
         if (!SG.camera) return;
 
         var camTarget = (SG.state.homelander && SG.homelanderGroup) ? SG.homelanderGroup.position : (SG.player ? SG.player.position : null);
+        if (SG.state.pvpSpectating && SG.getPvpSpectateTarget) {
+            var spectateTarget = SG.getPvpSpectateTarget();
+            if (spectateTarget && spectateTarget.position) camTarget = spectateTarget.position;
+        }
         if (!camTarget) return;
 
         if (isNaN(camTarget.x)) camTarget.x = 0;
@@ -5955,7 +6199,7 @@
             SG.camera.position.y += (targetY + shakeY - SG.camera.position.y) * 0.1;
             SG.camera.position.z += (targetZ - SG.camera.position.z) * 0.1;
             SG.camera.lookAt(camTarget.x, camTarget.y + view.lookY, camTarget.z + view.lookZ);
-            if (SG.player && !SG.state.homelander) SG.player.visible = true;
+            if (SG.player && !SG.state.homelander) SG.player.visible = !SG.state.pvpSpectating;
         }
     };
 
@@ -5983,6 +6227,7 @@
         SG.state.coinObstacleMap = new Map();
         SG.state.buildings = [];
         SG.state.particles = [];
+        SG.state.pvpOpponents = [];
         SG.state.pvpGhosts = [];
         if (SG.clearActiveGun) SG.clearActiveGun();
     };
@@ -6052,7 +6297,7 @@
         for (i = 0; i < SG.state.buildings.length; i++) SG.applyPvpNeonStyleToObject(SG.state.buildings[i], 'building', i);
         if (SG.updatePvpPlayerAura) SG.updatePvpPlayerAura();
         for (i = 0; i < SG.state.pvpGhosts.length; i++) {
-            if (SG.state.pvpGhosts[i].group) SG.applyPvpNeonStyleToObject(SG.state.pvpGhosts[i].group, 'ghost', i);
+            if (SG.state.pvpGhosts[i].group) SG.applyPvpNeonStyleToObject(SG.state.pvpGhosts[i].group, 'opponent', i);
         }
     };
 
@@ -6081,7 +6326,7 @@
             SG.pvpPlayerAura = aura;
             SG.player.add(aura);
         }
-        SG.pvpPlayerAura.visible = !!SG.state.pvpMode;
+        SG.pvpPlayerAura.visible = !!SG.state.pvpMode && !SG.state.pvpLocalDead;
     };
 
     SG.resetCyberMode = function() {
@@ -6105,6 +6350,9 @@
         SG.state.pvpMode = false;
         SG.state.pvpRoom = null;
         SG.state.pvpResult = null;
+        SG.state.pvpSpectating = false;
+        SG.state.pvpLocalDead = false;
+        SG.state.pvpSpectateIndex = 0;
         if (SG.pvpPlayerAura) SG.pvpPlayerAura.visible = false;
         if (SG.pvpHudEl) SG.pvpHudEl.style.display = 'none';
         SG.resetCyberMode();
@@ -6256,6 +6504,10 @@
 
     // ===== GAME OVER =====
     SG.gameOver = function() {
+        if (SG.state.pvpMode && !SG.state.pvpLocalDead && SG.enterPvpSpectator) {
+            SG.enterPvpSpectator();
+            return;
+        }
         SG.state.gameOver = true;
         SG.state.cameraShake = 0.5;
         SG.createCrashParticles(SG.player.position.clone());
@@ -6647,7 +6899,7 @@
         if (SG.state.homelander) SG.state.gameOver = false;
 
         // Collision
-        if (SG.checkCollisions()) {
+        if (!SG.state.pvpLocalDead && SG.checkCollisions()) {
             SG.gameOver();
             SG.updateCamera();
             return;

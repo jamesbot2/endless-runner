@@ -197,6 +197,20 @@
             SG.keys[e.key] = true;
             if (e.keyCode) { SG.keys['_kc_' + e.keyCode] = true; }
 
+            if (SG.state.pvpSpectating) {
+                var spectateAction = SG.getInputActionForKey ? SG.getInputActionForKey(e.key) : null;
+                if (spectateAction === 'left') {
+                    if (SG.cyclePvpSpectateTarget) SG.cyclePvpSpectateTarget(-1);
+                    e.preventDefault();
+                    return;
+                }
+                if (spectateAction === 'right') {
+                    if (SG.cyclePvpSpectateTarget) SG.cyclePvpSpectateTarget(1);
+                    e.preventDefault();
+                    return;
+                }
+            }
+
             if (SG.state.homelander && SG.homelanderGroup) {
                 var hlSpeed = 0.25;
                 var hla = SG.getInputActionForKey(e.key);

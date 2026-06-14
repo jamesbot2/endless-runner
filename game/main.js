@@ -25,6 +25,10 @@
         if (!SG.camera) return;
 
         var camTarget = (SG.state.homelander && SG.homelanderGroup) ? SG.homelanderGroup.position : (SG.player ? SG.player.position : null);
+        if (SG.state.pvpSpectating && SG.getPvpSpectateTarget) {
+            var spectateTarget = SG.getPvpSpectateTarget();
+            if (spectateTarget && spectateTarget.position) camTarget = spectateTarget.position;
+        }
         if (!camTarget) return;
 
         if (isNaN(camTarget.x)) camTarget.x = 0;
@@ -56,7 +60,7 @@
             SG.camera.position.y += (targetY + shakeY - SG.camera.position.y) * 0.1;
             SG.camera.position.z += (targetZ - SG.camera.position.z) * 0.1;
             SG.camera.lookAt(camTarget.x, camTarget.y + view.lookY, camTarget.z + view.lookZ);
-            if (SG.player && !SG.state.homelander) SG.player.visible = true;
+            if (SG.player && !SG.state.homelander) SG.player.visible = !SG.state.pvpSpectating;
         }
     };
 
@@ -84,6 +88,7 @@
         SG.state.coinObstacleMap = new Map();
         SG.state.buildings = [];
         SG.state.particles = [];
+        SG.state.pvpOpponents = [];
         SG.state.pvpGhosts = [];
         if (SG.clearActiveGun) SG.clearActiveGun();
     };
@@ -153,7 +158,7 @@
         for (i = 0; i < SG.state.buildings.length; i++) SG.applyPvpNeonStyleToObject(SG.state.buildings[i], 'building', i);
         if (SG.updatePvpPlayerAura) SG.updatePvpPlayerAura();
         for (i = 0; i < SG.state.pvpGhosts.length; i++) {
-            if (SG.state.pvpGhosts[i].group) SG.applyPvpNeonStyleToObject(SG.state.pvpGhosts[i].group, 'ghost', i);
+            if (SG.state.pvpGhosts[i].group) SG.applyPvpNeonStyleToObject(SG.state.pvpGhosts[i].group, 'opponent', i);
         }
     };
 
@@ -182,7 +187,7 @@
             SG.pvpPlayerAura = aura;
             SG.player.add(aura);
         }
-        SG.pvpPlayerAura.visible = !!SG.state.pvpMode;
+        SG.pvpPlayerAura.visible = !!SG.state.pvpMode && !SG.state.pvpLocalDead;
     };
 
     SG.resetCyberMode = function() {
@@ -206,6 +211,9 @@
         SG.state.pvpMode = false;
         SG.state.pvpRoom = null;
         SG.state.pvpResult = null;
+        SG.state.pvpSpectating = false;
+        SG.state.pvpLocalDead = false;
+        SG.state.pvpSpectateIndex = 0;
         if (SG.pvpPlayerAura) SG.pvpPlayerAura.visible = false;
         if (SG.pvpHudEl) SG.pvpHudEl.style.display = 'none';
         SG.resetCyberMode();
@@ -357,6 +365,10 @@
 
     // ===== GAME OVER =====
     SG.gameOver = function() {
+        if (SG.state.pvpMode && !SG.state.pvpLocalDead && SG.enterPvpSpectator) {
+            SG.enterPvpSpectator();
+            return;
+        }
         SG.state.gameOver = true;
         SG.state.cameraShake = 0.5;
         SG.createCrashParticles(SG.player.position.clone());
@@ -748,7 +760,7 @@
         if (SG.state.homelander) SG.state.gameOver = false;
 
         // Collision
-        if (SG.checkCollisions()) {
+        if (!SG.state.pvpLocalDead && SG.checkCollisions()) {
             SG.gameOver();
             SG.updateCamera();
             return;

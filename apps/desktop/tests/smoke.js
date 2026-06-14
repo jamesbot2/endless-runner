@@ -859,8 +859,10 @@ app.whenReady().then(async () => {
         if (window.__SG.updatePvpVisualStyle) window.__SG.updatePvpVisualStyle()
         var pvpObstacleNeon = false
         var pvpBuildingNeon = false
-        var ghostOpacityOk = true
-        var ghostOffsets = []
+        var opponentModelsLoaded = 0
+        var opponentGroups = 0
+        var opponentOffsets = []
+        await new Promise(function(resolve) { setTimeout(resolve, 900) })
         ;(window.__SG.state.obstacles || []).forEach(function(obs) {
           if (pvpObstacleNeon) return
           obs.traverse(function(node) {
@@ -885,17 +887,22 @@ app.whenReady().then(async () => {
           })
         })
         ;(window.__SG.state.pvpGhosts || []).forEach(function(ghost) {
-          ghostOffsets.push(ghost.group ? Math.round(ghost.group.position.z) : 0)
-          if (ghost.group) {
-            ghost.group.traverse(function(node) {
-              if (!node.isMesh || !node.material) return
-              var mats = Array.isArray(node.material) ? node.material : [node.material]
-              mats.forEach(function(mat) {
-                if (mat && mat.transparent && mat.opacity < 0.68) ghostOpacityOk = false
-              })
-            })
-          }
+          if (ghost.group && ghost.group.userData && ghost.group.userData.pvpOpponent) opponentGroups++
+          if (ghost.model) opponentModelsLoaded++
+          opponentOffsets.push(ghost.group ? Math.round(ghost.group.position.z) : 0)
         })
+        var snapshotSync = false
+        var remoteStateVisible = false
+        if (window.__SG.state.pvpOpponents && window.__SG.state.pvpOpponents.length >= 2 && window.__SG.applyPvpOpponentSnapshot && window.__SG.updatePvpGhosts) {
+          var firstOp = window.__SG.state.pvpOpponents[0]
+          var secondOp = window.__SG.state.pvpOpponents[1]
+          window.__SG.applyPvpOpponentSnapshot(firstOp, { lane: 2, distance: 120, isJumping: true, isRolling: false, alive: true })
+          window.__SG.applyPvpOpponentSnapshot(secondOp, { lane: 0, distance: 95, isJumping: false, isRolling: true, alive: true })
+          window.__SG.updatePvpGhosts(0.016)
+          snapshotSync = firstOp.targetLane === 2 && firstOp.status === 'JUMP' && secondOp.status === 'ROLL'
+          remoteStateVisible = !!(window.__SG.pvpHudEl && /JUMP/.test(window.__SG.pvpHudEl.innerHTML) && /ROLL/.test(window.__SG.pvpHudEl.innerHTML))
+        }
+        var localSnapshot = window.__SG.getLocalPvpSnapshot ? window.__SG.getLocalPvpSnapshot() : null
         var savedPvpObstacles = window.__SG.state.obstacles
         window.__SG.state.obstacles = []
         if (window.__SG.player && window.__SG.camera && window.__SG.update) {
@@ -914,7 +921,18 @@ app.whenReady().then(async () => {
         window.__SG.toggleConsole()
         var devConsole = document.getElementById('dev-console')
         var consoleDisabled = !devConsole || devConsole.style.display !== 'flex'
+        var raceStartedBeforeSpectate = !!window.__SG.state.started
+        var playerAuraBeforeSpectate = !!(window.__SG.pvpPlayerAura && window.__SG.pvpPlayerAura.visible)
         window.__SG.gameOver()
+        var spectating = !!window.__SG.state.pvpSpectating
+        var localDead = !!window.__SG.state.pvpLocalDead
+        var spectateTargetName = window.__SG.getPvpSpectateTargetName ? window.__SG.getPvpSpectateTargetName() : ''
+        var beforeCycle = spectateTargetName
+        if (window.__SG.cyclePvpSpectateTarget) window.__SG.cyclePvpSpectateTarget(1)
+        var afterCycle = window.__SG.getPvpSpectateTargetName ? window.__SG.getPvpSpectateTargetName() : ''
+        var playerHiddenWhenSpectating = !!(window.__SG.player && window.__SG.player.visible === false)
+        ;(window.__SG.state.pvpOpponents || []).forEach(function(op) { op.alive = false; op.status = 'OUT' })
+        if (window.__SG.finishPvpMatch) window.__SG.finishPvpMatch()
         var result = window.__SG.state.pvpResult || []
         r.pvpPhase1 = {
           menuButton: !!pvpButton,
@@ -924,15 +942,26 @@ app.whenReady().then(async () => {
           countdownSeq: countdownSeq,
           mode: !!window.__SG.state.pvpMode,
           difficulty: window.__SG.state.difficulty,
-          started: !!window.__SG.state.started,
+          started: raceStartedBeforeSpectate,
           ghosts: window.__SG.state.pvpGhosts ? window.__SG.state.pvpGhosts.length : 0,
+          opponents: window.__SG.state.pvpOpponents ? window.__SG.state.pvpOpponents.length : 0,
+          opponentGroups: opponentGroups,
+          opponentModelsLoaded: opponentModelsLoaded,
           track: !!(firstPvpTrack && firstPvpTrack.userData && firstPvpTrack.userData.pvpTrack),
           neonEdges: neonEdges,
           obstacleNeon: pvpObstacleNeon,
           buildingNeon: pvpBuildingNeon,
-          playerAura: !!(window.__SG.pvpPlayerAura && window.__SG.pvpPlayerAura.visible),
-          ghostOpacityOk: ghostOpacityOk,
-          ghostOffsetsUnique: Array.from(new Set(ghostOffsets)).length === ghostOffsets.length,
+          playerAura: playerAuraBeforeSpectate,
+          opponentOffsetsUnique: Array.from(new Set(opponentOffsets)).length === opponentOffsets.length,
+          snapshotProtocol: !!(window.__SG.pvpPhase2Protocol && window.__SG.pvpPhase2Protocol.clientSendHz === 20 && window.__SG.pvpPhase2Protocol.noPlayerCollision),
+          localSnapshot: !!(localSnapshot && typeof localSnapshot.lane === 'number' && typeof localSnapshot.alive === 'boolean'),
+          snapshotSync: snapshotSync,
+          remoteStateVisible: remoteStateVisible,
+          spectating: spectating,
+          localDead: localDead,
+          spectateTarget: !!spectateTargetName,
+          spectateCycle: beforeCycle !== afterCycle,
+          playerHiddenWhenSpectating: playerHiddenWhenSpectating,
           cameraFollows: pvpCameraFollows,
           pvpHud: !!(window.__SG.pvpHudEl && window.__SG.pvpHudEl.style.display === 'block'),
           pauseDisabled: pauseDisabled,
@@ -1032,7 +1061,7 @@ app.whenReady().then(async () => {
   check("14e-10. third-person speed HUD shows instant vector speed", !!state.speedHud && !!state.speedHudVector, state.speedHudText || state.speedHudBackground || 'missing')
   check("14e-11. first-person pitch setting defaults lower and saves", state.firstPersonPitchDefault === 1 && state.firstPersonPitchSetting === 1 && state.firstPersonPitchButtons === 2 && !!state.firstPersonPitchSaved, `default=${state.firstPersonPitchDefault}, slider=${state.firstPersonPitchSetting}, buttons=${state.firstPersonPitchButtons}`)
   check("14e-12. start countdown overlays 3-2-1-RUN before movement", !!state.startCountdown && !!state.startCountdown.overlay && state.startCountdown.sequence === '3,2,1,RUN!' && !!state.startCountdown.done && !state.startCountdown.active && state.startCountdown.display === 'none' && state.startCountdown.text === 'RUN!', state.startCountdown ? JSON.stringify(state.startCountdown) : 'missing')
-  check("14e-13. PVP Phase 1 local rooms launch neon cyber ghost race", !!state.pvpPhase1 && !!state.pvpPhase1.menuButton && !!state.pvpPhase1.overlay && !!state.pvpPhase1.localHost && !!state.pvpPhase1.roomReady && state.pvpPhase1.countdownSeq === '10,9,8,7,6,5,4,3,2,1,RUN!' && !!state.pvpPhase1.mode && state.pvpPhase1.difficulty === 1 && !!state.pvpPhase1.started && state.pvpPhase1.ghosts === 2 && !!state.pvpPhase1.track && state.pvpPhase1.neonEdges >= 4 && !!state.pvpPhase1.obstacleNeon && !!state.pvpPhase1.buildingNeon && !!state.pvpPhase1.playerAura && !!state.pvpPhase1.ghostOpacityOk && !!state.pvpPhase1.ghostOffsetsUnique && !!state.pvpPhase1.cameraFollows && !!state.pvpPhase1.pvpHud && !!state.pvpPhase1.pauseDisabled && !!state.pvpPhase1.consoleDisabled && state.pvpPhase1.resultCount === 3, state.pvpPhase1 ? JSON.stringify(state.pvpPhase1) : 'missing')
+  check("14e-13. PVP Phase 2 opponent models sync state and spectating", !!state.pvpPhase1 && !!state.pvpPhase1.menuButton && !!state.pvpPhase1.overlay && !!state.pvpPhase1.localHost && !!state.pvpPhase1.roomReady && state.pvpPhase1.countdownSeq === '10,9,8,7,6,5,4,3,2,1,RUN!' && !!state.pvpPhase1.mode && state.pvpPhase1.difficulty === 1 && !!state.pvpPhase1.started && state.pvpPhase1.ghosts === 2 && state.pvpPhase1.opponents === 2 && state.pvpPhase1.opponentGroups === 2 && state.pvpPhase1.opponentModelsLoaded >= 1 && !!state.pvpPhase1.track && state.pvpPhase1.neonEdges >= 4 && !!state.pvpPhase1.obstacleNeon && !!state.pvpPhase1.buildingNeon && !!state.pvpPhase1.playerAura && !!state.pvpPhase1.opponentOffsetsUnique && !!state.pvpPhase1.snapshotProtocol && !!state.pvpPhase1.localSnapshot && !!state.pvpPhase1.snapshotSync && !!state.pvpPhase1.remoteStateVisible && !!state.pvpPhase1.spectating && !!state.pvpPhase1.localDead && !!state.pvpPhase1.spectateTarget && !!state.pvpPhase1.spectateCycle && !!state.pvpPhase1.playerHiddenWhenSpectating && !!state.pvpPhase1.cameraFollows && !!state.pvpPhase1.pvpHud && !!state.pvpPhase1.pauseDisabled && !!state.pvpPhase1.consoleDisabled && state.pvpPhase1.resultCount === 3, state.pvpPhase1 ? JSON.stringify(state.pvpPhase1) : 'missing')
   check("14f. restart keeps player facing forward", Math.abs(state.restartRotationY - Math.PI) < 0.001, String(state.restartRotationY))
   check("14g. console command runner exists", !!state.executeConsoleCommand)
   check("14h. console includes Homelander easter egg", state.consoleCommands && state.consoleCommands.includes('homelander'), state.consoleCommands ? state.consoleCommands.join(', ') : 'none')
