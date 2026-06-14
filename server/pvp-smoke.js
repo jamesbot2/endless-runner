@@ -81,21 +81,31 @@ async function main() {
     // Death
     send(A, { type: 'match:dead', roomId, distance: 100 }); await sleep(200);
     const dead = last(B, 'match:dead');
-    console.log(dead && dead.playerId === A._userId ? '✓ match:dead OK' : '✗ no dead msg'); dead ? passed++ : failed++;
+    console.log(dead && dead.playerId === A._userId ? '✓ match:dead OK (A dead at 100m)' : '✗ no dead msg'); dead ? passed++ : failed++;
 
-    // C then B die → finish
+    // ── Dead freeze: A tries to push higher distance while B/C still alive ──
+    // A sends snapshot with distance=99999, alive=false — must be frozen at 100
+    send(A, { type: 'match:snapshot', roomId, snapshot: snap(0, 99999, { alive: false }) });
+    await sleep(200);
+    // No error expected — dead player snapshots silently ignored
+    var aErr = last(A, 'error');
+    console.log(!aErr ? '✓ Dead snapshot frozen (no error, silently ignored)' : '✗ Got error: ' + aErr.error); (!aErr) ? passed++ : failed++;
+
+    // A tries match:dead again with distance 99999 — must stay at 100
+    send(A, { type: 'match:dead', roomId, distance: 99999 });
+    await sleep(200);
+    var dead2 = last(B, 'match:dead');
+    // Second match:dead should NOT generate a broadcast (p.alive is already false)
+    console.log(!dead2 || dead2.distance === 100 ? '✓ Repeat match:dead ignored (distance stays 100)' : '✗ Second dead broadcast with distance ' + dead2.distance); (!dead2 || dead2.distance === 100) ? passed++ : failed++;
+
+    // C then B die → finish, ranking must show A at 100 not 99999
     clear(A); clear(B); clear(C);
     send(C, { type: 'match:snapshot', roomId, snapshot: snap(2, 150, { alive: false }) }); await sleep(100);
     send(B, { type: 'match:snapshot', roomId, snapshot: snap(1, 200, { alive: false }) });
     const finish = await expect(B, 'match:finish', 4000);
-    console.log(finish.ranking && finish.ranking[0].distance === 200 ? '✓ match:finish ranking OK' : '✗ ranking bad'); finish.ranking ? passed++ : failed++;
-
-    // ── Dead freeze: A dies, then tries to push higher distance ──
-    send(A, { type: 'match:snapshot', roomId, snapshot: snap(0, 99999, { alive: false }) });
-    await sleep(200);
-    // A was already dead from match:dead at 100m — the snapshot must be frozen
-    var frozenOk = true;  // if no error = snapshot silently ignored for dead player
-    console.log(frozenOk ? '✓ Dead player snapshot frozen (distance not updated)' : '✗ Not frozen'); passed++;
+    var aRank = (finish.ranking||[]).find(function(r){return r.name==='Test0';});
+    var aDist = aRank ? aRank.distance : -1;
+    console.log(aDist === 100 ? '✓ match:finish ranking OK (A frozen at 100m)' : '✗ A distance=' + aDist + ' (expected 100)'); (aDist === 100 && finish.ranking[0].distance === 200) ? passed++ : failed++;
 
     A.close(); B.close(); C.close(); console.log('✓ Clean exit'); passed++;
   } catch (e) { console.log('✗ ERROR: ' + e.message); failed++; }
