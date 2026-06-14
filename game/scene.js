@@ -30,23 +30,64 @@
         SG.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
         SG.renderer.setSize(window.innerWidth, window.innerHeight);
         SG.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
+        SG.renderer.outputEncoding = THREE.sRGBEncoding;
+        SG.renderer.toneMapping = THREE.ReinhardToneMapping;
+        SG.renderer.toneMappingExposure = 1.08;
+        SG.renderer.shadowMap.enabled = true;
+        SG.renderer.shadowMap.type = THREE.BasicShadowMap;
         document.body.appendChild(SG.renderer.domElement);
 
-        SG.ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        SG.ambientLight = new THREE.AmbientLight(0xffffff, 0.48);
         SG.scene.add(SG.ambientLight);
 
-        var hemiLight = new THREE.HemisphereLight(0x87CEEB, 0x3a5a2a, 0.5);
-        SG.scene.add(hemiLight);
+        SG.hemiLight = new THREE.HemisphereLight(0xbfe7ff, 0x4b4033, 0.72);
+        SG.scene.add(SG.hemiLight);
 
-        var dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-        dirLight.position.set(10, 20, 5);
-        SG.scene.add(dirLight);
+        SG.dirLight = new THREE.DirectionalLight(0xfff2d2, 0.95);
+        SG.dirLight.position.set(-8, 16, 10);
+        SG.dirLight.castShadow = true;
+        SG.dirLight.shadow.mapSize.width = 1024;
+        SG.dirLight.shadow.mapSize.height = 1024;
+        SG.dirLight.shadow.camera.left = -12;
+        SG.dirLight.shadow.camera.right = 12;
+        SG.dirLight.shadow.camera.top = 16;
+        SG.dirLight.shadow.camera.bottom = -8;
+        SG.dirLight.shadow.camera.near = 2;
+        SG.dirLight.shadow.camera.far = 45;
+        SG.dirLight.shadow.bias = -0.0008;
+        SG.scene.add(SG.dirLight);
+
+        SG.realisticLightingProfile = {
+            shadows: true,
+            shadowMapSize: 1024,
+            toneMapping: 'Reinhard',
+            themeAware: true
+        };
 
         if (SG.createSkyDome) SG.createSkyDome();
 
         SG.clock = new THREE.Clock();
 
         window.addEventListener('resize', SG.onResize);
+    };
+
+    SG.updateLightRigForTheme = function(themeIndex) {
+        if (!SG.ambientLight || !SG.hemiLight || !SG.dirLight) return;
+        var presets = [
+            { hemiSky: 0xbfe7ff, hemiGround: 0x4b4033, hemi: 0.72, sun: 0xfff2d2, sunPower: 0.95, pos: [-8, 16, 10], exposure: 1.08 },
+            { hemiSky: 0xd9f6d0, hemiGround: 0x314626, hemi: 0.78, sun: 0xf5ffd8, sunPower: 0.82, pos: [-6, 14, 8], exposure: 1.0 },
+            { hemiSky: 0xffd08a, hemiGround: 0x6a4726, hemi: 0.62, sun: 0xffcf7a, sunPower: 1.12, pos: [-10, 13, 5], exposure: 1.12 },
+            { hemiSky: 0xb5e7ff, hemiGround: 0x345066, hemi: 0.76, sun: 0xe9fbff, sunPower: 0.9, pos: [-7, 15, 12], exposure: 1.04 }
+        ];
+        var p = presets[Math.max(0, Math.min(3, themeIndex || 0))];
+        SG.ambientLight.intensity = 0.42;
+        SG.hemiLight.color.setHex(p.hemiSky);
+        SG.hemiLight.groundColor.setHex(p.hemiGround);
+        SG.hemiLight.intensity = p.hemi;
+        SG.dirLight.color.setHex(p.sun);
+        SG.dirLight.intensity = p.sunPower;
+        SG.dirLight.position.set(p.pos[0], p.pos[1], p.pos[2]);
+        if (SG.renderer) SG.renderer.toneMappingExposure = p.exposure;
     };
 
     SG.onResize = function() {

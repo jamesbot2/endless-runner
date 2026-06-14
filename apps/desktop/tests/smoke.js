@@ -625,9 +625,35 @@ app.whenReady().then(async () => {
           asphalt: !!(groundMesh && groundMesh.material && groundMesh.material.map),
           lanePaint: !!(laneMesh && laneMesh.material && laneMesh.material.map),
           concrete: !!(curbMesh && curbMesh.material && curbMesh.material.map),
+          groundReceivesShadow: !!(groundMesh && groundMesh.receiveShadow),
           warningTexture: typeof window.__SG.createWarningPanelMaterial === 'function'
         }
         window.__SG.disposeObject(textureSegment)
+      }
+      r.realisticLighting = window.__SG && window.__SG.renderer && window.__SG.realisticLightingProfile ? {
+        shadows: !!window.__SG.renderer.shadowMap.enabled,
+        shadowType: window.__SG.renderer.shadowMap.type,
+        outputEncoding: window.__SG.renderer.outputEncoding,
+        toneMapping: window.__SG.renderer.toneMapping,
+        exposure: window.__SG.renderer.toneMappingExposure,
+        dirCastsShadow: !!(window.__SG.dirLight && window.__SG.dirLight.castShadow),
+        shadowMapWidth: window.__SG.dirLight && window.__SG.dirLight.shadow ? window.__SG.dirLight.shadow.mapSize.width : 0,
+        profile: window.__SG.realisticLightingProfile
+      } : null
+      r.rhythmMusicProfile = window.__SG ? window.__SG.rhythmMusicProfile : null
+      r.themeThresholds = window.__SG ? window.__SG.THEME_DISTANCE_THRESHOLDS : null
+      r.themeThresholdSwitch = false
+      if (window.__SG && window.__SG.checkThemeChange && window.__SG.switchTheme) {
+        var savedThemeForThreshold = window.__SG.state.theme
+        var savedScoreForThreshold = window.__SG.state.score
+        window.__SG.state.theme = 0
+        window.__SG.state.score = window.__SG.THEME_DISTANCE_THRESHOLDS.forest + 1
+        window.__SG.checkThemeChange()
+        r.themeThresholdSwitch = window.__SG.state.theme === 1
+        window.__SG.state.score = savedScoreForThreshold
+        if (window.__SG.state.theme !== savedThemeForThreshold) window.__SG.switchTheme(savedThemeForThreshold || 0)
+        else window.__SG.state.theme = savedThemeForThreshold
+        if (window.__SG.updateLightRigForTheme) window.__SG.updateLightRigForTheme(savedThemeForThreshold || 0)
       }
       r.skyDomeThemeSwap = false
       if (window.__SG && window.__SG.updateSkyDome && window.__SG.skyDome) {
@@ -884,7 +910,10 @@ app.whenReady().then(async () => {
   check("14m-5a. full-width barrier leaves one lane gap", !!state.fullBarrierCollisionGap, state.fullBarrierGap ? JSON.stringify(state.fullBarrierGap) : 'missing')
   check("14m-6. train roof ramp matches train width and has warning texture", state.trainRampWidth !== null && state.trainRampWidth <= 1.6 && !!state.trainRampTextured, `rampWidth=${state.trainRampWidth}, textured=${state.trainRampTextured}`)
   check("14m-7. train obstacles wait for GLB assets", !!state.vehicleSkipsLegacyFallback)
-  check("14m-8. realistic skybox and track textures are active", !!state.realisticMaterials && !!state.realisticMaterials.skyDome && !!state.realisticMaterials.asphalt && !!state.realisticMaterials.lanePaint && !!state.realisticMaterials.concrete && !!state.realisticMaterials.warningTexture && !!state.skyDomeThemeSwap, state.realisticMaterials ? JSON.stringify({ materials: state.realisticMaterials, themeSwap: state.skyDomeThemeSwap }) : 'missing')
+  check("14m-8. realistic skybox and track textures are active", !!state.realisticMaterials && !!state.realisticMaterials.skyDome && !!state.realisticMaterials.asphalt && !!state.realisticMaterials.lanePaint && !!state.realisticMaterials.concrete && !!state.realisticMaterials.groundReceivesShadow && !!state.realisticMaterials.warningTexture && !!state.skyDomeThemeSwap, state.realisticMaterials ? JSON.stringify({ materials: state.realisticMaterials, themeSwap: state.skyDomeThemeSwap }) : 'missing')
+  check("14m-9. lightweight realistic lighting is active", !!state.realisticLighting && !!state.realisticLighting.shadows && !!state.realisticLighting.dirCastsShadow && state.realisticLighting.shadowMapWidth <= 1024 && !!state.realisticLighting.outputEncoding && !!state.realisticLighting.toneMapping, state.realisticLighting ? JSON.stringify(state.realisticLighting) : 'missing')
+  check("14m-10. scene theme distances are shorter", !!state.themeThresholds && state.themeThresholds.forest <= 300 && state.themeThresholds.desert <= 800 && state.themeThresholds.arctic <= 1400 && !!state.themeThresholdSwitch, state.themeThresholds ? JSON.stringify({ thresholds: state.themeThresholds, switch: state.themeThresholdSwitch }) : 'missing')
+  check("14m-11. rhythm music profile has layered beat parts", !!state.rhythmMusicProfile && state.rhythmMusicProfile.baseBpm >= 100 && state.rhythmMusicProfile.maxBpm >= 200 && !!state.rhythmMusicProfile.hasBackbeatSnare && !!state.rhythmMusicProfile.hasSyncopatedHats && !!state.rhythmMusicProfile.hasBassline && !!state.rhythmMusicProfile.hasLeadArp, state.rhythmMusicProfile ? JSON.stringify(state.rhythmMusicProfile) : 'missing')
   check("14n. character catalog loaded", state.characterCatalogCount >= 12, String(state.characterCatalogCount))
   check("14o. character selector menu exists", !!state.characterSelector && !!state.charactersButton)
   check("14p. character price follows unlock count", state.characterBuy && state.characterPrice === state.expectedCharacterPrice, `price=${state.characterPrice}, owned=${state.ownedCharacterCount}`)

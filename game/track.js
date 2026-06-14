@@ -11,6 +11,7 @@
         var groundMat = SG.createTrackGroundMaterial ? SG.createTrackGroundMaterial() : new THREE.MeshLambertMaterial({ color: 0x4a4a4e });
         var ground = new THREE.Mesh(new THREE.BoxGeometry(SG.GROUND_WIDTH, 0.2, SG.TRACK_SEGMENT_LENGTH), groundMat);
         ground.position.y = -0.1;
+        ground.receiveShadow = true;
         group.add(ground);
 
         var markMat = SG.createLanePaintMaterial ? SG.createLanePaintMaterial() : new THREE.MeshBasicMaterial({ color: 0x6a6a6e });
@@ -24,6 +25,7 @@
         for (var side = -1; side <= 1; side += 2) {
             var curb = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, SG.TRACK_SEGMENT_LENGTH), curbMat);
             curb.position.set(side * (SG.GROUND_WIDTH / 2 + 0.25), 0.1, 0);
+            curb.receiveShadow = true;
             group.add(curb);
         }
 

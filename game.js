@@ -310,6 +310,15 @@
         currentOscs: []
     };
 
+    SG.rhythmMusicProfile = {
+        baseBpm: 108,
+        maxBpm: 218,
+        hasBackbeatSnare: true,
+        hasSyncopatedHats: true,
+        hasBassline: true,
+        hasLeadArp: true
+    };
+
     SG.startBgMusic = function() {
         if (SG.state.muted || !SG.audioCtx || SG.bgMusicState.running) return;
         SG.bgMusicState.running = true;
@@ -324,6 +333,59 @@
         }
         SG.bgMusicState.currentOscs = [];
     };
+
+    function rememberMusicNode(node, ttlMs) {
+        SG.bgMusicState.currentOscs.push(node);
+        setTimeout(function() {
+            var idx = SG.bgMusicState.currentOscs.indexOf(node);
+            if (idx >= 0) SG.bgMusicState.currentOscs.splice(idx, 1);
+        }, ttlMs || 500);
+    }
+
+    function musicVolume(scale) {
+        var v = typeof SG.state.musicVolume === 'number' ? SG.state.musicVolume : 0.5;
+        return Math.max(0, Math.min(1, v)) * scale;
+    }
+
+    function playOscHit(type, freqA, freqB, gainValue, start, duration) {
+        var ctx = SG.audioCtx;
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = type;
+        osc.frequency.setValueAtTime(freqA, start);
+        if (freqB) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqB), start + duration * 0.72);
+        gain.gain.setValueAtTime(musicVolume(gainValue), start);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+        osc.start(start);
+        osc.stop(start + duration + 0.02);
+        rememberMusicNode(osc, (duration + 0.1) * 1000);
+    }
+
+    function playNoiseHit(start, duration, gainValue, filterFreq, filterType) {
+        var ctx = SG.audioCtx;
+        var bufferSize = Math.max(1, Math.floor(ctx.sampleRate * duration));
+        var buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        var data = buffer.getChannelData(0);
+        for (var i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2.1);
+        }
+        var src = ctx.createBufferSource();
+        var filter = ctx.createBiquadFilter();
+        var gain = ctx.createGain();
+        filter.type = filterType || 'highpass';
+        filter.frequency.setValueAtTime(filterFreq || 2800, start);
+        src.buffer = buffer;
+        src.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+        gain.gain.setValueAtTime(musicVolume(gainValue), start);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+        src.start(start);
+        src.stop(start + duration + 0.01);
+        rememberMusicNode(src, (duration + 0.1) * 1000);
+    }
 
     SG.ensureHomelanderAudio = function() {
         if (!SG.homelanderThemeAudio && typeof Audio !== 'undefined') {
@@ -417,8 +479,8 @@
         var speedLevel = Math.floor((SG.state.speed - SG.START_SPEED) / (SG.MAX_SPEED - SG.START_SPEED) * 49) + 1;
         speedLevel = Math.max(1, Math.min(speedLevel, 50));
         var speedT = (speedLevel - 1) / 49;
-        var targetBpm = 96 + speedT * 144;
-        SG.bgMusicState.tempo += (targetBpm - SG.bgMusicState.tempo) * 0.035;
+        var targetBpm = SG.rhythmMusicProfile.baseBpm + speedT * (SG.rhythmMusicProfile.maxBpm - SG.rhythmMusicProfile.baseBpm);
+        SG.bgMusicState.tempo += (targetBpm - SG.bgMusicState.tempo) * 0.05;
 
         var beatInterval = 60 / SG.bgMusicState.tempo;
         var now = SG.audioCtx.currentTime;
@@ -429,61 +491,33 @@
             var beat = SG.bgMusicState.beatCount;
 
             try {
-                if (beat % 2 === 0 || beat % 4 === 1) {
-                    var kick = SG.audioCtx.createOscillator();
-                    var kickGain = SG.audioCtx.createGain();
-                    kick.connect(kickGain);
-                    kickGain.connect(SG.audioCtx.destination);
-                    kick.type = 'sine';
-                    kick.frequency.setValueAtTime(150, now);
-                    kick.frequency.linearRampToValueAtTime(40, now + 0.1);
-                    kickGain.gain.setValueAtTime(0.35, now);
-                    kickGain.gain.linearRampToValueAtTime(0, now + 0.2);
-                    kick.start(now);
-                    kick.stop(now + 0.2);
-                    SG.bgMusicState.currentOscs.push(kick);
-                    setTimeout(function() {
-                        var idx = SG.bgMusicState.currentOscs.indexOf(kick);
-                        if (idx >= 0) SG.bgMusicState.currentOscs.splice(idx, 1);
-                    }, 300);
+                var step = beat % 8;
+                var sixteenth = beatInterval * 0.5;
+                var notes = [98, 123.47, 110, 146.83, 98, 130.81, 110, 164.81];
+                var bassNote = notes[beat % notes.length];
+
+                if (step === 1 || step === 5 || step === 0 || (speedLevel > 28 && step === 3)) {
+                    playOscHit('sine', 165, 42, 0.54, now, 0.18);
                 }
 
-                if (speedLevel > 12 || beat % 2 === 0) {
-                    var hatGain = SG.audioCtx.createGain();
-                    hatGain.connect(SG.audioCtx.destination);
-                    var hat = SG.audioCtx.createOscillator();
-                    hat.connect(hatGain);
-                    hat.type = 'square';
-                    hat.frequency.setValueAtTime(5000, now);
-                    hatGain.gain.setValueAtTime(0.12, now);
-                    hatGain.gain.linearRampToValueAtTime(0, now + 0.04);
-                    hat.start(now);
-                    hat.stop(now + 0.04);
-                    SG.bgMusicState.currentOscs.push(hat);
-                    setTimeout(function() {
-                        var idx = SG.bgMusicState.currentOscs.indexOf(hat);
-                        if (idx >= 0) SG.bgMusicState.currentOscs.splice(idx, 1);
-                    }, 100);
+                if (step === 3 || step === 7) {
+                    playNoiseHit(now, 0.12, 0.25, 1600, 'bandpass');
+                    playOscHit('triangle', 220, 165, 0.08, now, 0.1);
                 }
 
-                if (beat % 4 === 0 || speedLevel > 35 && beat % 2 === 0) {
-                    var bass = SG.audioCtx.createOscillator();
-                    var bassGain = SG.audioCtx.createGain();
-                    bass.connect(bassGain);
-                    bassGain.connect(SG.audioCtx.destination);
-                    bass.type = 'sawtooth';
-                    var notes = [110, 130.8, 110, 146.8];
-                    var note = notes[Math.floor(beat / 4) % 4];
-                    bass.frequency.setValueAtTime(note, now);
-                    bassGain.gain.setValueAtTime(0.15, now);
-                    bassGain.gain.linearRampToValueAtTime(0, now + 0.3);
-                    bass.start(now);
-                    bass.stop(now + 0.3);
-                    SG.bgMusicState.currentOscs.push(bass);
-                    setTimeout(function() {
-                        var idx = SG.bgMusicState.currentOscs.indexOf(bass);
-                        if (idx >= 0) SG.bgMusicState.currentOscs.splice(idx, 1);
-                    }, 400);
+                playNoiseHit(now, 0.035, speedLevel > 20 ? 0.11 : 0.075, 5200, 'highpass');
+                if (SG.rhythmMusicProfile.hasSyncopatedHats && (speedLevel > 10 || beat % 2 === 0)) {
+                    playNoiseHit(now + sixteenth, 0.026, speedLevel > 32 ? 0.085 : 0.05, 7200, 'highpass');
+                }
+
+                if (SG.rhythmMusicProfile.hasBassline) {
+                    playOscHit('sawtooth', bassNote, bassNote * 0.995, 0.16, now, beatInterval * 0.82);
+                }
+
+                if (SG.rhythmMusicProfile.hasLeadArp && speedLevel > 14 && beat % 2 === 0) {
+                    var leadNotes = [392, 493.88, 587.33, 659.25, 783.99, 659.25, 587.33, 493.88];
+                    var lead = leadNotes[Math.floor(beat / 2) % leadNotes.length];
+                    playOscHit('square', lead, lead * 1.01, speedLevel > 34 ? 0.045 : 0.025, now + beatInterval * 0.25, 0.08);
                 }
             } catch(e) {}
         }
@@ -858,23 +892,64 @@
         SG.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
         SG.renderer.setSize(window.innerWidth, window.innerHeight);
         SG.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
+        SG.renderer.outputEncoding = THREE.sRGBEncoding;
+        SG.renderer.toneMapping = THREE.ReinhardToneMapping;
+        SG.renderer.toneMappingExposure = 1.08;
+        SG.renderer.shadowMap.enabled = true;
+        SG.renderer.shadowMap.type = THREE.BasicShadowMap;
         document.body.appendChild(SG.renderer.domElement);
 
-        SG.ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        SG.ambientLight = new THREE.AmbientLight(0xffffff, 0.48);
         SG.scene.add(SG.ambientLight);
 
-        var hemiLight = new THREE.HemisphereLight(0x87CEEB, 0x3a5a2a, 0.5);
-        SG.scene.add(hemiLight);
+        SG.hemiLight = new THREE.HemisphereLight(0xbfe7ff, 0x4b4033, 0.72);
+        SG.scene.add(SG.hemiLight);
 
-        var dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-        dirLight.position.set(10, 20, 5);
-        SG.scene.add(dirLight);
+        SG.dirLight = new THREE.DirectionalLight(0xfff2d2, 0.95);
+        SG.dirLight.position.set(-8, 16, 10);
+        SG.dirLight.castShadow = true;
+        SG.dirLight.shadow.mapSize.width = 1024;
+        SG.dirLight.shadow.mapSize.height = 1024;
+        SG.dirLight.shadow.camera.left = -12;
+        SG.dirLight.shadow.camera.right = 12;
+        SG.dirLight.shadow.camera.top = 16;
+        SG.dirLight.shadow.camera.bottom = -8;
+        SG.dirLight.shadow.camera.near = 2;
+        SG.dirLight.shadow.camera.far = 45;
+        SG.dirLight.shadow.bias = -0.0008;
+        SG.scene.add(SG.dirLight);
+
+        SG.realisticLightingProfile = {
+            shadows: true,
+            shadowMapSize: 1024,
+            toneMapping: 'Reinhard',
+            themeAware: true
+        };
 
         if (SG.createSkyDome) SG.createSkyDome();
 
         SG.clock = new THREE.Clock();
 
         window.addEventListener('resize', SG.onResize);
+    };
+
+    SG.updateLightRigForTheme = function(themeIndex) {
+        if (!SG.ambientLight || !SG.hemiLight || !SG.dirLight) return;
+        var presets = [
+            { hemiSky: 0xbfe7ff, hemiGround: 0x4b4033, hemi: 0.72, sun: 0xfff2d2, sunPower: 0.95, pos: [-8, 16, 10], exposure: 1.08 },
+            { hemiSky: 0xd9f6d0, hemiGround: 0x314626, hemi: 0.78, sun: 0xf5ffd8, sunPower: 0.82, pos: [-6, 14, 8], exposure: 1.0 },
+            { hemiSky: 0xffd08a, hemiGround: 0x6a4726, hemi: 0.62, sun: 0xffcf7a, sunPower: 1.12, pos: [-10, 13, 5], exposure: 1.12 },
+            { hemiSky: 0xb5e7ff, hemiGround: 0x345066, hemi: 0.76, sun: 0xe9fbff, sunPower: 0.9, pos: [-7, 15, 12], exposure: 1.04 }
+        ];
+        var p = presets[Math.max(0, Math.min(3, themeIndex || 0))];
+        SG.ambientLight.intensity = 0.42;
+        SG.hemiLight.color.setHex(p.hemiSky);
+        SG.hemiLight.groundColor.setHex(p.hemiGround);
+        SG.hemiLight.intensity = p.hemi;
+        SG.dirLight.color.setHex(p.sun);
+        SG.dirLight.intensity = p.sunPower;
+        SG.dirLight.position.set(p.pos[0], p.pos[1], p.pos[2]);
+        if (SG.renderer) SG.renderer.toneMappingExposure = p.exposure;
     };
 
     SG.onResize = function() {
@@ -1304,6 +1379,7 @@
         var groundMat = SG.createTrackGroundMaterial ? SG.createTrackGroundMaterial() : new THREE.MeshLambertMaterial({ color: 0x4a4a4e });
         var ground = new THREE.Mesh(new THREE.BoxGeometry(SG.GROUND_WIDTH, 0.2, SG.TRACK_SEGMENT_LENGTH), groundMat);
         ground.position.y = -0.1;
+        ground.receiveShadow = true;
         group.add(ground);
 
         var markMat = SG.createLanePaintMaterial ? SG.createLanePaintMaterial() : new THREE.MeshBasicMaterial({ color: 0x6a6a6e });
@@ -1317,6 +1393,7 @@
         for (var side = -1; side <= 1; side += 2) {
             var curb = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, SG.TRACK_SEGMENT_LENGTH), curbMat);
             curb.position.set(side * (SG.GROUND_WIDTH / 2 + 0.25), 0.1, 0);
+            curb.receiveShadow = true;
             group.add(curb);
         }
 
@@ -1440,6 +1517,12 @@
             buildings: [0x85C1E9, 0xAED6F1, 0x5DADE2, 0x7FB3D8, 0x95C8E0, 0xB8D8F0]
         }
     ];
+
+    SG.THEME_DISTANCE_THRESHOLDS = {
+        forest: 260,
+        desert: 760,
+        arctic: 1350
+    };
 
     SG.createScenery = function(x, z) {
         var group = new THREE.Group();
@@ -1625,6 +1708,7 @@
         SG.scene.fog.near = themeIndex >= 2 ? 40 : 60;
         SG.scene.fog.far = themeIndex >= 2 ? 90 : 120;
         if (SG.updateSkyDome) SG.updateSkyDome(themeIndex, 'normal');
+        if (SG.updateLightRigForTheme) SG.updateLightRigForTheme(themeIndex);
 
         for (var si = 0; si < SG.state.trackSegments.length; si++) {
             var seg = SG.state.trackSegments[si];
@@ -1679,9 +1763,9 @@
     SG.checkThemeChange = function() {
         var score = Math.floor(SG.state.score);
         var newTheme = 0;
-        if (score >= 3000) newTheme = 3;
-        else if (score >= 1500) newTheme = 2;
-        else if (score >= 500) newTheme = 1;
+        if (score >= SG.THEME_DISTANCE_THRESHOLDS.arctic) newTheme = 3;
+        else if (score >= SG.THEME_DISTANCE_THRESHOLDS.desert) newTheme = 2;
+        else if (score >= SG.THEME_DISTANCE_THRESHOLDS.forest) newTheme = 1;
         if (newTheme !== SG.state.theme) {
             SG.switchTheme(newTheme);
         }

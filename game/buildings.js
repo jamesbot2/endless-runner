@@ -106,6 +106,12 @@
         }
     ];
 
+    SG.THEME_DISTANCE_THRESHOLDS = {
+        forest: 260,
+        desert: 760,
+        arctic: 1350
+    };
+
     SG.createScenery = function(x, z) {
         var group = new THREE.Group();
         group.position.set(x, 0, z);
@@ -290,6 +296,7 @@
         SG.scene.fog.near = themeIndex >= 2 ? 40 : 60;
         SG.scene.fog.far = themeIndex >= 2 ? 90 : 120;
         if (SG.updateSkyDome) SG.updateSkyDome(themeIndex, 'normal');
+        if (SG.updateLightRigForTheme) SG.updateLightRigForTheme(themeIndex);
 
         for (var si = 0; si < SG.state.trackSegments.length; si++) {
             var seg = SG.state.trackSegments[si];
@@ -344,9 +351,9 @@
     SG.checkThemeChange = function() {
         var score = Math.floor(SG.state.score);
         var newTheme = 0;
-        if (score >= 3000) newTheme = 3;
-        else if (score >= 1500) newTheme = 2;
-        else if (score >= 500) newTheme = 1;
+        if (score >= SG.THEME_DISTANCE_THRESHOLDS.arctic) newTheme = 3;
+        else if (score >= SG.THEME_DISTANCE_THRESHOLDS.desert) newTheme = 2;
+        else if (score >= SG.THEME_DISTANCE_THRESHOLDS.forest) newTheme = 1;
         if (newTheme !== SG.state.theme) {
             SG.switchTheme(newTheme);
         }
