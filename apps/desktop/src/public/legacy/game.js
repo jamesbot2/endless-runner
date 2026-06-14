@@ -102,6 +102,11 @@
         rollReleaseDelay: parseInt(localStorage.getItem('subwayRollReleaseDelay') || '200'),
         thirdPersonView: localStorage.getItem('subwayThirdPersonView') || 'near',
         firstPersonPitchDeg: Math.max(-5, Math.min(5, parseFloat(localStorage.getItem('subwayFirstPersonPitchDeg') || '1'))),
+        pvpMode: false,
+        pvpRoom: null,
+        pvpCountdownSeconds: 10,
+        pvpGhosts: [],
+        pvpResult: null,
         lastPlayedCoin: 0,
         credits: parseInt(localStorage.getItem('subwayCredits') || '0'),
         totalCoins: parseInt(localStorage.getItem('subwayTotalCoins') || '0'),
@@ -1418,27 +1423,46 @@
         var group = new THREE.Group();
         group.position.z = zPos;
 
-        var groundMat = SG.createTrackGroundMaterial ? SG.createTrackGroundMaterial() : new THREE.MeshLambertMaterial({ color: 0x4a4a4e });
+        var isPvp = !!(SG.state && SG.state.pvpMode);
+        var groundMat = isPvp
+            ? new THREE.MeshPhongMaterial({ color: 0x05060b, emissive: 0x14031f, shininess: 96, transparent: true, opacity: 0.88 })
+            : (SG.createTrackGroundMaterial ? SG.createTrackGroundMaterial() : new THREE.MeshLambertMaterial({ color: 0x4a4a4e }));
         var ground = new THREE.Mesh(new THREE.BoxGeometry(SG.GROUND_WIDTH, 0.2, SG.TRACK_SEGMENT_LENGTH), groundMat);
         ground.position.y = -0.1;
         ground.receiveShadow = true;
+        ground.userData.pvpGlassTrack = isPvp;
         group.add(ground);
 
-        var markMat = SG.createLanePaintMaterial ? SG.createLanePaintMaterial() : new THREE.MeshBasicMaterial({ color: 0x6a6a6e });
+        var markMat = isPvp
+            ? new THREE.MeshBasicMaterial({ color: 0x8d35ff, transparent: true, opacity: 0.92 })
+            : (SG.createLanePaintMaterial ? SG.createLanePaintMaterial() : new THREE.MeshBasicMaterial({ color: 0x6a6a6e }));
         for (var lane = -1; lane <= 1; lane += 2) {
             var mark = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.01, SG.TRACK_SEGMENT_LENGTH - 2), markMat);
             mark.position.set(lane * (SG.LANE_WIDTH / 2), 0.01, 0);
             group.add(mark);
         }
 
-        var curbMat = SG.createCurbMaterial ? SG.createCurbMaterial() : new THREE.MeshLambertMaterial({ color: 0x5a5a5a });
+        var curbMat = isPvp
+            ? new THREE.MeshBasicMaterial({ color: 0xff2ccf })
+            : (SG.createCurbMaterial ? SG.createCurbMaterial() : new THREE.MeshLambertMaterial({ color: 0x5a5a5a }));
         for (var side = -1; side <= 1; side += 2) {
             var curb = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, SG.TRACK_SEGMENT_LENGTH), curbMat);
             curb.position.set(side * (SG.GROUND_WIDTH / 2 + 0.25), 0.1, 0);
             curb.receiveShadow = true;
+            curb.userData.pvpNeonEdge = isPvp;
             group.add(curb);
+            if (isPvp) {
+                var glow = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.08, 0.04, SG.TRACK_SEGMENT_LENGTH),
+                    new THREE.MeshBasicMaterial({ color: side < 0 ? 0xff2ccf : 0x9b4dff, transparent: true, opacity: 0.82 })
+                );
+                glow.position.set(side * (SG.GROUND_WIDTH / 2 + 0.46), 0.24, 0);
+                glow.userData.pvpNeonGlow = true;
+                group.add(glow);
+            }
         }
 
+        group.userData.pvpTrack = isPvp;
         return group;
     };
 
@@ -3819,6 +3843,7 @@
                     '<div class="menu-nav-btn" id="characters-btn"><span class="nav-ico">◆</span> Characters</div>' +
                     '<div class="menu-nav-btn" id="profile-btn"><span class="nav-ico">👤</span> Profile</div>' +
                     '<div class="menu-nav-btn" id="leaderboard-btn"><span class="nav-ico">🏆</span> Leaderboard</div>' +
+                    '<div class="menu-nav-btn" id="pvp-btn-menu"><span class="nav-ico">VS</span> PVP</div>' +
                     '<div class="menu-nav-btn" id="settings-btn-menu"><span class="nav-ico">⚙</span> Settings</div>' +
                     '<div class="menu-nav-btn danger" id="signout-btn"><span class="nav-ico">🚪</span> Sign Out</div>' +
                 '</aside>' +
@@ -3842,6 +3867,14 @@
                 '</section>' +
             '</div>';
         SG.uiOverlay.appendChild(SG.menuOverlay);
+
+        var pvpOverlay = document.createElement('div');
+        pvpOverlay.id = 'pvp-overlay';
+        pvpOverlay.className = 'overlay';
+        pvpOverlay.style.display = 'none';
+        pvpOverlay.innerHTML = '<div id="pvp-panel" style="width:min(1040px,94vw);max-height:88vh;overflow:auto;background:rgba(4,6,14,.92);border:1px solid rgba(255,44,207,.45);box-shadow:0 0 34px rgba(155,77,255,.28);padding:24px;border-radius:8px;color:#f5f7ff;font-family:Arial,sans-serif;"></div>';
+        SG.uiOverlay.appendChild(pvpOverlay);
+        SG.pvpOverlay = pvpOverlay;
 
         // ===== PAUSE OVERLAY =====
         SG.pauseOverlay = document.createElement('div');
@@ -3867,6 +3900,12 @@
         SG.speedHudEl.id = 'third-person-speed-hud';
         SG.speedHudEl.style.cssText = 'position:fixed;left:50%;top:50%;z-index:18;display:none;pointer-events:none;transform:translate(-8px,2px);padding:3px 7px;border-radius:5px;background:rgba(0,0,0,0.16);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.94);font:700 12px/1.25 Arial,sans-serif;text-shadow:0 1px 6px rgba(0,0,0,0.85);letter-spacing:0;';
         SG.uiOverlay.appendChild(SG.speedHudEl);
+
+        var pvpHud = document.createElement('div');
+        pvpHud.id = 'pvp-hud';
+        pvpHud.style.cssText = 'position:absolute;top:16px;right:16px;display:none;min-width:220px;max-width:280px;padding:10px 12px;border-radius:8px;background:rgba(4,5,12,0.52);border:1px solid rgba(255,44,207,0.34);box-shadow:0 0 18px rgba(155,77,255,0.2);color:rgba(245,247,255,0.92);font:700 12px/1.45 Arial,sans-serif;pointer-events:none;text-shadow:0 1px 7px rgba(0,0,0,0.9);';
+        SG.uiOverlay.appendChild(pvpHud);
+        SG.pvpHudEl = pvpHud;
 
         // ===== PAUSE BUTTON =====
         SG.pauseBtnEl = document.createElement('div');
@@ -4129,6 +4168,11 @@
             leaderboardBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showLeaderboard(); });
             leaderboardBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showLeaderboard(); });
         }
+        var pvpBtn = document.getElementById('pvp-btn-menu');
+        if (pvpBtn) {
+            pvpBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showPvpLobby(); });
+            pvpBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showPvpLobby(); });
+        }
         var settingsBtn = document.getElementById('settings-btn-menu');
         if (settingsBtn) {
             settingsBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showSettings(); });
@@ -4328,10 +4372,312 @@
         bindMobileBtn('m-roll', SG.roll, 's');
     };
 
+    // ===== PVP Phase 1 local room prototype =====
+    SG.pvpRooms = SG.pvpRooms || [
+        { id: 'R-101', name: 'Neon Rush', host: 'Astra', players: [{ name: 'Astra', ready: true }, { name: 'Byte', ready: false }], maxPlayers: 3, locked: false },
+        { id: 'R-204', name: 'Glass Track', host: 'Vector', players: [{ name: 'Vector', ready: true }, { name: 'Echo', ready: true }, { name: 'Nova', ready: false }], maxPlayers: 3, locked: false }
+    ];
+
+    SG.getLocalPvpName = function() {
+        return (SG.state && SG.state.username) || localStorage.getItem('subwayUsername') || 'You';
+    };
+
+    SG.createLocalPvpRoom = function() {
+        var room = {
+            id: 'LOCAL-' + Math.floor(1000 + Math.random() * 9000),
+            name: 'Cyber Sprint',
+            host: SG.getLocalPvpName(),
+            localHost: true,
+            players: [
+                { name: SG.getLocalPvpName(), ready: true, local: true, lane: 1 },
+                { name: 'Echo', ready: false, invited: false, bot: true, lane: 0 },
+                { name: 'Vector', ready: false, invited: false, bot: true, lane: 2 }
+            ],
+            maxPlayers: 3,
+            locked: false
+        };
+        SG.state.pvpRoom = room;
+        SG.renderPvpLobby();
+    };
+
+    SG.joinLocalPvpRoom = function(roomId) {
+        var room = null;
+        for (var i = 0; i < SG.pvpRooms.length; i++) {
+            if (SG.pvpRooms[i].id === roomId) room = SG.pvpRooms[i];
+        }
+        if (!room) return;
+        var copy = {
+            id: room.id,
+            name: room.name,
+            host: room.host,
+            localHost: false,
+            players: room.players.slice(0, 2).map(function(p, idx) {
+                return { name: p.name, ready: !!p.ready, bot: true, lane: idx === 0 ? 0 : 2 };
+            }),
+            maxPlayers: 3,
+            locked: room.locked
+        };
+        copy.players.push({ name: SG.getLocalPvpName(), ready: false, local: true, lane: 1 });
+        SG.state.pvpRoom = copy;
+        SG.renderPvpLobby();
+    };
+
+    SG.invitePvpBot = function(index, accept) {
+        var room = SG.state.pvpRoom;
+        if (!room || !room.players[index]) return;
+        room.players[index].invited = true;
+        room.players[index].ready = !!accept;
+        room.players[index].declined = !accept;
+        SG.renderPvpLobby();
+    };
+
+    SG.togglePvpReady = function() {
+        var room = SG.state.pvpRoom;
+        if (!room) return;
+        for (var i = 0; i < room.players.length; i++) {
+            if (room.players[i].local) room.players[i].ready = !room.players[i].ready;
+        }
+        SG.renderPvpLobby();
+    };
+
+    SG.isPvpRoomReady = function(room) {
+        if (!room || room.players.length < 2) return false;
+        for (var i = 0; i < room.players.length; i++) {
+            if (!room.players[i].ready) return false;
+        }
+        return true;
+    };
+
+    SG.renderPvpLobby = function() {
+        var panel = document.getElementById('pvp-panel');
+        if (!panel) return;
+        var room = SG.state.pvpRoom;
+        var html = '<div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px;">' +
+            '<div><div style="font-size:28px;font-weight:900;color:#fff;letter-spacing:0;">PVP Rooms</div>' +
+            '<div style="color:rgba(231,224,255,.72);font-size:13px;margin-top:4px;">Phase 1 local prototype - server sync lands in Phase 2</div></div>' +
+            '<button id="pvp-close" style="height:38px;padding:0 16px;border-radius:6px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#fff;font-weight:800;cursor:pointer;">Close</button></div>';
+        if (!room) {
+            html += '<button id="pvp-create" style="width:100%;height:44px;margin-bottom:16px;border:0;border-radius:6px;background:linear-gradient(90deg,#ff2ccf,#8d35ff);color:#fff;font-weight:900;cursor:pointer;">Create Room</button>';
+            html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;">';
+            for (var r = 0; r < SG.pvpRooms.length; r++) {
+                var listed = SG.pvpRooms[r];
+                html += '<div style="border:1px solid rgba(141,53,255,.35);background:rgba(255,255,255,.05);border-radius:8px;padding:14px;">' +
+                    '<div style="font-size:17px;font-weight:900;color:#fff;">' + listed.name + '</div>' +
+                    '<div style="font-size:12px;color:rgba(231,224,255,.7);margin:5px 0 12px;">Host: ' + listed.host + ' | ' + listed.players.length + '/' + listed.maxPlayers + '</div>' +
+                    '<button class="pvp-join" data-room="' + listed.id + '" style="width:100%;height:36px;border-radius:6px;border:1px solid rgba(255,44,207,.55);background:rgba(255,44,207,.14);color:#fff;font-weight:800;cursor:pointer;">Join</button>' +
+                '</div>';
+            }
+            html += '</div>';
+        } else {
+            html += '<div style="display:grid;grid-template-columns:1.2fr .8fr;gap:16px;">';
+            html += '<section style="border:1px solid rgba(255,44,207,.35);border-radius:8px;padding:16px;background:rgba(255,255,255,.045);">' +
+                '<div style="font-size:20px;font-weight:900;color:#fff;margin-bottom:4px;">' + room.name + '</div>' +
+                '<div style="font-size:12px;color:rgba(231,224,255,.7);margin-bottom:14px;">Room ' + room.id + ' | Host: ' + room.host + ' | Max 3 players</div>';
+            for (var p = 0; p < room.players.length; p++) {
+                var player = room.players[p];
+                var status = player.declined ? 'DECLINED' : (player.ready ? 'READY' : (player.invited ? 'INVITED' : 'WAITING'));
+                html += '<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;margin:8px 0;padding:10px;border-radius:6px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);">' +
+                    '<div><strong>' + player.name + '</strong><span style="margin-left:8px;color:' + (player.ready ? '#68ffcc' : '#ffd36b') + ';">' + status + '</span><div style="font-size:11px;color:rgba(231,224,255,.58);">Lane ' + (player.lane + 1) + '</div></div>';
+                if (room.localHost && player.bot && !player.ready) {
+                    html += '<div><button class="pvp-invite-accept" data-index="' + p + '" style="height:30px;margin-right:6px;border:0;border-radius:5px;background:#25d6a2;color:#06120f;font-weight:900;cursor:pointer;">Accept</button><button class="pvp-invite-decline" data-index="' + p + '" style="height:30px;border:0;border-radius:5px;background:#36243d;color:#fff;font-weight:800;cursor:pointer;">Refuse</button></div>';
+                } else {
+                    html += '<div></div>';
+                }
+                html += '</div>';
+            }
+            var ready = SG.isPvpRoomReady(room);
+            html += '<div style="display:flex;gap:10px;margin-top:16px;">' +
+                '<button id="pvp-ready" style="flex:1;height:40px;border-radius:6px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.08);color:#fff;font-weight:900;cursor:pointer;">Ready</button>' +
+                '<button id="pvp-start" ' + (!room.localHost || !ready ? 'disabled' : '') + ' style="flex:1;height:40px;border-radius:6px;border:0;background:' + (room.localHost && ready ? 'linear-gradient(90deg,#ff2ccf,#8d35ff)' : 'rgba(255,255,255,.12)') + ';color:#fff;font-weight:900;cursor:' + (room.localHost && ready ? 'pointer' : 'not-allowed') + ';">Start Game</button>' +
+                '<button id="pvp-leave" style="height:40px;padding:0 14px;border-radius:6px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;font-weight:800;cursor:pointer;">Leave</button>' +
+            '</div></section>';
+            html += '<aside style="border:1px solid rgba(141,53,255,.32);border-radius:8px;padding:16px;background:rgba(0,0,0,.22);font-size:13px;color:rgba(241,237,255,.82);line-height:1.5;">' +
+                '<strong style="display:block;color:#fff;font-size:16px;margin-bottom:8px;">Phase 1 Rules</strong>' +
+                '<div>Scene: cyber glass track</div><div>Difficulty: medium obstacles</div><div>Countdown: 10 seconds</div><div>Pause and console disabled</div><div>Players: no body collision</div><div>Ghosts: local placeholders now, realtime sync next</div></aside>';
+            html += '</div>';
+        }
+        panel.innerHTML = html;
+        var close = document.getElementById('pvp-close');
+        if (close) close.onclick = function() { SG.pvpOverlay.style.display = 'none'; };
+        var create = document.getElementById('pvp-create');
+        if (create) create.onclick = SG.createLocalPvpRoom;
+        var leave = document.getElementById('pvp-leave');
+        if (leave) leave.onclick = function() { SG.state.pvpRoom = null; SG.renderPvpLobby(); };
+        var readyBtn = document.getElementById('pvp-ready');
+        if (readyBtn) readyBtn.onclick = SG.togglePvpReady;
+        var startBtn = document.getElementById('pvp-start');
+        if (startBtn) startBtn.onclick = SG.startPvpRace;
+        var joins = panel.querySelectorAll('.pvp-join');
+        for (var j = 0; j < joins.length; j++) joins[j].onclick = function() { SG.joinLocalPvpRoom(this.getAttribute('data-room')); };
+        var accepts = panel.querySelectorAll('.pvp-invite-accept');
+        for (var a = 0; a < accepts.length; a++) accepts[a].onclick = function() { SG.invitePvpBot(parseInt(this.getAttribute('data-index'), 10), true); };
+        var declines = panel.querySelectorAll('.pvp-invite-decline');
+        for (var d = 0; d < declines.length; d++) declines[d].onclick = function() { SG.invitePvpBot(parseInt(this.getAttribute('data-index'), 10), false); };
+    };
+
+    SG.showPvpLobby = function() {
+        if (!SG.pvpOverlay) return;
+        SG.renderPvpLobby();
+        SG.pvpOverlay.style.display = 'flex';
+    };
+
+    SG.createPvpGhostGroup = function(name, lane, color) {
+        var group = new THREE.Group();
+        group.userData.pvpGhost = true;
+        group.userData.name = name;
+        group.userData.lane = lane;
+        var mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.34, depthWrite: false });
+        var coreGeo = THREE.CapsuleGeometry ? new THREE.CapsuleGeometry(0.28, 0.9, 4, 8) : new THREE.CylinderGeometry(0.28, 0.28, 1.25, 12);
+        var core = new THREE.Mesh(coreGeo, mat);
+        core.position.y = 0.85;
+        group.add(core);
+        var head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12), mat);
+        head.position.y = 1.62;
+        group.add(head);
+        var halo = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.5, 24), new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false }));
+        halo.position.y = 0.05;
+        halo.rotation.x = Math.PI / 2;
+        group.add(halo);
+        group.position.set(SG.LANE_POSITIONS[lane], SG.PLAYER_Y, -2);
+        return group;
+    };
+
+    SG.spawnPvpGhosts = function(room) {
+        SG.state.pvpGhosts = [];
+        if (!room || !SG.scene) return;
+        var colors = [0xff2ccf, 0x8d35ff, 0x42f5ff];
+        for (var i = 0; i < room.players.length; i++) {
+            var p = room.players[i];
+            if (p.local) continue;
+            var ghost = {
+                name: p.name,
+                lane: typeof p.lane === 'number' ? p.lane : (i % 3),
+                distance: 0,
+                speedBias: 0.9 + i * 0.18,
+                group: SG.createPvpGhostGroup(p.name, typeof p.lane === 'number' ? p.lane : (i % 3), colors[i % colors.length])
+            };
+            SG.scene.add(ghost.group);
+            SG.state.pvpGhosts.push(ghost);
+        }
+    };
+
+    SG.updatePvpGhosts = function(delta) {
+        if (!SG.state.pvpMode) return;
+        var playerDistance = SG.state.score || 0;
+        for (var i = 0; i < SG.state.pvpGhosts.length; i++) {
+            var ghost = SG.state.pvpGhosts[i];
+            ghost.distance += (SG.getDistanceRate ? SG.getDistanceRate(SG.state.speed) : 8) * ghost.speedBias * delta;
+            var lead = Math.max(-6, Math.min(10, (ghost.distance - playerDistance) * 0.22));
+            if (ghost.group) {
+                ghost.group.position.x += (SG.LANE_POSITIONS[ghost.lane] - ghost.group.position.x) * 0.12;
+                ghost.group.position.z += (lead - ghost.group.position.z) * 0.12;
+                ghost.group.position.y = SG.PLAYER_Y + Math.sin(SG.state.gameTime * 9 + i) * 0.035;
+                ghost.group.rotation.y = Math.PI;
+                ghost.group.visible = true;
+            }
+        }
+        if (SG.pvpHudEl) {
+            var lines = ['PVP ROOM ' + (SG.state.pvpRoom ? SG.state.pvpRoom.id : 'LOCAL')];
+            lines.push('You ' + Math.floor(playerDistance) + 'm');
+            for (var g = 0; g < SG.state.pvpGhosts.length; g++) {
+                lines.push(SG.state.pvpGhosts[g].name + ' ' + Math.floor(SG.state.pvpGhosts[g].distance) + 'm');
+            }
+            SG.pvpHudEl.innerHTML = lines.join('<br>');
+        }
+    };
+
+    SG.buildPvpResult = function(playerDistance) {
+        var rows = [{ name: SG.getLocalPvpName(), distance: playerDistance || 0 }];
+        for (var i = 0; i < SG.state.pvpGhosts.length; i++) {
+            rows.push({ name: SG.state.pvpGhosts[i].name, distance: SG.state.pvpGhosts[i].distance || 0 });
+        }
+        rows.sort(function(a, b) { return b.distance - a.distance; });
+        return rows;
+    };
+
+    SG.exitPvpToLobby = function() {
+        SG.stopBgMusic();
+        SG.state.pvpMode = false;
+        SG.state.started = false;
+        SG.state.gameOver = false;
+        SG.state.countdownActive = false;
+        if (SG.pvpHudEl) SG.pvpHudEl.style.display = 'none';
+        if (SG.gameOverEl) {
+            SG.gameOverEl.classList.remove('visible');
+            var title = SG.gameOverEl.querySelector('h1');
+            if (title) title.textContent = 'GAME OVER';
+        }
+        SG.resetAllGameObjects();
+        SG.resetCyberMode();
+        SG.spawnInitialTrack();
+        SG.spawnBuildings();
+        SG.spawnObstacles();
+        if (SG.menuOverlay) SG.menuOverlay.style.display = 'none';
+        if (SG.pvpOverlay) {
+            SG.renderPvpLobby();
+            SG.pvpOverlay.style.display = 'flex';
+        }
+    };
+
+    SG.startPvpRace = function() {
+        var room = SG.state.pvpRoom;
+        if (!SG.isPvpRoomReady(room) || !room.localHost) return;
+        if (SG.cancelStartCountdown) SG.cancelStartCountdown();
+        SG.stopBgMusic();
+        SG.stopPoliceChase();
+        SG.resetAllGameObjects();
+        SG.state.pvpMode = true;
+        SG.state.pvpResult = null;
+        SG.state.difficulty = 1;
+        SG.state.score = 0;
+        SG.state.coins = 0;
+        SG.state.speed = SG.START_SPEED;
+        SG.state.gameOver = false;
+        SG.state.started = false;
+        SG.state.paused = false;
+        SG.state.currentLane = 1;
+        SG.state.targetLane = 1;
+        SG.state.laneLerp = 1;
+        SG.state.isJumping = false;
+        SG.state.isRolling = false;
+        SG.state.jumpVelocity = 0;
+        SG.state.playerHeight = SG.PLAYER_Y;
+        SG.state.targetPlayerHeight = SG.PLAYER_Y;
+        SG.state.gameTime = 0;
+        if (SG.player) {
+            SG.player.position.set(SG.LANE_POSITIONS[1], SG.PLAYER_Y, 0);
+            SG.player.rotation.set(0, Math.PI, 0);
+            SG.player.visible = true;
+        }
+        if (SG.menuOverlay) SG.menuOverlay.style.display = 'none';
+        if (SG.pvpOverlay) SG.pvpOverlay.style.display = 'none';
+        if (SG.pauseOverlay) SG.pauseOverlay.style.display = 'none';
+        if (SG.pauseBtnEl) SG.pauseBtnEl.style.display = 'none';
+        var con = document.getElementById('con-btn');
+        if (con) con.style.display = 'none';
+        if (SG.pvpHudEl) SG.pvpHudEl.style.display = 'block';
+        SG.applyPvpScene(true);
+        SG.spawnInitialTrack();
+        SG.spawnBuildings();
+        SG.spawnObstacles();
+        SG.spawnPvpGhosts(room);
+        SG.beginRunWithCountdown();
+    };
+
     // ===== Toggle functions (on SG for cross-module access) =====
     SG.countdownSequence = ['3', '2', '1', 'RUN!'];
     SG.COUNTDOWN_STEP_MS = SG.COUNTDOWN_STEP_MS || 720;
     SG.COUNTDOWN_RUN_MS = SG.COUNTDOWN_RUN_MS || 560;
+    SG.PVP_COUNTDOWN_STEP_MS = SG.PVP_COUNTDOWN_STEP_MS || 1000;
+    SG.PVP_COUNTDOWN_RUN_MS = SG.PVP_COUNTDOWN_RUN_MS || 650;
+
+    SG.getCountdownSequence = function() {
+        if (!SG.state.pvpMode) return SG.countdownSequence || ['3', '2', '1', 'RUN!'];
+        var seq = [];
+        for (var i = SG.state.pvpCountdownSeconds || 10; i >= 1; i--) seq.push(String(i));
+        seq.push('RUN!');
+        return seq;
+    };
 
     SG.cancelStartCountdown = function() {
         if (SG.countdownTimer) {
@@ -4353,7 +4699,7 @@
         SG.state.countdownActive = true;
         SG.state.started = false;
         SG.state.paused = false;
-        var seq = SG.countdownSequence || ['3', '2', '1', 'RUN!'];
+        var seq = SG.getCountdownSequence ? SG.getCountdownSequence() : (SG.countdownSequence || ['3', '2', '1', 'RUN!']);
         var index = 0;
         var overlay = SG.countdownOverlay || document.getElementById('start-countdown');
         function showNext() {
@@ -4371,7 +4717,9 @@
                 overlay.style.transform = 'translateY(-3vh) scale(1)';
             });
             index++;
-            var delay = seq[index - 1] === 'RUN!' ? SG.COUNTDOWN_RUN_MS : SG.COUNTDOWN_STEP_MS;
+            var delay = seq[index - 1] === 'RUN!'
+                ? (SG.state.pvpMode ? SG.PVP_COUNTDOWN_RUN_MS : SG.COUNTDOWN_RUN_MS)
+                : (SG.state.pvpMode ? SG.PVP_COUNTDOWN_STEP_MS : SG.COUNTDOWN_STEP_MS);
             SG.countdownTimer = setTimeout(function() {
                 if (index >= seq.length) {
                     overlay.style.opacity = '0';
@@ -4397,12 +4745,12 @@
         SG.runStartCountdown(function() {
             SG.state.started = true;
             SG.state.paused = false;
-            if (SG.pauseBtnEl) {
+            if (SG.pauseBtnEl && !SG.state.pvpMode) {
                 SG.pauseBtnEl.style.display = 'block';
                 SG.pauseBtnEl.textContent = '\u23F8';
             }
             var cb = document.getElementById('con-btn');
-            if (cb) cb.style.display = 'block';
+            if (cb) cb.style.display = SG.state.pvpMode ? 'none' : 'block';
             var f = document.getElementById('fpv-btn');
             if (f) f.style.display = 'block';
             if (SG.clock) SG.clock.getDelta();
@@ -4412,6 +4760,7 @@
 
     SG.startGameFromMenu = function() {
         if (SG.state.started || SG.state.countdownActive) return;
+        SG.state.pvpMode = false;
         SG.menuOverlay.style.display = 'none';
         var cb = document.getElementById('con-btn');
         if (cb) cb.style.display = 'block';
@@ -4435,6 +4784,7 @@
     };
 
     SG.toggleConsole = function() {
+        if (SG.state.pvpMode) return;
         var con = document.getElementById('dev-console');
         if (!con) return;
         if (con.style.display === 'flex') {
@@ -4454,6 +4804,7 @@
     };
 
     SG.togglePause = function() {
+        if (SG.state.pvpMode) return;
         if (!SG.state.started || SG.state.gameOver) return;
         SG.state.paused = !SG.state.paused;
         if (SG.state.paused) {
@@ -4698,6 +5049,10 @@
             }
 
             if (e.key === 'Escape') {
+                if (SG.state.pvpMode) {
+                    e.preventDefault();
+                    return;
+                }
                 var devCon = document.getElementById('dev-console');
                 if (devCon && devCon.style.display === 'flex') {
                     SG.toggleConsole();
@@ -4710,6 +5065,7 @@
             }
             if (e.key === '`' || e.key === '~') {
                 e.preventDefault();
+                if (SG.state.pvpMode) return;
                 SG.toggleConsole();
                 return;
             }
@@ -4727,6 +5083,10 @@
             }
 
             if ((e.key === 'm' || e.key === 'M') && SG.state.started) {
+                if (SG.state.pvpMode) {
+                    e.preventDefault();
+                    return;
+                }
                 if (!SG.state.gameOver) {
                     SG.togglePause();
                     setTimeout(SG.quitToMenu, 100);
@@ -5577,6 +5937,14 @@
         for (i = 0; i < SG.state.gunPickups.length; i++) { SG.scene.remove(SG.state.gunPickups[i]); SG.disposeObject(SG.state.gunPickups[i]); }
         for (i = 0; i < SG.state.buildings.length; i++) { SG.scene.remove(SG.state.buildings[i]); SG.disposeObject(SG.state.buildings[i]); }
         for (i = 0; i < SG.state.particles.length; i++) { SG.scene.remove(SG.state.particles[i]); SG.disposeObject(SG.state.particles[i]); }
+        if (SG.state.pvpGhosts) {
+            for (i = 0; i < SG.state.pvpGhosts.length; i++) {
+                if (SG.state.pvpGhosts[i].group) {
+                    SG.scene.remove(SG.state.pvpGhosts[i].group);
+                    SG.disposeObject(SG.state.pvpGhosts[i].group);
+                }
+            }
+        }
         SG.state.trackSegments = [];
         SG.state.obstacles = [];
         SG.state.coinObjects = [];
@@ -5584,7 +5952,26 @@
         SG.state.coinObstacleMap = new Map();
         SG.state.buildings = [];
         SG.state.particles = [];
+        SG.state.pvpGhosts = [];
         if (SG.clearActiveGun) SG.clearActiveGun();
+    };
+
+    SG.applyPvpScene = function(active) {
+        if (!SG.scene) return;
+        if (active) {
+            SG.state.cyberMode = true;
+            if (SG.applyCyberColors) SG.applyCyberColors(true);
+            if (SG.scene.background) SG.scene.background.setHex(0x02030a);
+            if (SG.scene.fog) {
+                SG.scene.fog.color.setHex(0x05000a);
+                SG.scene.fog.near = 24;
+                SG.scene.fog.far = 82;
+            }
+            if (SG.updateSkyDome) SG.updateSkyDome(0, 'cyber');
+            if (SG.updateLightRigForTheme) SG.updateLightRigForTheme(3);
+            return;
+        }
+        SG.resetCyberMode();
     };
 
     SG.resetCyberMode = function() {
@@ -5605,6 +5992,10 @@
     SG.quitToMenu = function() {
         if (SG.cancelStartCountdown) SG.cancelStartCountdown();
         SG.stopPoliceChase();
+        SG.state.pvpMode = false;
+        SG.state.pvpRoom = null;
+        SG.state.pvpResult = null;
+        if (SG.pvpHudEl) SG.pvpHudEl.style.display = 'none';
         SG.resetCyberMode();
         SG.resetAllGameObjects();
         SG.state.score = 0;
@@ -5678,6 +6069,10 @@
     // ===== RESTART GAME =====
     SG.restartGame = function() {
         if (SG.cancelStartCountdown) SG.cancelStartCountdown();
+        if (SG.state.pvpMode && SG.exitPvpToLobby) {
+            SG.exitPvpToLobby();
+            return;
+        }
         SG.stopPoliceChase();
         SG.resetCyberMode();
         SG.resetAllGameObjects();
@@ -5774,13 +6169,31 @@
         }
         SG.finalScoreEl.textContent = score;
         SG.finalCoinsEl.textContent = SG.state.coins;
+        var title = SG.gameOverEl ? SG.gameOverEl.querySelector('h1') : null;
+        if (title) title.textContent = 'GAME OVER';
+
+        if (SG.state.pvpMode) {
+            SG.state.pvpResult = SG.buildPvpResult ? SG.buildPvpResult(score) : null;
+            if (title) title.textContent = 'PVP FINISHED';
+            var oldRanks = document.getElementById('pvp-results');
+            if (oldRanks) oldRanks.remove();
+            if (SG.state.pvpResult && SG.gameOverEl) {
+                var ranks = document.createElement('div');
+                ranks.id = 'pvp-results';
+                ranks.style.cssText = 'margin:12px auto 16px;max-width:320px;text-align:left;font:700 13px/1.5 Arial,sans-serif;color:#f7eaff;background:rgba(14,4,24,.55);border:1px solid rgba(255,44,207,.3);border-radius:8px;padding:10px 12px;';
+                ranks.innerHTML = SG.state.pvpResult.map(function(row, idx) {
+                    return '<div>' + (idx + 1) + '. ' + row.name + ' - ' + Math.floor(row.distance) + 'm</div>';
+                }).join('');
+                SG.gameOverEl.insertBefore(ranks, SG.restartBtnEl || null);
+            }
+        }
 
         var multipliers = [1, 5, 10];
         var multiplier = multipliers[SG.state.difficulty] || 1;
         var earned = SG.state.coins * multiplier;
 
         // Homelander: don't save coins/credits or shop data
-        if (!SG.state.homelander) {
+        if (!SG.state.homelander && !SG.state.pvpMode) {
             SG.state.credits += earned;
             SG.state.totalCoins += SG.state.coins;
             try {
@@ -5789,7 +6202,7 @@
             } catch(e) {}
             SG.saveShopData();
         } else {
-            earned = 0; // Homelander: show 0 credits earned
+            earned = 0; // Homelander/PVP: show 0 credits earned
         }
 
         var oldCredits = document.getElementById('credits-earned');
@@ -5827,6 +6240,7 @@
 
         var delta = Math.min(SG.clock.getDelta(), 0.05);
         SG.state.gameTime += delta;
+        if (SG.updatePvpGhosts) SG.updatePvpGhosts(delta);
         if (SG.updatePlayerModelAnimation) SG.updatePlayerModelAnimation(delta);
 
         // Speed increase
@@ -6129,12 +6543,16 @@
         }
 
         // Theme change
-        SG.checkThemeChange();
+        if (!SG.state.pvpMode) SG.checkThemeChange();
 
         // Background color changes with speed
         var speedLvl = SG.getSpeedLevel(SG.state.speed);
         var speedRatio = Math.min(SG.state.speed / SG.MAX_SPEED, 1.0);
         var inCyber = speedLvl >= 48;
+        if (SG.state.pvpMode) {
+            SG.applyPvpScene(true);
+            return;
+        }
         if (inCyber !== SG.state.cyberMode) {
             SG.state.cyberMode = inCyber;
             SG.applyCyberColors(inCyber);

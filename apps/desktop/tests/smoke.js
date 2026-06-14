@@ -838,6 +838,54 @@ app.whenReady().then(async () => {
         const overlay = document.getElementById('characters-overlay')
         if (overlay) overlay.style.display = 'none'
       }
+      r.pvpPhase1 = null
+      if (window.__SG && window.__SG.showPvpLobby && window.__SG.createLocalPvpRoom && window.__SG.startPvpRace && window.__SG.exitPvpToLobby) {
+        window.__SG.showPvpLobby()
+        var pvpOverlay = document.getElementById('pvp-overlay')
+        var pvpButton = document.getElementById('pvp-btn-menu')
+        window.__SG.createLocalPvpRoom()
+        window.__SG.invitePvpBot(1, true)
+        window.__SG.invitePvpBot(2, true)
+        var roomReady = window.__SG.isPvpRoomReady(window.__SG.state.pvpRoom)
+        window.__SG.skipCountdownForTests = true
+        window.__SG.startPvpRace()
+        var firstPvpTrack = window.__SG.state.trackSegments[0]
+        var neonEdges = 0
+        if (firstPvpTrack) {
+          firstPvpTrack.traverse(function(node) {
+            if (node && node.userData && (node.userData.pvpNeonEdge || node.userData.pvpNeonGlow)) neonEdges++
+          })
+        }
+        var countdownSeq = window.__SG.getCountdownSequence ? window.__SG.getCountdownSequence().join(',') : ''
+        var pausedBefore = window.__SG.state.paused
+        window.__SG.togglePause()
+        var pauseDisabled = window.__SG.state.paused === pausedBefore
+        window.__SG.toggleConsole()
+        var devConsole = document.getElementById('dev-console')
+        var consoleDisabled = !devConsole || devConsole.style.display !== 'flex'
+        window.__SG.gameOver()
+        var result = window.__SG.state.pvpResult || []
+        r.pvpPhase1 = {
+          menuButton: !!pvpButton,
+          overlay: !!pvpOverlay,
+          localHost: !!(window.__SG.state.pvpRoom && window.__SG.state.pvpRoom.localHost),
+          roomReady: roomReady,
+          countdownSeq: countdownSeq,
+          mode: !!window.__SG.state.pvpMode,
+          difficulty: window.__SG.state.difficulty,
+          started: !!window.__SG.state.started,
+          ghosts: window.__SG.state.pvpGhosts ? window.__SG.state.pvpGhosts.length : 0,
+          track: !!(firstPvpTrack && firstPvpTrack.userData && firstPvpTrack.userData.pvpTrack),
+          neonEdges: neonEdges,
+          pvpHud: !!(window.__SG.pvpHudEl && window.__SG.pvpHudEl.style.display === 'block'),
+          pauseDisabled: pauseDisabled,
+          consoleDisabled: consoleDisabled,
+          resultCount: result.length
+        }
+        window.__SG.skipCountdownForTests = false
+        window.__SG.exitPvpToLobby()
+        if (pvpOverlay) pvpOverlay.style.display = 'none'
+      }
       if (window.__SG && window.__SG.restartGame && window.__SG.player) {
         window.__SG.skipCountdownForTests = true
         window.__SG.restartGame()
@@ -927,6 +975,7 @@ app.whenReady().then(async () => {
   check("14e-10. third-person speed HUD shows instant vector speed", !!state.speedHud && !!state.speedHudVector, state.speedHudText || state.speedHudBackground || 'missing')
   check("14e-11. first-person pitch setting defaults lower and saves", state.firstPersonPitchDefault === 1 && state.firstPersonPitchSetting === 1 && state.firstPersonPitchButtons === 2 && !!state.firstPersonPitchSaved, `default=${state.firstPersonPitchDefault}, slider=${state.firstPersonPitchSetting}, buttons=${state.firstPersonPitchButtons}`)
   check("14e-12. start countdown overlays 3-2-1-RUN before movement", !!state.startCountdown && !!state.startCountdown.overlay && state.startCountdown.sequence === '3,2,1,RUN!' && !!state.startCountdown.done && !state.startCountdown.active && state.startCountdown.display === 'none' && state.startCountdown.text === 'RUN!', state.startCountdown ? JSON.stringify(state.startCountdown) : 'missing')
+  check("14e-13. PVP Phase 1 local rooms launch cyber ghost race", !!state.pvpPhase1 && !!state.pvpPhase1.menuButton && !!state.pvpPhase1.overlay && !!state.pvpPhase1.localHost && !!state.pvpPhase1.roomReady && state.pvpPhase1.countdownSeq === '10,9,8,7,6,5,4,3,2,1,RUN!' && !!state.pvpPhase1.mode && state.pvpPhase1.difficulty === 1 && !!state.pvpPhase1.started && state.pvpPhase1.ghosts === 2 && !!state.pvpPhase1.track && state.pvpPhase1.neonEdges >= 4 && !!state.pvpPhase1.pvpHud && !!state.pvpPhase1.pauseDisabled && !!state.pvpPhase1.consoleDisabled && state.pvpPhase1.resultCount === 3, state.pvpPhase1 ? JSON.stringify(state.pvpPhase1) : 'missing')
   check("14f. restart keeps player facing forward", Math.abs(state.restartRotationY - Math.PI) < 0.001, String(state.restartRotationY))
   check("14g. console command runner exists", !!state.executeConsoleCommand)
   check("14h. console includes Homelander easter egg", state.consoleCommands && state.consoleCommands.includes('homelander'), state.consoleCommands ? state.consoleCommands.join(', ') : 'none')

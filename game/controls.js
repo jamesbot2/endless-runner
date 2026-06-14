@@ -207,6 +207,10 @@
             }
 
             if (e.key === 'Escape') {
+                if (SG.state.pvpMode) {
+                    e.preventDefault();
+                    return;
+                }
                 var devCon = document.getElementById('dev-console');
                 if (devCon && devCon.style.display === 'flex') {
                     SG.toggleConsole();
@@ -219,6 +223,7 @@
             }
             if (e.key === '`' || e.key === '~') {
                 e.preventDefault();
+                if (SG.state.pvpMode) return;
                 SG.toggleConsole();
                 return;
             }
@@ -236,6 +241,10 @@
             }
 
             if ((e.key === 'm' || e.key === 'M') && SG.state.started) {
+                if (SG.state.pvpMode) {
+                    e.preventDefault();
+                    return;
+                }
                 if (!SG.state.gameOver) {
                     SG.togglePause();
                     setTimeout(SG.quitToMenu, 100);

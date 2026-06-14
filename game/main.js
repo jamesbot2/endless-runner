@@ -69,6 +69,14 @@
         for (i = 0; i < SG.state.gunPickups.length; i++) { SG.scene.remove(SG.state.gunPickups[i]); SG.disposeObject(SG.state.gunPickups[i]); }
         for (i = 0; i < SG.state.buildings.length; i++) { SG.scene.remove(SG.state.buildings[i]); SG.disposeObject(SG.state.buildings[i]); }
         for (i = 0; i < SG.state.particles.length; i++) { SG.scene.remove(SG.state.particles[i]); SG.disposeObject(SG.state.particles[i]); }
+        if (SG.state.pvpGhosts) {
+            for (i = 0; i < SG.state.pvpGhosts.length; i++) {
+                if (SG.state.pvpGhosts[i].group) {
+                    SG.scene.remove(SG.state.pvpGhosts[i].group);
+                    SG.disposeObject(SG.state.pvpGhosts[i].group);
+                }
+            }
+        }
         SG.state.trackSegments = [];
         SG.state.obstacles = [];
         SG.state.coinObjects = [];
@@ -76,7 +84,26 @@
         SG.state.coinObstacleMap = new Map();
         SG.state.buildings = [];
         SG.state.particles = [];
+        SG.state.pvpGhosts = [];
         if (SG.clearActiveGun) SG.clearActiveGun();
+    };
+
+    SG.applyPvpScene = function(active) {
+        if (!SG.scene) return;
+        if (active) {
+            SG.state.cyberMode = true;
+            if (SG.applyCyberColors) SG.applyCyberColors(true);
+            if (SG.scene.background) SG.scene.background.setHex(0x02030a);
+            if (SG.scene.fog) {
+                SG.scene.fog.color.setHex(0x05000a);
+                SG.scene.fog.near = 24;
+                SG.scene.fog.far = 82;
+            }
+            if (SG.updateSkyDome) SG.updateSkyDome(0, 'cyber');
+            if (SG.updateLightRigForTheme) SG.updateLightRigForTheme(3);
+            return;
+        }
+        SG.resetCyberMode();
     };
 
     SG.resetCyberMode = function() {
@@ -97,6 +124,10 @@
     SG.quitToMenu = function() {
         if (SG.cancelStartCountdown) SG.cancelStartCountdown();
         SG.stopPoliceChase();
+        SG.state.pvpMode = false;
+        SG.state.pvpRoom = null;
+        SG.state.pvpResult = null;
+        if (SG.pvpHudEl) SG.pvpHudEl.style.display = 'none';
         SG.resetCyberMode();
         SG.resetAllGameObjects();
         SG.state.score = 0;
@@ -170,6 +201,10 @@
     // ===== RESTART GAME =====
     SG.restartGame = function() {
         if (SG.cancelStartCountdown) SG.cancelStartCountdown();
+        if (SG.state.pvpMode && SG.exitPvpToLobby) {
+            SG.exitPvpToLobby();
+            return;
+        }
         SG.stopPoliceChase();
         SG.resetCyberMode();
         SG.resetAllGameObjects();
@@ -266,13 +301,31 @@
         }
         SG.finalScoreEl.textContent = score;
         SG.finalCoinsEl.textContent = SG.state.coins;
+        var title = SG.gameOverEl ? SG.gameOverEl.querySelector('h1') : null;
+        if (title) title.textContent = 'GAME OVER';
+
+        if (SG.state.pvpMode) {
+            SG.state.pvpResult = SG.buildPvpResult ? SG.buildPvpResult(score) : null;
+            if (title) title.textContent = 'PVP FINISHED';
+            var oldRanks = document.getElementById('pvp-results');
+            if (oldRanks) oldRanks.remove();
+            if (SG.state.pvpResult && SG.gameOverEl) {
+                var ranks = document.createElement('div');
+                ranks.id = 'pvp-results';
+                ranks.style.cssText = 'margin:12px auto 16px;max-width:320px;text-align:left;font:700 13px/1.5 Arial,sans-serif;color:#f7eaff;background:rgba(14,4,24,.55);border:1px solid rgba(255,44,207,.3);border-radius:8px;padding:10px 12px;';
+                ranks.innerHTML = SG.state.pvpResult.map(function(row, idx) {
+                    return '<div>' + (idx + 1) + '. ' + row.name + ' - ' + Math.floor(row.distance) + 'm</div>';
+                }).join('');
+                SG.gameOverEl.insertBefore(ranks, SG.restartBtnEl || null);
+            }
+        }
 
         var multipliers = [1, 5, 10];
         var multiplier = multipliers[SG.state.difficulty] || 1;
         var earned = SG.state.coins * multiplier;
 
         // Homelander: don't save coins/credits or shop data
-        if (!SG.state.homelander) {
+        if (!SG.state.homelander && !SG.state.pvpMode) {
             SG.state.credits += earned;
             SG.state.totalCoins += SG.state.coins;
             try {
@@ -281,7 +334,7 @@
             } catch(e) {}
             SG.saveShopData();
         } else {
-            earned = 0; // Homelander: show 0 credits earned
+            earned = 0; // Homelander/PVP: show 0 credits earned
         }
 
         var oldCredits = document.getElementById('credits-earned');
@@ -319,6 +372,7 @@
 
         var delta = Math.min(SG.clock.getDelta(), 0.05);
         SG.state.gameTime += delta;
+        if (SG.updatePvpGhosts) SG.updatePvpGhosts(delta);
         if (SG.updatePlayerModelAnimation) SG.updatePlayerModelAnimation(delta);
 
         // Speed increase
@@ -621,12 +675,16 @@
         }
 
         // Theme change
-        SG.checkThemeChange();
+        if (!SG.state.pvpMode) SG.checkThemeChange();
 
         // Background color changes with speed
         var speedLvl = SG.getSpeedLevel(SG.state.speed);
         var speedRatio = Math.min(SG.state.speed / SG.MAX_SPEED, 1.0);
         var inCyber = speedLvl >= 48;
+        if (SG.state.pvpMode) {
+            SG.applyPvpScene(true);
+            return;
+        }
         if (inCyber !== SG.state.cyberMode) {
             SG.state.cyberMode = inCyber;
             SG.applyCyberColors(inCyber);
