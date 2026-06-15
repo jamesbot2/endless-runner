@@ -1,0 +1,130 @@
+# Endless Runner — Build & Release Pipeline
+#
+# Runs on push/PR to main, and on version tag push (v*).
+# - Builds game bundle (game.js)
+# - Compiles Electron app (TypeScript + Vite)
+# - Runs headless smoke tests
+# - Packages win-unpacked
+# - On tag: creates GitHub Release with zip
+
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: |
+            package-lock.json
+            apps/desktop/package-lock.json
+
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Install desktop dependencies
+        working-directory: apps/desktop
+        run: npm install
+
+      - name: Build game bundle
+        run: npm run build:game
+
+      - name: Build Electron app (TypeScript + Vite)
+        run: npm run desktop:build
+
+      - name: Install xvfb (headless display)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb
+
+      - name: Smoke test (headless Electron)
+        run: npm run desktop:test:smoke:headless
+
+      - name: Start account server
+        run: |
+          node server/account-server.js &
+          sleep 3
+          echo "Account server ready"
+
+      - name: Start PVP server
+        run: |
+          node server/pvp-server.js &
+          sleep 2
+          echo "PVP server ready"
+
+      - name: PVP smoke test
+        run: npm run pvp:smoke
+
+      - name: Package app (win-unpacked)
+        run: npm run desktop:pack
+
+      - name: Zip win-unpacked
+        run: |
+          cd apps/desktop/release
+          VERSION="${GITHUB_REF_NAME#v}"
+          [ -z "$VERSION" ] && VERSION="dev-$(date +%Y%m%d-%H%M%S)"
+          zip -r "Endless-Runner-${VERSION}-win.zip" win-unpacked/
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: endless-runner-win-${{ github.sha }}
+          path: apps/desktop/release/Endless-Runner-*.zip
+          retention-days: 90
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: endless-runner-win-${{ github.sha }}
+          path: release-artifact
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Endless Runner ${{ github.ref_name }}
+          body: |
+            ## 🏃 Endless Runner ${{ github.ref_name }}
+
+            ### Changes in this release
+
+            _Auto-generated from CI. See the [commit history](https://github.com/${{ github.repository }}/commits/${{ github.ref_name }}) for details._
+
+            ### 📥 Download
+
+            - **Windows (portable)**: `Endless-Runner-${{ github.ref_name }}-win.zip`
+            - Extract and run `Endless Runner.exe`
+
+            ### 🖥 Prerequisites
+
+            - Windows 10+ 64-bit
+            - WebGL-capable GPU
+            - Internet connection for online features
+
+            For more details see [docs/release.md](https://github.com/${{ github.repository }}/blob/main/docs/release.md).
+          files: release-artifact/Endless-Runner-*.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

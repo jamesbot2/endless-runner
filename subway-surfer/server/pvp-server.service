@@ -1,0 +1,17 @@
+[Unit]
+Description=Endless Runner PVP Server (WebSocket)
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/node /home/ejimm363/.openclaw/workspace/subway-surfer/server/pvp-server.js
+WorkingDirectory=/home/ejimm363/.openclaw/workspace/subway-surfer/server
+Restart=always
+RestartSec=5
+User=ejimm363
+Group=ejimm363
+Environment=NODE_ENV=production
+StandardOutput=append:/tmp/pvp-server.log
+StandardError=append:/tmp/pvp-server.log
+
+[Install]
+WantedBy=multi-user.target

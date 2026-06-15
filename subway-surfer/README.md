@@ -3,6 +3,9 @@
 > Three.js + Electron desktop endless runner with real-time PVP, character system, abilities, cloud saves, and admin backend.
 > Made by Neo 🤖 for James
 
+[![Build & Release](https://github.com/jamesbot2/subway-surfer/actions/workflows/build.yml/badge.svg)](https://github.com/jamesbot2/subway-surfer/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/jamesbot2/subway-surfer)](https://github.com/jamesbot2/subway-surfer/releases)
+
 ---
 
 ## 🖥 Architecture
@@ -70,14 +73,42 @@ npm run desktop:dev
 ## 📦 Packaging
 
 ```bash
-npm run desktop:build    # Build TypeScript + Vite renderer
-npm run desktop:pack     # Package Electron app (win32 dir)
-npm run desktop:dist     # Full installer build (NSIS)
+npm run build:game              # Rebuild game.js from game/ modules
+npm run desktop:build           # Build TypeScript + Vite renderer
+npm run desktop:pack            # Package → win-unpacked (portable)
+npm run desktop:dist            # Full NSIS installer (requires wine on Linux)
 ```
 
-Output: `apps/desktop/release/Endless Runner Setup.exe`
+| Output | Location |
+|--------|----------|
+| Portable directory | `apps/desktop/release/win-unpacked/` |
+| NSIS installer | `apps/desktop/release/Endless Runner Setup.exe` |
 
-> **Note**: Release builds are uploaded to GitHub Releases, not committed to git.
+> **Important**: Release binaries are **never committed to git**. Use GitHub Releases to distribute.
+
+### Quick Release Zip
+
+```bash
+npm run build:game
+npm run desktop:build
+npm run desktop:pack
+cd apps/desktop/release
+zip -r Endless-Runner-v1.0.0-win.zip win-unpacked/
+```
+
+Then upload the zip to [GitHub Releases](https://github.com/jamesbot2/subway-surfer/releases).
+
+---
+
+## 🚀 Releases
+
+Prebuilt binaries are available from **[GitHub Releases](https://github.com/jamesbot2/subway-surfer/releases)**.
+
+- **Windows**: `Endless-Runner-vX.X.X-win.zip` (portable, no install needed)
+- **Windows (setup)**: NSIS installer (available via `npm run desktop:dist`)
+- **Linux/macOS**: Build from source via `npm run desktop:dist` (AppImage / DMG)
+
+See [docs/release.md](docs/release.md) for detailed build, packaging, and server deployment instructions.
 
 ---
 
@@ -92,6 +123,10 @@ npm run pvp:smoke                # PVP WebSocket integration test
 ---
 
 ## ☁️ Server Deployment
+
+Full server setup instructions are in [docs/release.md](docs/release.md#-server-configuration--deployment).
+
+Quick reference:
 
 ### Account Server (port 3000)
 
@@ -209,18 +244,6 @@ endless-runner/
 ├── package.json              # Root scripts + dependencies
 └── README.md
 ```
-
----
-
-## 🚀 Releases
-
-Prebuilt binaries are available from [GitHub Releases](https://github.com/jamesbot2/subway-surfer/releases).
-
-- **Windows**: `Endless Runner Setup.exe` (NSIS installer, self-contained)
-- **Linux**: AppImage
-- **macOS**: DMG
-
-No browser or web server required — just download, install, and run.
 
 ---
 
