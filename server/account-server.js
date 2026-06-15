@@ -113,6 +113,7 @@ function normalizeEmailInput(email) {
     return String(email || '')
         .trim()
         .replace(/\uFF20/g, '@')
+        .replace(/[\u3002\uFF0E\uFF61]/g, '.')
         .replace(/[。．｡]/g, '.')
         .toLowerCase();
 }
@@ -498,10 +499,11 @@ async function handleRequest(req, res) {
     // GET /api/admin/user?email=xxx
     if (pathname === '/api/admin/user' && method === 'GET') {
         if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
-        const email = parsedUrl.searchParams.get('email');
+        const email = normalizeEmailInput(parsedUrl.searchParams.get('email'));
         if (!email) { sendJSON(res, 400, { error: 'Email required' }); return; }
         const users = getUsers();
-        const u = users[email];
+        const userKey = findUserKeyByEmail(users, email);
+        const u = userKey ? users[userKey] : null;
         if (!u) { sendJSON(res, 404, { error: 'User not found' }); return; }
         const g = normalizeGameData(u.gameData);
         sendJSON(res, 200, { email: u.email, username: u.username, verified: !!u.verified, banned: !!u.banned, createdAt: u.createdAt || 0, lastLoginAt: u.lastLoginAt || 0, gameData: g, hasPvpData: !!u.pvpData });
@@ -512,10 +514,11 @@ async function handleRequest(req, res) {
     if (pathname === '/api/admin/user/update' && method === 'POST') {
         if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
         const body = await parseBody(req);
-        const { email } = body;
+        const email = normalizeEmailInput(body.email);
         if (!email) { sendJSON(res, 400, { error: 'Email required' }); return; }
         const users = getUsers();
-        const u = users[email];
+        const userKey = findUserKeyByEmail(users, email);
+        const u = userKey ? users[userKey] : null;
         if (!u) { sendJSON(res, 404, { error: 'User not found' }); return; }
         const before = JSON.parse(JSON.stringify(u));
         const existing = normalizeGameData(u.gameData);
@@ -567,10 +570,12 @@ async function handleRequest(req, res) {
     if (pathname === '/api/admin/user/action' && method === 'POST') {
         if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
         const body = await parseBody(req);
-        const { email, action } = body;
+        const email = normalizeEmailInput(body.email);
+        const { action } = body;
         if (!email || !action) { sendJSON(res, 400, { error: 'Email and action required' }); return; }
         const users = getUsers();
-        const u = users[email];
+        const userKey = findUserKeyByEmail(users, email);
+        const u = userKey ? users[userKey] : null;
         if (!u && action !== 'delete') { sendJSON(res, 404, { error: 'User not found' }); return; }
         const before = u ? JSON.parse(JSON.stringify(u)) : null;
         switch (action) {
@@ -624,7 +629,8 @@ async function handleRequest(req, res) {
                 break;
             case 'delete':
                 if (!body.confirm) { sendJSON(res, 400, { error: 'confirm: true required to delete' }); return; }
-                delete users[email];
+                if (!userKey) { sendJSON(res, 404, { error: 'User not found' }); return; }
+                delete users[userKey];
                 saveUsers(users);
                 console.log('[ADMIN] Deleted user: ' + email);
                 addAuditLog('admin', 'delete', email, before, null);
@@ -633,9 +639,9 @@ async function handleRequest(req, res) {
             default:
                 sendJSON(res, 400, { error: 'Unknown action: ' + action }); return;
         }
-        const after = JSON.parse(JSON.stringify(users[email]));
+        const after = JSON.parse(JSON.stringify(users[userKey]));
         addAuditLog('admin', action, email, before, after);
-        const g = normalizeGameData(users[email].gameData);
+        const g = normalizeGameData(users[userKey].gameData);
         sendJSON(res, 200, { success: true, email: u.email, username: u.username, verified: !!u.verified, banned: !!u.banned, gameData: g });
         return;
     }
@@ -748,7 +754,7 @@ async function handleRequest(req, res) {
         }
         delete captchaStore[captchaId];
 
-        if (users[email]) { sendJSON(res, 409, { error: 'Email already registered' }); return; }
+        if (findUserKeyByEmail(users, email)) { sendJSON(res, 409, { error: 'Email already registered' }); return; }
 
         // Generate verification code
         const code = generateCode();
@@ -819,8 +825,9 @@ async function handleRequest(req, res) {
         // Mark user as verified
         delete verifyCodes[email];
         const users = getUsers();
-        if (users[email]) {
-            users[email].verified = true;
+        const userKey = findUserKeyByEmail(users, email);
+        if (userKey) {
+            users[userKey].verified = true;
             saveUsers(users);
         }
 
@@ -832,10 +839,12 @@ async function handleRequest(req, res) {
     // ---- LOGIN ----
     if (pathname === '/api/login' && method === 'POST') {
         const body = await parseBody(req);
-        const { email, password } = body;
+        const email = normalizeEmailInput(body.email);
+        const { password } = body;
 
         const users = getUsers();
-        const user = users[email];
+        const userKey = findUserKeyByEmail(users, email);
+        const user = userKey ? users[userKey] : null;
         if (!user || !verifyPassword(password, user.passwordHash, user.passwordSalt)) {
             sendJSON(res, 401, { error: 'Invalid email or password' });
             return;
@@ -863,12 +872,13 @@ async function handleRequest(req, res) {
 
         const body = await parseBody(req);
         const users = getUsers();
-        if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
+        const userKey = findUserKeyByEmail(users, email);
+        if (!userKey) { sendJSON(res, 404, { error: 'User not found' }); return; }
 
         var gd = body.gameData || {};
-        var existing = normalizeGameData(users[email].gameData);
+        var existing = normalizeGameData(users[userKey].gameData);
         gd = normalizeGameData(gd);
-        users[email].gameData = {
+        users[userKey].gameData = {
             coins: gd.coins ?? existing.coins,
             credits: gd.credits ?? existing.credits,
             totalCoins: Math.max(gd.totalCoins ?? 0, gd.coins ?? 0, existing.totalCoins ?? 0),
@@ -887,7 +897,7 @@ async function handleRequest(req, res) {
             selectedCharacter: gd.selectedCharacter || existing.selectedCharacter || 'runner',
         };
         saveUsers(users);
-        sendJSON(res, 200, { message: 'Saved', gameData: normalizeGameData(users[email].gameData) });
+        sendJSON(res, 200, { message: 'Saved', gameData: normalizeGameData(users[userKey].gameData) });
         return;
     }
 
@@ -896,8 +906,9 @@ async function handleRequest(req, res) {
         const email = normalizeEmailInput(getAuthUser(req.headers) || '');
         if (!email) { sendJSON(res, 401, { error: 'Not authenticated' }); return; }
         const users = getUsers();
-        if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
-        sendJSON(res, 200, { gameData: normalizeGameData(users[email].gameData) });
+        const userKey = findUserKeyByEmail(users, email);
+        if (!userKey) { sendJSON(res, 404, { error: 'User not found' }); return; }
+        sendJSON(res, 200, { gameData: normalizeGameData(users[userKey].gameData) });
         return;
     }
 

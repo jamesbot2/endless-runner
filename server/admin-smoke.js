@@ -300,6 +300,18 @@ async function main() {
     check('Audit no sessionExpires leak', auditBodyStr.indexOf('sessionExpires') < 0, '');
   }
 
+  // 37. Numeric QQ email addresses are valid real-world addresses.
+  var c4 = await getCaptcha();
+  var qqEmail = String(Date.now()).slice(-10) + '@qq.com';
+  var qqUser = await request('POST', '/api/register', {
+    email: qqEmail,
+    password: 'test123',
+    username: 'QQTester' + String(Date.now()).slice(-6),
+    captchaId: c4 ? c4.captchaId : 'x',
+    captchaAnswer: c4 ? c4.answer : 'x'
+  });
+  check('Numeric qq.com email registers', qqUser.status === 201 || qqUser.status === 200, 'status=' + qqUser.status + ' body=' + JSON.stringify(qqUser.body));
+
   // Print summary
   console.log('\n=== Results: ' + passed + ' passed, ' + failed + ' failed ===');
   process.exit(failed > 0 ? 1 : 0);
