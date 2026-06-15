@@ -346,7 +346,7 @@ function adminHTML() {
   '<div class="btn-row"><button class="btn btn-green" id="saveEditBtn">Save</button><button class="btn btn-red" id="cancelEditBtn">Cancel</button></div>' +
   '</div></div>' +
   '<script>' +
-  'var currentEditEmail=null;function esc(s){return String(s??"").replace(/[&<>"\']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","\'":"&#39;"}[c]||c})}' +
+  'var currentEditEmail=null;function esc(s){return String(s??"").replace(/[&<>"\']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","\'":"&#39;"}[c]||c})}function escAttr(s){return esc(s).replace(/`/g,"&#96;")}' +
   'function msg(t,c){var m=document.getElementById("msg");m.textContent=t;m.className=c||"info";m.style.display="block";setTimeout(function(){m.style.display="none"},3000)}' +
   'function api(url,opts){opts=opts||{};opts.credentials="same-origin";return fetch(url,opts).then(function(r){return r.json()})}' +
   'document.querySelectorAll(".tab").forEach(function(t){t.addEventListener("click",function(){document.querySelectorAll(".tab").forEach(function(x){x.classList.remove("active")});this.classList.add("active");document.querySelectorAll(".section").forEach(function(s){s.classList.remove("active")});document.getElementById("tab-"+this.getAttribute("data-tab")).classList.add("active")})});' +
@@ -384,12 +384,12 @@ function adminHTML() {
   '"<td>"+(u.gameData.maxDistance||0)+"</td>"+' +
   '"<td>"+(u.gameData.runCount||0)+"</td>"+' +
   '"<td>"+esc(abils)+"</td>"+' +  '"<td>"+esc(u.gameData.selectedCharacter||"runner")+"</td>"+' +  '"<td><div class=\"actions\">"+' +
-  '"<button class=\"btn btn-sm btn-blue\" data-action=\"edit\" data-email=\""+email+"\">Edit</button>"+' +
-  '"<button class=\"btn btn-sm btn-green\" data-action=\"verify\" data-email=\""+email+"\">Verify</button>"+' +
-  '"<button class=\"btn btn-sm btn-red\" data-action=\"ban\" data-email=\""+email+"\">Ban</button>"+' +
-  '"<button class=\"btn btn-sm btn-orange\" data-action=\"reset-pw\" data-email=\""+email+"\">Reset PW</button>"+' +
-  '"<button class=\"btn btn-sm btn-purple\" data-action=\"grant-abil\" data-email=\""+email+"\">Grant Abil</button>"+' +
-  '"<button class=\"btn btn-sm btn-red\" data-action=\"delete\" data-email=\""+email+"\">Delete</button>"+' +
+  '"<button class=\"btn btn-sm btn-blue\" data-action=\"edit\" data-email=\""+escAttr(email)+"\">Edit</button>"+' +
+  '"<button class=\"btn btn-sm btn-green\" data-action=\"verify\" data-email=\""+escAttr(email)+"\">Verify</button>"+' +
+  '"<button class=\"btn btn-sm btn-red\" data-action=\"ban\" data-email=\""+escAttr(email)+"\">Ban</button>"+' +
+  '"<button class=\"btn btn-sm btn-orange\" data-action=\"reset-pw\" data-email=\""+escAttr(email)+"\">Reset PW</button>"+' +
+  '"<button class=\"btn btn-sm btn-purple\" data-action=\"grant-abil\" data-email=\""+escAttr(email)+"\">Grant Abil</button>"+' +
+  '"<button class=\"btn btn-sm btn-red\" data-action=\"delete\" data-email=\""+escAttr(email)+"\">Delete</button>"+' +
   '"</div></td></tr>"' +
   '});tbody.innerHTML=h})};' +
   'document.getElementById("searchInput").addEventListener("input",loadUsers);' +
@@ -401,10 +401,10 @@ function adminHTML() {
   'var btn=e.target.closest("button[data-action]");if(!btn)return;' +
   'var action=btn.getAttribute("data-action");var email=btn.getAttribute("data-email");' +
   'if(action==="edit"){editUser(email)}' +
-  'else if(action==="verify"){userAction(email,"verify")}' +
-  'else if(action==="ban"){if(!confirm("Ban "+email+"?"))return;userAction(email,"ban")}' +
+  'else if(action==="verify"){userAction(email,"verify",false)}' +
+  'else if(action==="ban"){if(!confirm("Ban "+email+"?"))return;userAction(email,"ban",true)}' +
   'else if(action==="reset-pw"){if(!confirm("Reset password for "+email+"?"))return;resetPW(email)}' +
-  'else if(action==="grant-abil"){if(!confirm("Grant all abilities to "+email+"?"))return;userAction(email,"grant-all-abilities")}' +
+  'else if(action==="grant-abil"){if(!confirm("Grant all abilities to "+email+"?"))return;userAction(email,"grant-all-abilities",true)}' +
   'else if(action==="delete"){if(!confirm("Delete "+email+"?"))return;delUser(email)}' +
   '})' +
   'function editUser(email){' +
@@ -438,21 +438,22 @@ function adminHTML() {
   'ownedCharacters:document.getElementById("editOwnedCharacters").value.split(",").map(function(x){return x.trim()}).filter(Boolean),' +
   'selectedCharacter:document.getElementById("editSelectedCharacter").value.trim()||"runner"' +
   '}};' +
-  'api("/api/admin/user/update",{method:"POST",headers:{"Content-Type":"application/json",credentials:"same-origin"},body:JSON.stringify(body)}).then(function(r){' +
+  'api("/api/admin/user/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){' +
   'if(r.error){msg(esc(r.error),"err")}else{msg("Saved "+currentEditEmail,"ok");document.getElementById("editModal").style.display="none";loadUsers()}})' +
   '});' +
-  'function userAction(email,action){' +
-  'api("/api/admin/user/action",{method:"POST",headers:{"Content-Type":"application/json",credentials:"same-origin"},body:JSON.stringify({email:email,action:action})}).then(function(r){' +
+  'function userAction(email,action,confirmed){' +
+  'var body={email:email,action:action};if(confirmed)body.confirm=true;' +
+  'api("/api/admin/user/action",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){' +
   'if(r.error){msg(esc(r.error),"err")}else{msg(action+" done for "+email,"ok");loadUsers()}})' +
   '};' +
   'function resetPW(email){' +
   'var p=prompt("New password for "+email);if(!p||p.length<4)return;' +
-  'api("/api/admin/user/action",{method:"POST",headers:{"Content-Type":"application/json",credentials:"same-origin"},body:JSON.stringify({email:email,action:"reset-password",newPassword:p})}).then(function(r){' +
+  'api("/api/admin/user/action",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email,action:"reset-password",confirm:true,newPassword:p})}).then(function(r){' +
   'if(r.error){msg(esc(r.error),"err")}else{msg("PW reset for "+email,"ok")}})' +
   '};' +
   'function delUser(email){' +
   'if(!confirm("Delete "+email+"?"))return;' +
-  'api("/api/admin/user/action",{method:"POST",headers:{"Content-Type":"application/json",credentials:"same-origin"},body:JSON.stringify({email:email,action:"delete",confirm:true})}).then(function(r){' +
+  'api("/api/admin/user/action",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email,action:"delete",confirm:true})}).then(function(r){' +
   'if(r.error){msg(esc(r.error),"err")}else{msg("Deleted "+email,"ok");loadUsers()}})' +
   '};' +
   'document.querySelectorAll(".tab").forEach(function(t){t.addEventListener("click",function(){' +

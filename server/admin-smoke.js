@@ -227,6 +227,34 @@ async function main() {
   var pvpSrc = fs.readFileSync(__dirname + '/pvp-server.js', 'utf8');
   check('pvp-server.js no 10.138.0.2', pvpSrc.indexOf('10.138.0.2') < 0, '');
 
+
+  // 27. /admin HTML does not have credentials in headers
+  check('/admin no credentials in headers', adminStr.indexOf('credentials:"same-origin"') < 0 || adminStr.indexOf('credentials:') < 0, '');
+
+  // 28. /admin HTML ban/grant/reset requests include confirm:true
+  check('/admin ban with confirm:true', adminStr.indexOf('userAction(email,\"ban\",true)') >= 0, '');
+  check('/admin grant with confirm:true', adminStr.indexOf('userAction(email,\"grant-all-abilities\",true)') >= 0, '');
+  check('/admin reset-password with confirm:true', adminStr.indexOf('reset-password",confirm:true') >= 0, '');
+
+  // 29. /admin HTML data-email uses escAttr
+  check('/admin data-email uses escAttr', adminStr.indexOf('escAttr(email)') >= 0, '');
+
+  // 30. Ban without confirm returns 400
+  var banNoConfirm = await request('POST', '/api/admin/user/action', { email: testEmail, action: 'ban' }, ADMIN_AUTH);
+  check('Ban without confirm -> 400', banNoConfirm.status === 400 && banNoConfirm.body && banNoConfirm.body.error === 'confirm:true required for dangerous action', 'status=' + banNoConfirm.status);
+
+  // 31. Ban with confirm returns 200
+  var banWithConfirm = await request('POST', '/api/admin/user/action', { email: testEmail, action: 'ban', confirm: true }, ADMIN_AUTH);
+  check('Ban with confirm -> 200', banWithConfirm.status === 200, 'status=' + banWithConfirm.status);
+
+  // 32. Reset password with confirm returns 200
+  var resetPW = await request('POST', '/api/admin/user/action', { email: testEmail, action: 'reset-password', newPassword: 'newpass123', confirm: true }, ADMIN_AUTH);
+  check('Reset password with confirm', resetPW.status === 200, 'status=' + resetPW.status);
+
+  // 33. Reset password without confirm returns 400
+  var resetPWNoConfirm = await request('POST', '/api/admin/user/action', { email: testEmail, action: 'reset-password', newPassword: 'newpass123' }, ADMIN_AUTH);
+  check('Reset password without confirm -> 400', resetPWNoConfirm.status === 400, 'status=' + resetPWNoConfirm.status);
+
   // Print summary
   console.log('\n=== Results: ' + passed + ' passed, ' + failed + ' failed ===');
   process.exit(failed > 0 ? 1 : 0);
