@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Main Game Loop & Init =====
+// ===== ENDLESS RUNNER - Main Game Loop & Init =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
@@ -66,6 +66,8 @@
     SG.quitToMenu = function() {
         SG.stopPoliceChase();
         SG.resetAllGameObjects();
+        SG.removePvpOpponentMeshes();
+        SG.disconnectPvp();
         SG.state.score = 0;
         SG.state.coins = 0;
         SG.state.speed = SG.START_SPEED;
@@ -131,6 +133,12 @@
     };
 
     // ===== RESTART GAME =====
+    // Alias for PVP match start
+    SG.startGame = function() {
+        SG.startGameFromMenu();
+        SG.restartGame();
+    };
+
     SG.restartGame = function() {
         SG.stopPoliceChase();
         SG.resetAllGameObjects();
@@ -274,6 +282,7 @@
 
         var delta = Math.min(SG.clock.getDelta(), 0.05);
         SG.state.gameTime += delta;
+        if (SG.updatePlayerModelAnimation) SG.updatePlayerModelAnimation(delta);
 
         // Speed increase
         if (SG.state.speed < SG.MAX_SPEED) {

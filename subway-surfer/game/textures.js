@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Textures =====
+// ===== ENDLESS RUNNER - Textures =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};

@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - UI System =====
+// ===== ENDLESS RUNNER - UI System =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
@@ -207,7 +207,7 @@
         SG.menuOverlay.className = 'overlay';
         SG.menuOverlay.innerHTML = '' +
             '<div class="menu-content">' +
-                '<h1 class="menu-title">SUBWAY SURFER</h1>' +
+                '<h1 class="menu-title">ENDLESS RUNNER</h1>' +
                 '<p class="menu-subtitle">Neo Edition</p>' +
                 '<div class="tap-to-start pulse">TAP TO START</div>' +
                 '<div class="diff-select">' +

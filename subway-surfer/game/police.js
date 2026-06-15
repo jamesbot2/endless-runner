@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Police Chase System =====
+// ===== ENDLESS RUNNER - Police Chase System =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};

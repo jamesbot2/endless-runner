@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Scene Setup =====
+// ===== ENDLESS RUNNER - Scene Setup =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};

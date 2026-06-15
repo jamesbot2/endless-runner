@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Player =====
+// ===== ENDLESS RUNNER - Player =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};

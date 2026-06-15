@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Controls =====
+// ===== ENDLESS RUNNER - Controls =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};

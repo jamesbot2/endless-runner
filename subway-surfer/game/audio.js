@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Audio System =====
+// ===== ENDLESS RUNNER - Audio System =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};

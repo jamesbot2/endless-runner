@@ -1,5 +1,5 @@
 [Unit]
-Description=Subway Surfer Account Server (API + auth)
+Description=Endless Runner Account Server (API + auth)
 After=network.target
 
 [Service]

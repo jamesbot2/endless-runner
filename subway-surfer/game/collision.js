@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Collision Detection =====
+// ===== ENDLESS RUNNER - Collision Detection =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
