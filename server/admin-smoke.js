@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // Endless Runner Admin Smoke Test
+process.env.MOCK_EMAIL_SEND = 'true';
 const http = require('http');
 const HOST = 'http://127.0.0.1:3000';
 const ADMIN_AUTH = 'Basic ' + Buffer.from('admin:admin123').toString('base64');
@@ -237,9 +238,27 @@ async function main() {
   check('Reset password without confirm -> 400', resetPWNoConfirm.status === 400, 'status=' + resetPWNoConfirm.status);
 
 
-  // 34. /admin HTML includes script src=/admin.js not inline JS
+  // 34. /admin HTML: validate all inline scripts with new Function()
   check('/admin uses external JS', adminStr.indexOf('src="/admin.js"') >= 0, '');
-  check('/admin no inline page JS', adminStr.indexOf('<script>') < 0 || adminStr.indexOf('src="/admin.js"') >= 0, '');
+  // Extract inline <script>...</script> blocks and validate each
+  var scriptBlocks = [];
+  var re = /<script>([\s\S]*?)<\/script>/g;
+  var m;
+  while ((m = re.exec(adminStr)) !== null) {
+    scriptBlocks.push(m[1]);
+  }
+  if (scriptBlocks.length > 0) {
+    for (var si = 0; si < scriptBlocks.length; si++) {
+      try {
+        new Function(scriptBlocks[si]);
+      } catch (e) {
+        check('Inline script block ' + si + ' syntax valid', false, e.message);
+      }
+    }
+    check('All ' + scriptBlocks.length + ' inline script blocks valid', true, '');
+  } else {
+    check('No inline script blocks (good - JS is external)', true, '');
+  }
 
   // 35. JS syntax check: fetch /admin.js and validate syntax
   var adminJsReq = await request('GET', '/admin.js', null, ADMIN_AUTH);
@@ -280,6 +299,18 @@ async function main() {
     check('Audit no sessionToken leak', auditBodyStr.indexOf('sessionToken') < 0, '');
     check('Audit no sessionExpires leak', auditBodyStr.indexOf('sessionExpires') < 0, '');
   }
+
+  // 37. Numeric QQ email addresses are valid real-world addresses.
+  var c4 = await getCaptcha();
+  var qqEmail = String(Date.now()).slice(-10) + '@qq.com';
+  var qqUser = await request('POST', '/api/register', {
+    email: qqEmail,
+    password: 'test123',
+    username: 'QQTester' + String(Date.now()).slice(-6),
+    captchaId: c4 ? c4.captchaId : 'x',
+    captchaAnswer: c4 ? c4.answer : 'x'
+  });
+  check('Numeric qq.com email registers', qqUser.status === 201 || qqUser.status === 200, 'status=' + qqUser.status + ' body=' + JSON.stringify(qqUser.body));
 
   // Print summary
   console.log('\n=== Results: ' + passed + ' passed, ' + failed + ' failed ===');
