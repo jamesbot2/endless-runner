@@ -108,15 +108,17 @@ node server/pvp-server.js &
 ### systemd
 
 ```bash
-sudo cp server/subway-account.service /etc/systemd/system/
+sudo cp server/endless-runner-account.service /etc/systemd/system/
+sudo cp server/endless-runner-pvp.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now subway-account
+sudo systemctl enable --now endless-runner-account
+sudo systemctl enable --now endless-runner-pvp
 ```
 
 ### SMTP (Email Verification)
 
 ```bash
-sudo systemctl edit subway-account
+sudo systemctl edit endless-runner-account
 ```
 
 ```ini
