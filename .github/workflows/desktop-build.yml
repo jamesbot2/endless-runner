@@ -1,11 +1,14 @@
-# ===== Subway Surfer Desktop — CI Build =====
+# ===== Endless Runner Desktop — CI Build =====
 # Builds, smoke-tests and packages the Electron desktop app.
 # Output: win-unpacked portable directory (unsigned).
+# Runs on Windows to avoid code-signing restrictions on Linux.
 
 name: Desktop Build
 
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -57,7 +60,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Subway-Surfer-win-unpacked
+          name: Endless-Runner-win-unpacked
           path: apps/desktop/release/win-unpacked/**
           if-no-files-found: error
           retention-days: 14

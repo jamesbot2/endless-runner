@@ -6,7 +6,6 @@
   "scripts": {
     "build:game": "node game/build.js",
     "server:account": "node server/account-server.js",
-    "server:static": "node server/static-server.js",
     "server:pvp": "node server/pvp-server.js",
     "pvp:smoke": "node server/pvp-smoke.js",
     "desktop:dev": "npm --prefix apps/desktop run dev",

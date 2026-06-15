@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Shared Auth / Data Helpers =====
+// ===== ENDLESS RUNNER - Shared Auth / Data Helpers =====
 const fs = require('fs');
 const path = require('path');
 
