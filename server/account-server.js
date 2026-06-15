@@ -108,14 +108,33 @@ function verifyPassword(password, storedHash, salt) {
 
 function generateToken() { return crypto.randomBytes(32).toString('hex'); }
 function generateCode() { return String(Math.floor(100000 + crypto.randomInt(900000))); }
+
+function normalizeEmailInput(email) {
+    return String(email || '')
+        .trim()
+        .replace(/\uFF20/g, '@')
+        .replace(/[。．｡]/g, '.')
+        .toLowerCase();
+}
+
+function findUserKeyByEmail(users, email) {
+    var normalized = normalizeEmailInput(email);
+    if (users[normalized]) return normalized;
+    for (var key in users) {
+        if (normalizeEmailInput(key) === normalized) return key;
+    }
+    return null;
+}
+
 function validateEmail(email) {
+    email = normalizeEmailInput(email);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
+    var domain = email.split('@')[1];
     // Reject phone numbers as email usernames
-    if (/^\d{6,}@/.test(email)) return false;
+    if (/^\d{6,}@/.test(email) && domain !== 'qq.com') return false;
     // Reject obviously fake domains
     if (/@(test|example|fake|temp|dispostable|mailinator|guerrillamail|yopmail|10minute|trashmail|sharklasers|spam)\./i.test(email)) return false;
     // Require valid TLD (2+ chars)
-    var domain = email.split('@')[1];
     if (!domain || domain.split('.').length < 2) return false;
     var tld = domain.split('.').pop();
     if (!tld || tld.length < 2) return false;
@@ -704,7 +723,8 @@ async function handleRequest(req, res) {
 
     if (pathname === '/api/register' && method === 'POST') {
         const body = await parseBody(req);
-        const { email, password, username, captchaId, captchaAnswer } = body;
+        const { email: rawEmail, password, username, captchaId, captchaAnswer } = body;
+        const email = normalizeEmailInput(rawEmail);
 
         if (!email || !password || !username) { sendJSON(res, 400, { error: 'Email, username and password required' }); return; }
         if (username.length < 2 || username.length > 16) { sendJSON(res, 400, { error: 'Username must be 2-16 characters' }); return; }
@@ -782,7 +802,8 @@ async function handleRequest(req, res) {
     // ---- VERIFY CODE ----
     if (pathname === '/api/verify-code' && method === 'POST') {
         const body = await parseBody(req);
-        const { email, code } = body;
+        const { code } = body;
+        const email = normalizeEmailInput(body.email);
 
         if (!email || !code) { sendJSON(res, 400, { error: 'Email and code required' }); return; }
 
@@ -837,7 +858,7 @@ async function handleRequest(req, res) {
 
     // ---- SAVE ----
     if (pathname === '/api/save' && method === 'POST') {
-        const email = getAuthUser(req.headers);
+        const email = normalizeEmailInput(getAuthUser(req.headers) || '');
         if (!email) { sendJSON(res, 401, { error: 'Not authenticated' }); return; }
 
         const body = await parseBody(req);
@@ -872,7 +893,7 @@ async function handleRequest(req, res) {
 
     // ---- LOAD ----
     if (pathname === '/api/load' && method === 'GET') {
-        const email = getAuthUser(req.headers);
+        const email = normalizeEmailInput(getAuthUser(req.headers) || '');
         if (!email) { sendJSON(res, 401, { error: 'Not authenticated' }); return; }
         const users = getUsers();
         if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
