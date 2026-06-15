@@ -243,7 +243,18 @@ function normalizeGameData(g) {
     };
 }
 
-function getMailTransport() {
+function getMailTransport(toEmail) {
+    var domain = String(toEmail || '').toLowerCase().split('@')[1] || '';
+
+    // QQ email recipient → use QQ SMTP if configured
+    if (domain === 'qq.com' && process.env.QQ_SMTP_USER && process.env.QQ_SMTP_PASS) {
+        var qqUser = process.env.QQ_SMTP_USER || '';
+        var qqPass = process.env.QQ_SMTP_PASS || '';
+        var qqFrom = process.env.QQ_MAIL_FROM || '"Endless Runner" <' + qqUser + '>';
+        return { provider: 'qq', host: 'smtp.qq.com', port: 465, secure: true, user: qqUser, pass: qqPass, fromMasked: qqFrom.replace(/:([^@]+)@/, ':***@'), from: qqFrom };
+    }
+
+    // Default: 163 SMTP or configured MAIL_PROVIDER
     var provider = (process.env.MAIL_PROVIDER || '163').trim().toLowerCase();
     var host = process.env.SMTP_HOST || '';
     var port = parseInt(process.env.SMTP_PORT, 10) || 465;
@@ -260,7 +271,7 @@ function getMailTransport() {
 
 function sendEmail(to, subject, body, htmlBody) {
     return new Promise(function(resolve) {
-        var cfg = getMailTransport();
+        var cfg = getMailTransport(to);
         var result = { ok: false, messageId: null, accepted: [], rejected: [], response: null, error: null };
 
         if (!cfg.user || !cfg.pass) {
@@ -713,7 +724,7 @@ async function handleRequest(req, res) {
             sendJSON(res, 200, { ok: true, messageId: 'mock-' + Date.now(), accepted: [to], rejected: [], response: 'mock', error: null, provider: 'mock', mailFrom: 'mock' });
             return;
         }
-        var cfg = getMailTransport();
+        var cfg = getMailTransport(to);
         if (!cfg.user) {
             sendJSON(res, 200, { ok: false, messageId: null, accepted: [], rejected: [], response: null, error: 'SMTP_CREDENTIALS_MISSING', provider: cfg.provider, mailFrom: cfg.fromMasked });
             return;
