@@ -166,7 +166,34 @@ function makeRoomId() { return 'room_'+(nextRoomId++); }
 
 // ─── HTTP + WS ───────────────────────────────────────────────────────────
 
-const server = http.createServer((req, res) => { res.writeHead(200,{'Content-Type':'application/json','Access-Control-Allow-Origin':'*'}); res.end(JSON.stringify({service:'endless-runner-pvp',status:'running',onlineUsers:onlineUsers.size,activeRooms:rooms.size})); });
+const server = http.createServer((req, res) => {
+  try {
+    const u = new URL(req.url, 'http://localhost');
+    if (u.pathname === '/admin/pvp-status' && req.method === 'GET') {
+      // Only allow localhost access
+      const ip = req.socket.remoteAddress;
+      if (ip !== '127.0.0.1' && ip !== '::1' && ip !== '::ffff:127.0.0.1') {
+        res.writeHead(403,{'Content-Type':'application/json'});
+        res.end(JSON.stringify({error:'Forbidden: localhost only'}));
+        return;
+      }
+      const roomsList = [];
+      for (const [,r] of rooms) {
+        roomsList.push({
+          id: r.id, name: r.name, host: r.host, hostId: r.hostId,
+          playerCount: r.players.size, maxPlayers: r.maxPlayers,
+          readyCount: [...r.players.values()].filter(function(p) { return p.ready; }).length,
+          status: r.status, createdAt: r.createdAt
+        });
+      }
+      res.writeHead(200,{'Content-Type':'application/json','Access-Control-Allow-Origin':'*'});
+      res.end(JSON.stringify({ totalRooms: rooms.size, totalPlayers: onlineUsers.size, rooms: roomsList }));
+      return;
+    }
+  } catch(e) { /* ignore parse errors */ }
+  res.writeHead(200,{'Content-Type':'application/json','Access-Control-Allow-Origin':'*'});
+  res.end(JSON.stringify({service:'endless-runner-pvp',status:'running',onlineUsers:onlineUsers.size,activeRooms:rooms.size}));
+});
 const wss = new WebSocketServer({ noServer: true });
 
 wss.on('connection', (ws) => {

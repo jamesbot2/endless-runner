@@ -3,6 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { generateId, htmlEscape, atomicWriteFile } = require('./auth.js');
 
 const PORT = 3000;
 const DATA_DIR = path.join(__dirname, 'data');
@@ -63,7 +64,21 @@ function readDB(file) {
 }
 function writeDB(file, data) { fs.writeFileSync(file, JSON.stringify(data, null, 2)); }
 function getUsers() { return readDB(USERS_FILE); }
-function saveUsers(users) { writeDB(USERS_FILE, users); }
+function saveUsers(users) { atomicWriteFile(USERS_FILE, users); }
+
+// ---- AUDIT LOG ----
+const AUDIT_FILE = path.join(DATA_DIR, 'admin-audit.json');
+function loadAuditLog() {
+  try { return fs.existsSync(AUDIT_FILE) ? JSON.parse(fs.readFileSync(AUDIT_FILE, 'utf8')) : []; }
+  catch { return []; }
+}
+function saveAuditLog(entries) { atomicWriteFile(AUDIT_FILE, entries); }
+function addAuditLog(adminUser, action, targetEmail, before, after) {
+  const log = loadAuditLog();
+  log.push({ time: new Date().toISOString(), admin: adminUser, action, target: targetEmail, before: before || null, after: after || null });
+  if (log.length > 10000) log.splice(0, log.length - 10000);
+  saveAuditLog(log);
+}
 
 function hashPassword(password, salt) {
     if (!salt) salt = crypto.randomBytes(16).toString('hex');
@@ -214,6 +229,259 @@ function sendEmail(to, subject, body) {
     });
 }
 
+function httpGet(url) {
+  return new Promise(function(resolve, reject) {
+    var u = new URL(url);
+    var opts = { hostname: u.hostname, port: u.port, path: u.pathname + u.search, method: 'GET', timeout: 3000 };
+    var req = http.request(opts, function(res) {
+      var data = '';
+      res.on('data', function(c) { data += c; });
+      res.on('end', function() { try { resolve(JSON.parse(data)); } catch(e) { reject(e); } });
+    });
+    req.on('error', reject);
+    req.on('timeout', function() { req.destroy(); reject(new Error('timeout')); });
+    req.end();
+  });
+}
+
+function adminHTML() {
+  // Auth is handled by browser's native Basic Auth via credentials:'same-origin'
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Admin Dashboard - Endless Runner</title>' +
+  '<style>' +
+  '*{box-sizing:border-box;margin:0;padding:0}' +
+  'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#1a1a2e;color:#e0e0e0;padding:16px;min-height:100vh}' +
+  '.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px}' +
+  'h1{color:#ff6600;font-size:24px;font-weight:700}' +
+  '.tabs{display:flex;gap:4px;background:#16213e;border-radius:8px;padding:4px}' +
+  '.tab{padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px;color:#888;border:none;background:transparent;transition:all 0.2s}' +
+  '.tab.active{background:#ff6600;color:#fff;font-weight:600}' +
+  '.tab:hover{color:#fff}' +
+  '.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:20px}' +
+  '.stat-card{background:#16213e;border-radius:10px;padding:14px;border:1px solid #2a2a4a}' +
+  '.stat-card .value{font-size:22px;font-weight:700;color:#ff6600}' +
+  '.stat-card .label{font-size:11px;color:#888;margin-top:4px;text-transform:uppercase;letter-spacing:0.5px}' +
+  '.controls{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}' +
+  '.search-wrap{flex:1;min-width:180px}' +
+  '.search-wrap input{width:100%;padding:9px 14px;border-radius:8px;border:1px solid #333;background:#0d1b2a;color:#fff;font-size:13px;outline:none}' +
+  '.search-wrap input:focus{border-color:#ff6600}' +
+  'select{padding:8px 12px;border-radius:8px;border:1px solid #333;background:#0d1b2a;color:#fff;font-size:12px;outline:none}' +
+  '.filter-chips{display:flex;gap:6px;flex-wrap:wrap;width:100%;margin-bottom:16px}' +
+  '.chip{padding:5px 14px;border-radius:20px;border:1px solid #333;background:transparent;color:#888;cursor:pointer;font-size:12px;transition:all 0.2s}' +
+  '.chip.active{background:#ff6600;border-color:#ff6600;color:#fff}' +
+  '.chip:hover{border-color:#ff6600;color:#fff}' +
+  '.table-wrap{overflow-x:auto;border-radius:10px;border:1px solid #2a2a4a}' +
+  'table{width:100%;border-collapse:collapse;font-size:12px}' +
+  'th{background:#16213e;color:#ffd700;padding:10px 8px;text-align:left;font-weight:600;white-space:nowrap;position:sticky;top:0;z-index:1}' +
+  'td{padding:8px;border-bottom:1px solid #222;white-space:nowrap}' +
+  'tr:hover{background:#0f3460}' +
+  '.badge{padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600}' +
+  '.badge-green{background:#1b5e20;color:#81c784}' +
+  '.badge-red{background:#b71c1c;color:#ef9a9a}' +
+  '.badge-yellow{background:#f57f17;color:#ffe082}' +
+  '.btn{padding:5px 10px;border-radius:6px;border:none;cursor:pointer;font-size:11px;font-weight:500;transition:opacity 0.2s;color:#fff}' +
+  '.btn:hover{opacity:0.85}' +
+  '.btn-sm{padding:3px 8px;font-size:10px}' +
+  '.btn-orange{background:#ff6600}' +
+  '.btn-red{background:#d32f2f}' +
+  '.btn-green{background:#388e3c}' +
+  '.btn-blue{background:#1976d2}' +
+  '.btn-purple{background:#7b1fa2}' +
+  '.actions{display:flex;gap:3px;flex-wrap:wrap}' +
+  '#msg{padding:10px 14px;border-radius:8px;margin-bottom:12px;display:none;font-size:13px}' +
+  '#msg.info{background:#0d47a1;color:#90caf9;display:block}' +
+  '#msg.err{background:#b71c1c;color:#ef9a9a;display:block}' +
+  '#msg.ok{background:#1b5e20;color:#81c784;display:block}' +
+  '.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:999;display:flex;align-items:center;justify-content:center;padding:20px}' +
+  '.modal{background:#16213e;border-radius:12px;padding:24px;max-width:650px;width:100%;max-height:80vh;overflow-y:auto;border:1px solid #2a2a4a}' +
+  '.modal h2{color:#ff6600;margin-bottom:16px;font-size:18px}' +
+  '.modal .field{margin-bottom:12px}' +
+  '.modal .field label{display:block;font-size:11px;color:#888;margin-bottom:3px}' +
+  '.modal .field input,.modal .field select{width:100%;padding:8px 10px;border-radius:6px;border:1px solid #333;background:#0d1b2a;color:#fff;font-size:13px;outline:none}' +
+  '.modal .field input:focus{border-color:#ff6600}' +
+  '.modal .btn-row{display:flex;gap:8px;margin-top:16px}' +
+  '.section{display:none}' +
+  '.section.active{display:block}' +
+  '.pvp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}' +
+  '.pvp-card{background:#16213e;border-radius:10px;padding:14px;border:1px solid #2a2a4a}' +
+  '.pvp-card h3{color:#ff6600;font-size:15px;margin-bottom:8px}' +
+  '.pvp-card .info{font-size:12px;color:#aaa;margin:3px 0}' +
+  '.pvp-card .players{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}' +
+  '.pvp-card .players span{padding:2px 8px;border-radius:4px;background:#0d1b2a;font-size:11px}' +
+  '.loader{text-align:center;padding:40px;color:#555}' +
+  '.loader:after{content:"...";animation:dots 1.5s infinite}' +
+  '@keyframes dots{0%,20%{content:"."}40%{content:".."}60%,100%{content:"..."}}' +
+  '@media(max-width:600px){body{padding:10px}h1{font-size:20px}.stats{grid-template-columns:repeat(2,1fr)}.stat-card{padding:10px}.stat-card .value{font-size:18px}.controls{flex-direction:column}.search-wrap{min-width:100%}}' +
+  '</style></head><body>' +
+  '<div class="header"><h1>🚄 Endless Runner Admin</h1><a href="/verify-codes" style="color:#ffaa00;font-size:13px;">Verification Codes</a></div>' +
+  '<div id="msg"></div>' +
+  '<div class="tabs"><button class="tab active" data-tab="users">Users</button><button class="tab" data-tab="pvp">PVP</button><button class="tab" data-tab="audit">Audit Log</button></div>' +
+  '<div id="tab-users" class="section active">' +
+  '<div class="stats" id="statsRow"></div>' +
+  '<div class="controls">' +
+  '<div class="search-wrap"><input type="text" id="searchInput" placeholder="Search by email or username..."></div>' +
+  '<select id="sortSelect"><option value="createdAt">Created</option><option value="lastLoginAt">Last Login</option><option value="credits">Credits</option><option value="coins">Coins</option><option value="maxDistance" selected>Max Distance</option><option value="runCount">Runs</option></select>' +
+  '<select id="orderSelect"><option value="desc">Desc</option><option value="asc">Asc</option></select>' +
+  '</div>' +
+  '<div class="filter-chips" id="filterChips">' +
+  '<span class="chip active" data-filter="">All</span><span class="chip" data-filter="verified">Verified</span><span class="chip" data-filter="unverified">Unverified</span><span class="chip" data-filter="banned">Banned</span><span class="chip" data-filter="active">Active</span><span class="chip" data-filter="hasPvp">Has PVP</span><span class="chip" data-filter="noPvp">No PVP</span>' +
+  '</div>' +
+  '<div class="table-wrap"><table><thead><tr><th>Email</th><th>Username</th><th>Verified</th><th>Banned</th><th>Created</th><th>Coins</th><th>Credits</th><th>Max</th><th>Runs</th><th>Abilities</th><th>Character</th><th>Actions</th></tr></thead><tbody id="userTableBody"><tr><td colspan="12" class="loader">Loading</td></tr></tbody></table></div>' +
+  '</div>' +
+  '<div id="tab-pvp" class="section"><h2 style="color:#ff6600;font-size:18px;margin-bottom:14px">PVP Rooms</h2><div id="pvpContent"><p class="loader">Loading</p></div></div>' +
+  '<div id="tab-audit" class="section"><h2 style="color:#ff6600;font-size:18px;margin-bottom:14px">Audit Log</h2><div class="table-wrap"><table><thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Target</th></tr></thead><tbody id="auditBody"><tr><td colspan="4" class="loader">Loading</td></tr></tbody></table></div></div>' +
+  '<div id="editModal" class="modal-overlay" style="display:none">' +
+  '<div class="modal"><h2 id="modalTitle">Edit User</h2>' +
+  '<div class="field"><label>Username</label><input id="editUsername" type="text"></div>' +
+  '<div class="field"><label>Coins</label><input id="editCoins" type="number"></div>' +
+  '<div class="field"><label>Credits</label><input id="editCredits" type="number"></div>' +
+  '<div class="field"><label>Run Count</label><input id="editRunCount" type="number"></div>' +
+  '<div class="field"><label>Max Distance</label><input id="editMaxDistance" type="number"></div>' +
+  '<div class="field"><label>Max Easy</label><input id="editMaxEasy" type="number"></div>' +
+  '<div class="field"><label>Max Medium</label><input id="editMaxMedium" type="number"></div>' +
+  '<div class="field"><label>Max Hard</label><input id="editMaxHard" type="number"></div>' +
+  '<div class="field"><label>Equipped Ability (0=None,1=Double,2=Jetpack,3=Roof)</label><input id="editEquippedAbility" type="number"></div>' +
+  '<div class="field"><label>Owned Abilities (comma separated numbers)</label><input id="editOwnedAbilities" type="text"></div>' +
+  '<div class="field"><label>Owned Characters (comma separated)</label><input id="editOwnedCharacters" type="text"></div>' +
+  '<div class="field"><label>Selected Character</label><input id="editSelectedCharacter" type="text"></div>' +
+  '<div class="btn-row"><button class="btn btn-green" id="saveEditBtn">Save</button><button class="btn btn-red" id="cancelEditBtn">Cancel</button></div>' +
+  '</div></div>' +
+  '<script>' +
+  'var currentEditEmail=null;function esc(s){return String(s??"").replace(/[&<>"\']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","\'":"&#39;"}[c]||c})}function escAttr(s){return esc(s).replace(/`/g,"&#96;")}' +
+  'function msg(t,c){var m=document.getElementById("msg");m.textContent=t;m.className=c||"info";m.style.display="block";setTimeout(function(){m.style.display="none"},3000)}' +
+  'function api(url,opts){opts=opts||{};opts.credentials="same-origin";return fetch(url,opts).then(function(r){return r.json()})}' +
+  'document.querySelectorAll(".tab").forEach(function(t){t.addEventListener("click",function(){document.querySelectorAll(".tab").forEach(function(x){x.classList.remove("active")});this.classList.add("active");document.querySelectorAll(".section").forEach(function(s){s.classList.remove("active")});document.getElementById("tab-"+this.getAttribute("data-tab")).classList.add("active")})});' +
+  'api("/api/admin/stats").then(function(s){' +
+  'document.getElementById("statsRow").innerHTML=' +
+  '"<div class=\"stat-card\"><div class=\"value\">"+esc(s.totalUsers)+"</div><div class=\"label\">Total Users</div></div>"+' +
+  '"<div class=\"stat-card\"><div class=\"value\">"+esc(s.verifiedUsers)+"</div><div class=\"label\">Verified</div></div>"+' +
+  '"<div class=\"stat-card\"><div class=\"value\">"+esc(s.bannedUsers)+"</div><div class=\"label\">Banned</div></div>"+' +
+  '"<div class=\"stat-card\"><div class=\"value\">"+esc(s.todayRegistrations)+"</div><div class=\"label\">Today Reg</div></div>"+' +
+  '"<div class=\"stat-card\"><div class=\"value\">"+esc(s.totalRuns)+"</div><div class=\"label\">Total Runs</div></div>"+' +
+  '"<div class=\"stat-card\"><div class=\"value\">"+esc(s.highestDistance)+"</div><div class=\"label\">Highest Dist</div></div>"+' +
+  '"<div class=\"stat-card\"><div class=\"value\">"+esc(s.totalCredits)+"</div><div class=\"label\">Total Credits</div></div>"+' +
+  '"<div class=\"stat-card\"><div class=\"value\">"+esc(s.totalCoins)+"</div><div class=\"label\">Total Coins</div></div>"' +
+  '});' +
+  'function loadUsers(){' +
+  'var q="search="+encodeURIComponent(document.getElementById("searchInput").value);' +
+  'q+="&sort="+document.getElementById("sortSelect").value;' +
+  'q+="&order="+document.getElementById("orderSelect").value;' +
+  'var activeFilter=document.querySelector(".chip.active");if(activeFilter)q+="&filter="+activeFilter.getAttribute("data-filter");' +
+  'api("/api/admin/users?"+q).then(function(users){' +
+  'var tbody=document.getElementById("userTableBody");' +
+  'if(!users.length){tbody.innerHTML="<tr><td colspan=\'12\' style=\'text-align:center;padding:30px;color:#555\'>No users found</td></tr>";return}' +
+  'var h="";var abilNames={0:"None",1:"Double",2:"Jetpack",3:"Roof"};' +
+  'users.forEach(function(u){' +
+  'var email=u.email;var eid=email.replace(/[^a-zA-Z0-9]/g,"_");' +
+  'var abils=(u.gameData.ownedAbilities||[0]).map(function(a){return abilNames[a]||"?"}).join(",");' +
+  'h+="<tr>"+' +
+  '"<td>"+esc(email)+"</td>"+' +
+  '"<td>"+esc(u.username||"-")+"</td>"+' +
+  '"<td>"+(u.verified?"<span class=\"badge badge-green\">Yes</span>":"<span class=\"badge badge-red\">No</span>")+"</td>"+' +
+  '"<td>"+(u.banned?"<span class=\"badge badge-red\">Banned</span>":"<span class=\"badge badge-green\">No</span>")+"</td>"+' +
+  '"<td>"+new Date(u.createdAt).toLocaleDateString()+"</td>"+' +
+  '"<td>"+(u.gameData.coins||0)+"</td>"+' +
+  '"<td>"+(u.gameData.credits||0)+"</td>"+' +
+  '"<td>"+(u.gameData.maxDistance||0)+"</td>"+' +
+  '"<td>"+(u.gameData.runCount||0)+"</td>"+' +
+  '"<td>"+esc(abils)+"</td>"+' +  '"<td>"+esc(u.gameData.selectedCharacter||"runner")+"</td>"+' +  '"<td><div class=\"actions\">"+' +
+  '"<button class=\"btn btn-sm btn-blue\" data-action=\"edit\" data-email=\""+escAttr(email)+"\">Edit</button>"+' +
+  '"<button class=\"btn btn-sm btn-green\" data-action=\"verify\" data-email=\""+escAttr(email)+"\">Verify</button>"+' +
+  '"<button class=\"btn btn-sm btn-red\" data-action=\"ban\" data-email=\""+escAttr(email)+"\">Ban</button>"+' +
+  '"<button class=\"btn btn-sm btn-orange\" data-action=\"reset-pw\" data-email=\""+escAttr(email)+"\">Reset PW</button>"+' +
+  '"<button class=\"btn btn-sm btn-purple\" data-action=\"grant-abil\" data-email=\""+escAttr(email)+"\">Grant Abil</button>"+' +
+  '"<button class=\"btn btn-sm btn-red\" data-action=\"delete\" data-email=\""+escAttr(email)+"\">Delete</button>"+' +
+  '"</div></td></tr>"' +
+  '});tbody.innerHTML=h})};' +
+  'document.getElementById("searchInput").addEventListener("input",loadUsers);' +
+  'document.getElementById("sortSelect").addEventListener("change",loadUsers);' +
+  'document.getElementById("orderSelect").addEventListener("change",loadUsers);' +
+  'document.querySelectorAll(".chip").forEach(function(c){c.addEventListener("click",function(){document.querySelectorAll(".chip").forEach(function(x){x.classList.remove("active")});this.classList.add("active");loadUsers()})});' +
+  'loadUsers();' +
+  'document.getElementById("userTableBody").addEventListener("click",function(e){' +
+  'var btn=e.target.closest("button[data-action]");if(!btn)return;' +
+  'var action=btn.getAttribute("data-action");var email=btn.getAttribute("data-email");' +
+  'if(action==="edit"){editUser(email)}' +
+  'else if(action==="verify"){userAction(email,"verify",false)}' +
+  'else if(action==="ban"){if(!confirm("Ban "+email+"?"))return;userAction(email,"ban",true)}' +
+  'else if(action==="reset-pw"){if(!confirm("Reset password for "+email+"?"))return;resetPW(email)}' +
+  'else if(action==="grant-abil"){if(!confirm("Grant all abilities to "+email+"?"))return;userAction(email,"grant-all-abilities",true)}' +
+  'else if(action==="delete"){if(!confirm("Delete "+email+"?"))return;delUser(email)}' +
+  '})' +
+  'function editUser(email){' +
+  'currentEditEmail=email;document.getElementById("modalTitle").textContent="Edit: "+esc(email);' +
+  'api("/api/admin/user?email="+encodeURIComponent(email)).then(function(u){' +
+  'document.getElementById("editUsername").value=u.username||"";' +
+  'document.getElementById("editCoins").value=u.gameData.coins||0;' +
+  'document.getElementById("editCredits").value=u.gameData.credits||0;' +
+  'document.getElementById("editRunCount").value=u.gameData.runCount||0;' +
+  'document.getElementById("editMaxDistance").value=u.gameData.maxDistance||0;' +
+  'document.getElementById("editMaxEasy").value=u.gameData.maxEasy||0;' +
+  'document.getElementById("editMaxMedium").value=u.gameData.maxMedium||0;' +
+  'document.getElementById("editMaxHard").value=u.gameData.maxHard||0;' +
+  'document.getElementById("editEquippedAbility").value=u.gameData.equippedAbility||0;' +
+  'document.getElementById("editOwnedAbilities").value=(u.gameData.ownedAbilities||[0]).join(",");' +
+  'document.getElementById("editOwnedCharacters").value=(u.gameData.ownedCharacters||["runner"]).join(",");' +
+  'document.getElementById("editSelectedCharacter").value=u.gameData.selectedCharacter||"runner";' +
+  'document.getElementById("editModal").style.display="flex"})};' +
+  'document.getElementById("cancelEditBtn").addEventListener("click",function(){document.getElementById("editModal").style.display="none"});' +
+  'document.getElementById("saveEditBtn").addEventListener("click",function(){' +
+  'var body={email:currentEditEmail,gameData:{' +
+  'coins:parseInt(document.getElementById("editCoins").value)||0,' +
+  'credits:parseInt(document.getElementById("editCredits").value)||0,' +
+  'runCount:parseInt(document.getElementById("editRunCount").value)||0,' +
+  'maxDistance:parseInt(document.getElementById("editMaxDistance").value)||0,' +
+  'maxEasy:parseInt(document.getElementById("editMaxEasy").value)||0,' +
+  'maxMedium:parseInt(document.getElementById("editMaxMedium").value)||0,' +
+  'maxHard:parseInt(document.getElementById("editMaxHard").value)||0,' +
+  'equippedAbility:parseInt(document.getElementById("editEquippedAbility").value)||0,' +
+  'ownedAbilities:document.getElementById("editOwnedAbilities").value.split(",").map(function(x){return parseInt(x,10)}).filter(function(x){return!isNaN(x)}),' +
+  'ownedCharacters:document.getElementById("editOwnedCharacters").value.split(",").map(function(x){return x.trim()}).filter(Boolean),' +
+  'selectedCharacter:document.getElementById("editSelectedCharacter").value.trim()||"runner"' +
+  '}};' +
+  'api("/api/admin/user/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){' +
+  'if(r.error){msg(esc(r.error),"err")}else{msg("Saved "+currentEditEmail,"ok");document.getElementById("editModal").style.display="none";loadUsers()}})' +
+  '});' +
+  'function userAction(email,action,confirmed){' +
+  'var body={email:email,action:action};if(confirmed)body.confirm=true;' +
+  'api("/api/admin/user/action",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){' +
+  'if(r.error){msg(esc(r.error),"err")}else{msg(action+" done for "+email,"ok");loadUsers()}})' +
+  '};' +
+  'function resetPW(email){' +
+  'var p=prompt("New password for "+email);if(!p||p.length<4)return;' +
+  'api("/api/admin/user/action",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email,action:"reset-password",confirm:true,newPassword:p})}).then(function(r){' +
+  'if(r.error){msg(esc(r.error),"err")}else{msg("PW reset for "+email,"ok")}})' +
+  '};' +
+  'function delUser(email){' +
+  'if(!confirm("Delete "+email+"?"))return;' +
+  'api("/api/admin/user/action",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email,action:"delete",confirm:true})}).then(function(r){' +
+  'if(r.error){msg(esc(r.error),"err")}else{msg("Deleted "+email,"ok");loadUsers()}})' +
+  '};' +
+  'document.querySelectorAll(".tab").forEach(function(t){t.addEventListener("click",function(){' +
+  'if(this.getAttribute("data-tab")==="pvp"){' +
+  'document.getElementById("pvpContent").innerHTML="<p class=\"loader\">Loading</p>";' +
+  'api("/api/admin/pvp/status").then(function(d){' +
+  'if(d.error){document.getElementById("pvpContent").innerHTML="<p style=\"color:#ef9a9a\">PVP Server: "+esc(d.error)+"</p>";return}' +
+  'var h="<p style=\"margin-bottom:10px;font-size:14px;color:#aaa\">Total Rooms: "+esc(d.totalRooms)+" | Players: "+esc(d.totalPlayers)+"</p>";' +
+  'if(d.roomsList&&d.roomsList.length){h+="<div class=\"pvp-grid\">";' +
+  'd.roomsList.forEach(function(r){' +
+  'h+="<div class=\"pvp-card\"><h3>"+esc(r.name)+"</h3>"+' +
+  '"<div class=\"info\">Host: "+esc(r.host)+"</div>"+' +
+  '"<div class=\"info\">Players: "+r.playerCount+"/"+r.maxPlayers+"</div>"+' +
+  '"<div class=\"info\">Status: "+esc(r.status)+"</div>"+' +
+  '"<div class=\"info\">ID: "+esc(r.id)+"</div></div>"' +
+  '});h+="</div>"}else{h+="<p style=\"color:#555\">No active rooms</p>"}' +
+  'document.getElementById("pvpContent").innerHTML=h})}' +
+  'if(this.getAttribute("data-tab")==="audit"){' +
+  'api("/api/admin/audit?limit=200").then(function(log){' +
+  'var tb=document.getElementById("auditBody");' +
+  'if(!log.length){tb.innerHTML="<tr><td colspan=\'4\' style=\'text-align:center;padding:30px;color:#555\'>No audit entries</td></tr>";return}' +
+  'var h="";log.reverse().forEach(function(e){' +
+  'h+="<tr><td>"+esc(new Date(e.time).toLocaleString())+"</td><td>"+esc(e.admin)+"</td><td>"+esc(e.action)+"</td><td>"+esc(e.target||"-")+"</td></tr>"' +
+  '});tb.innerHTML=h})}' +
+  '})});' +
+  '</script></body></html>';
+}
+
 async function handleRequest(req, res) {
     const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const pathname = parsedUrl.pathname;
@@ -238,133 +506,237 @@ async function handleRequest(req, res) {
         return;
     }
 
-    // ---- ADMIN PANEL ----
+    // ---- NEW ADMIN HTML PANEL ----
     if (pathname === '/admin' && method === 'GET') {
-        // Basic auth
         if (!checkAdminAuth(req.headers)) {
             res.writeHead(401, { 'Content-Type': 'text/html', 'WWW-Authenticate': 'Basic realm="Endless Runner Admin"' });
             res.end('<h1>401 Unauthorized</h1><p>Admin access requires login.</p>');
             return;
         }
-        const users = getUsers();
-        let h = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Admin</title>';
-        h += '<style>';
-        h += 'body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;padding:12px;margin:0}';
-        h += 'h1{color:#ff6600;font-size:22px;margin:0 0 8px}';
-        h += '#msg{color:#ffaa00;font-size:13px;margin:8px 0}';
-        h += '.wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -12px;padding:0 12px}';
-        h += 'table{width:100%;border-collapse:collapse;min-width:1200px}';
-        h += 'td,th{padding:5px 6px;text-align:left;border-bottom:1px solid #333;font-size:11px;white-space:nowrap}';
-        h += 'th{background:#16213e;color:#ffd700;position:sticky;top:0;z-index:1;font-size:11px}';
-        h += 'tr:hover{background:#0f3460}';
-        h += '.btn{padding:4px 8px;border-radius:4px;border:none;cursor:pointer;font-size:11px;margin:1px;color:#fff;white-space:nowrap}';
-        h += '.btn-edit{background:#ff8800}.btn-del{background:#cc3333}.btn:active{opacity:0.7}';
-        h += 'input{padding:4px;font-size:11px;border:1px solid #444;border-radius:4px;background:#0d1b2a;color:#fff}input[type=number]{width:52px}.txt{width:130px}';
-        h += '@media(max-width:480px){body{padding:8px}h1{font-size:18px}td,th{padding:4px 5px;font-size:10px}th{font-size:10px}.btn{padding:3px 6px;font-size:10px}input[type=number]{width:44px;padding:3px;font-size:10px}}';
-        h += '</style></head><body>';
-        h += '<h1>🚄 Admin Panel</h1><p style="color:#aaa;font-size:13px;margin:4px 0 10px">' + Object.keys(users).length + ' users | ';
-        h += '<a href="/verify-codes" style="color:#ffaa00;">Codes</a></p><div id="msg"></div>';
-        h += '<div class="wrap"><table>';
-        h += '<tr><th>Email</th><th>User</th><th>PW</th><th>Max</th><th>Coins</th><th>Cred</th><th>Runs</th><th>Abilities</th><th>Characters</th><th>Selected</th><th>Edit Data</th><th>Actions</th></tr>';
-        const sorted = Object.values(users).sort((a, b) => (b.gameData?.maxDistance || 0) - (a.gameData?.maxDistance || 0));
-        const an = {0:'None',1:'Double',2:'Jetpack',3:'Roof'};
-        for (const u of sorted) {
-            const g = normalizeGameData(u.gameData || defaultGameData());
-            const ab = (g.ownedAbilities || [0]).map(a => an[a] || '?').join(',');
-            const eid = u.email.replace(/[^a-zA-Z0-9]/g,'_');
-            h += '<tr><td>' + u.email + '</td><td>' + (u.username || '-') + '</td><td>*****</td>';
-            h += '<td>' + (g.maxDistance||0) + 'm</td><td>' + (g.coins||0) + '</td><td>' + (g.credits||0) + '</td>';
-            h += '<td>' + (g.runCount||0) + '</td><td>' + ab + '</td><td>' + (g.ownedCharacters||['runner']).join(',') + '</td><td>' + (g.selectedCharacter||'runner') + '</td>';
-            h += '<td>';
-            h += '<input id="cns-' + eid + '" type="number" value="' + (g.coins||0) + '" title="coins"> ';
-            h += '<input id="crd-' + eid + '" type="number" value="' + (g.credits||0) + '" title="credits"> ';
-            h += '<input id="max-' + eid + '" type="number" value="' + (g.maxDistance||0) + '" title="max distance"> ';
-            h += '<input id="run-' + eid + '" type="number" value="' + (g.runCount||0) + '" title="runs"> ';
-            h += '<input id="abl-' + eid + '" class="txt" value="' + (g.ownedAbilities||[0]).join(',') + '" title="owned abilities, e.g. 0,1,2"> ';
-            h += '<input id="chr-' + eid + '" class="txt" value="' + (g.ownedCharacters||['runner']).join(',') + '" title="owned characters"> ';
-            h += '<input id="sel-' + eid + '" class="txt" value="' + (g.selectedCharacter||'runner') + '" title="selected character"> ';
-            h += '<button class="btn btn-edit set-data-btn" data-email="' + u.email + '">Set Data</button></td>';
-            // Actions
-            h += '<td><button class="btn btn-edit pw-btn" data-email="' + u.email + '">Set PW</button> ';
-            h += '<button class="btn" style="background:#4CAF50;" data-email="' + u.email + '" data-action="verify">Verify</button> ';
-            h += '<button class="btn btn-del" data-email="' + u.email + '" data-action="delete">Delete</button></td></tr>';
-        }
-        h += '</table></div><script>';
-        h += '(function(){';
-        h += 'var msg=document.getElementById("msg");';
-        h += 'var AUTH="Basic ' + Buffer.from('admin:admin123').toString('base64') + '";';
-        h += 'function msgOk(t){msg.textContent=t;setTimeout(function(){location.reload()},500)};';
-        h += 'function apiPost(url,body){return fetch(url,{method:"POST",headers:{"Content-Type":"application/json",Authorization:AUTH},body:JSON.stringify(body)}).then(function(r){return r.json()})};';
-        // Set Game Data
-        h += 'function csvNums(v){return String(v||"").split(",").map(function(x){return parseInt(x,10)}).filter(function(x){return !isNaN(x)})};';
-        h += 'function csvText(v){return String(v||"").split(",").map(function(x){return x.trim()}).filter(Boolean)};';
-        h += 'document.querySelectorAll(".set-data-btn").forEach(function(b){';
-        h += 'b.addEventListener("click",function(){';
-        h += 'var em=this.getAttribute("data-email");';
-        h += 'var eid=em.replace(/[^a-zA-Z0-9]/g,"_");';
-        h += 'var body={email:em,coins:parseInt(document.getElementById("cns-"+eid).value)||0,credits:parseInt(document.getElementById("crd-"+eid).value)||0,maxDistance:parseInt(document.getElementById("max-"+eid).value)||0,runCount:parseInt(document.getElementById("run-"+eid).value)||0,ownedAbilities:csvNums(document.getElementById("abl-"+eid).value),ownedCharacters:csvText(document.getElementById("chr-"+eid).value),selectedCharacter:document.getElementById("sel-"+eid).value.trim()||"runner"};';
-        h += 'apiPost("/api/admin-set-game-data",body).then(function(d){';
-        h += 'msg.textContent=(d.message||d.error||"Updated data").replace(/<[^>]*>/g,"");';
-        h += 'if(!d.error)msgOk("Data updated for "+em)})})});';
-        // Set Password
-        h += 'document.querySelectorAll(".pw-btn").forEach(function(b){';
-        h += 'b.addEventListener("click",function(){';
-        h += 'var em=this.getAttribute("data-email");';
-        h += 'var p=prompt("New password for "+em);';
-        h += 'if(!p||p.length<4)return;';
-        h += 'apiPost("/api/admin-reset-password",{email:em,newPassword:p}).then(function(d){';
-        h += 'msg.textContent=(d.error||"Password updated").replace(/<[^>]*>/g,"");';
-        h += 'if(!d.error)msgOk("PW updated for "+em)})})});';
-        // Verify
-        h += 'document.querySelectorAll("[data-action=verify]").forEach(function(b){';
-        h += 'b.addEventListener("click",function(){';
-        h += 'var em=this.getAttribute("data-email");';
-        h += 'apiPost("/api/admin-verify-user",{email:em}).then(function(d){';
-        h += 'msg.textContent=(d.message||d.error||"").replace(/<[^>]*>/g,"");';
-        h += 'if(!d.error)msgOk("Verified "+em)})})});';
-        // Delete
-        h += 'document.querySelectorAll("[data-action=delete]").forEach(function(b){';
-        h += 'b.addEventListener("click",function(){';
-        h += 'var em=this.getAttribute("data-email");';
-        h += 'if(!confirm("Delete "+em+"?"))return;';
-        h += 'apiPost("/api/admin-delete-user",{email:em}).then(function(d){';
-        h += 'msg.textContent=(d.message||d.error||"").replace(/<[^>]*>/g,"");';
-        h += 'if(!d.error)msgOk("Deleted "+em)})})});';
-        h += '})();</script></body></html>';
-        sendHTML(res, h);
+        sendHTML(res, adminHTML());
         return;
     }
 
-    // ---- ADMIN: DELETE USER ----
-    if (pathname === '/api/admin-delete-user' && method === 'POST') {
+    // ---- ADMIN API ENDPOINTS ----
+
+    // GET /api/admin/stats
+    if (pathname === '/api/admin/stats' && method === 'GET') {
+        if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
+        const users = getUsers();
+        const vals = Object.values(users);
+        const today = new Date(); today.setHours(0,0,0,0);
+        const todayTs = today.getTime();
+        let totalRuns = 0, highestDistance = 0, totalCredits = 0, totalCoins = 0;
+        let todayReg = 0, verified = 0, banned = 0;
+        for (const u of vals) {
+            if (u.verified) verified++;
+            if (u.banned) banned++;
+            if (u.createdAt >= todayTs) todayReg++;
+            const g = normalizeGameData(u.gameData);
+            totalRuns += g.runCount || 0;
+            highestDistance = Math.max(highestDistance, g.maxDistance || 0);
+            totalCredits += g.credits || 0;
+            totalCoins += g.coins || 0;
+        }
+        sendJSON(res, 200, { totalUsers: vals.length, verifiedUsers: verified, bannedUsers: banned, todayRegistrations: todayReg, totalRuns, highestDistance, totalCredits, totalCoins });
+        return;
+    }
+
+    // GET /api/admin/users?search=&sort=&order=&filter=
+    if (pathname === '/api/admin/users' && method === 'GET') {
+        if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
+        const search = (parsedUrl.searchParams.get('search') || '').toLowerCase();
+        const sort = parsedUrl.searchParams.get('sort') || 'createdAt';
+        const order = parsedUrl.searchParams.get('order') || 'desc';
+        const filter = parsedUrl.searchParams.get('filter') || '';
+        const users = getUsers();
+        let list = Object.entries(users).map(function(e) {
+            const u = e[1];
+            const g = normalizeGameData(u.gameData);
+            return { email: u.email, username: u.username, verified: !!u.verified, banned: !!u.banned, createdAt: u.createdAt || 0, lastLoginAt: u.lastLoginAt || 0, gameData: g, hasPvpData: !!u.pvpData };
+        });
+        // Filter
+        if (search) list = list.filter(function(u) { return u.email.toLowerCase().indexOf(search) >= 0 || (u.username || '').toLowerCase().indexOf(search) >= 0; });
+        if (filter === 'verified') list = list.filter(function(u) { return u.verified; });
+        else if (filter === 'unverified') list = list.filter(function(u) { return !u.verified; });
+        else if (filter === 'banned') list = list.filter(function(u) { return u.banned; });
+        else if (filter === 'active') list = list.filter(function(u) { return u.lastLoginAt > 0 && u.lastLoginAt > Date.now() - 7 * 24 * 60 * 60 * 1000; });
+        else if (filter === 'hasPvp') list = list.filter(function(u) { return u.hasPvpData; });
+        else if (filter === 'noPvp') list = list.filter(function(u) { return !u.hasPvpData; });
+        // Sort
+        var sortField = ['createdAt', 'lastLoginAt', 'credits', 'coins', 'maxDistance', 'runCount'].indexOf(sort) >= 0 ? sort : 'createdAt';
+        list.sort(function(a, b) {
+            var va = sortField === 'credits' ? a.gameData.credits : sortField === 'coins' ? a.gameData.coins : sortField === 'maxDistance' ? a.gameData.maxDistance : sortField === 'runCount' ? a.gameData.runCount : sortField === 'lastLoginAt' ? a.lastLoginAt : a.createdAt;
+            var vb = sortField === 'credits' ? b.gameData.credits : sortField === 'coins' ? b.gameData.coins : sortField === 'maxDistance' ? b.gameData.maxDistance : sortField === 'runCount' ? b.gameData.runCount : sortField === 'lastLoginAt' ? b.lastLoginAt : b.createdAt;
+            return order === 'asc' ? va - vb : vb - va;
+        });
+        sendJSON(res, 200, list);
+        return;
+    }
+
+    // GET /api/admin/user?email=xxx
+    if (pathname === '/api/admin/user' && method === 'GET') {
+        if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
+        const email = parsedUrl.searchParams.get('email');
+        if (!email) { sendJSON(res, 400, { error: 'Email required' }); return; }
+        const users = getUsers();
+        const u = users[email];
+        if (!u) { sendJSON(res, 404, { error: 'User not found' }); return; }
+        const g = normalizeGameData(u.gameData);
+        sendJSON(res, 200, { email: u.email, username: u.username, verified: !!u.verified, banned: !!u.banned, createdAt: u.createdAt || 0, lastLoginAt: u.lastLoginAt || 0, gameData: g, hasPvpData: !!u.pvpData });
+        return;
+    }
+
+    // POST /api/admin/user/update
+    if (pathname === '/api/admin/user/update' && method === 'POST') {
         if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
         const body = await parseBody(req);
         const { email } = body;
         if (!email) { sendJSON(res, 400, { error: 'Email required' }); return; }
         const users = getUsers();
-        if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
-        delete users[email];
+        const u = users[email];
+        if (!u) { sendJSON(res, 404, { error: 'User not found' }); return; }
+        const before = JSON.parse(JSON.stringify(u));
+        const existing = normalizeGameData(u.gameData);
+        if (body.gameData) {
+            const gd = body.gameData;
+            // Validate ownedAbilities
+            if (gd.ownedAbilities !== undefined) {
+                if (!Array.isArray(gd.ownedAbilities) || !gd.ownedAbilities.every(function(x) { return typeof x === 'number' && x >= 0; })) {
+                    sendJSON(res, 400, { error: 'ownedAbilities must be an array of non-negative numbers' }); return;
+                }
+            }
+            // Validate ownedCharacters
+            if (gd.ownedCharacters !== undefined) {
+                if (!Array.isArray(gd.ownedCharacters) || !gd.ownedCharacters.every(function(x) { return typeof x === 'string'; })) {
+                    sendJSON(res, 400, { error: 'ownedCharacters must be an array of strings' }); return;
+                }
+                if (gd.ownedCharacters.indexOf('runner') < 0) {
+                    gd.ownedCharacters.unshift('runner');
+                }
+            }
+            // Validate selectedCharacter
+            var oc = gd.ownedCharacters || existing.ownedCharacters;
+            if (gd.selectedCharacter !== undefined && oc.indexOf(gd.selectedCharacter) < 0) {
+                gd.selectedCharacter = 'runner';
+            }
+            // Validate numeric fields non-negative
+            ['credits','coins','runCount','maxDistance','maxEasy','maxMedium','maxHard','maxEasyAbility','maxMediumAbility','maxHardAbility','equippedAbility'].forEach(function(f) {
+                if (gd[f] !== undefined && (typeof gd[f] !== 'number' || gd[f] < 0)) gd[f] = 0;
+            });
+            u.gameData = normalizeGameData(Object.assign({}, existing, gd));
+        } else if (body.field !== undefined && body.value !== undefined) {
+            // Simple field update
+            if (body.field === 'username') u.username = String(body.value);
+            else if (body.field === 'verified') u.verified = !!body.value;
+            else if (body.field === 'banned') u.banned = !!body.value;
+            else { sendJSON(res, 400, { error: 'Unknown field: ' + body.field }); return; }
+        } else {
+            sendJSON(res, 400, { error: 'Provide gameData or field+value' }); return;
+        }
         saveUsers(users);
-        console.log('[ADMIN] Deleted user: ' + email);
-        sendJSON(res, 200, { message: 'User deleted: ' + email });
+        const after = JSON.parse(JSON.stringify(u));
+        addAuditLog('admin', 'update', email, before, after);
+        const g = normalizeGameData(u.gameData);
+        sendJSON(res, 200, { success: true, email: u.email, username: u.username, verified: !!u.verified, banned: !!u.banned, gameData: g });
         return;
     }
 
-    // ---- ADMIN: RESET PASSWORD ----
-    if (pathname === '/api/admin-reset-password' && method === 'POST') {
+    // POST /api/admin/user/action
+    if (pathname === '/api/admin/user/action' && method === 'POST') {
         if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
         const body = await parseBody(req);
-        const { email, newPassword } = body;
-        if (!email || !newPassword) { sendJSON(res, 400, { error: 'Email and new password required' }); return; }
-        if (newPassword.length < 4) { sendJSON(res, 400, { error: 'Password too short (min 4)' }); return; }
+        const { email, action } = body;
+        if (!email || !action) { sendJSON(res, 400, { error: 'Email and action required' }); return; }
         const users = getUsers();
-        if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
-        const { hash, salt } = hashPassword(newPassword);
-        users[email].passwordHash = hash;
-        users[email].passwordSalt = salt;
-        saveUsers(users);
-        console.log('[ADMIN] Password reset for: ' + email);
-        sendJSON(res, 200, { message: 'Password updated for ' + email });
+        const u = users[email];
+        if (!u && action !== 'delete') { sendJSON(res, 404, { error: 'User not found' }); return; }
+        const before = u ? JSON.parse(JSON.stringify(u)) : null;
+        switch (action) {
+            case 'verify':
+                u.verified = true;
+                saveUsers(users);
+                break;
+            case 'unverify':
+                u.verified = false;
+                saveUsers(users);
+                break;
+            case 'ban':
+                if (!body.confirm) { sendJSON(res, 400, { error: 'confirm:true required for dangerous action' }); return; }
+                u.banned = true;
+                saveUsers(users);
+                break;
+            case 'unban':
+                if (!body.confirm) { sendJSON(res, 400, { error: 'confirm:true required for dangerous action' }); return; }
+                u.banned = false;
+                saveUsers(users);
+                break;
+            case 'reset-password': {
+                if (!body.confirm) { sendJSON(res, 400, { error: 'confirm:true required for dangerous action' }); return; }
+                const np = body.newPassword;
+                if (!np || np.length < 4) { sendJSON(res, 400, { error: 'newPassword required (min 4 chars)' }); return; }
+                const { hash, salt } = hashPassword(np);
+                u.passwordHash = hash;
+                u.passwordSalt = salt;
+                saveUsers(users);
+                break;
+            }
+            case 'clear-save':
+                if (!body.confirm) { sendJSON(res, 400, { error: 'confirm:true required for dangerous action' }); return; }
+                u.gameData = defaultGameData();
+                saveUsers(users);
+                break;
+            case 'grant-all-abilities':
+                if (!body.confirm) { sendJSON(res, 400, { error: 'confirm:true required for dangerous action' }); return; }
+                u.gameData = normalizeGameData(Object.assign({}, u.gameData, { ownedAbilities: [0,1,2,3], equippedAbility: 2 }));
+                saveUsers(users);
+                break;
+            case 'grant-all-characters':
+                if (!body.confirm) { sendJSON(res, 400, { error: 'confirm:true required for dangerous action' }); return; }
+                u.gameData = normalizeGameData(Object.assign({}, u.gameData, { ownedCharacters: ['runner','adventurer','beach','casual2','hoodie','farmer','king','punk','spacesuit','suit','swat','worker'] }));
+                saveUsers(users);
+                break;
+            case 'reset-leaderboard':
+                if (!body.confirm) { sendJSON(res, 400, { error: 'confirm:true required for dangerous action' }); return; }
+                u.gameData = normalizeGameData(Object.assign({}, u.gameData, { maxDistance: 0, maxEasy: 0, maxMedium: 0, maxHard: 0, maxEasyAbility: 0, maxMediumAbility: 0, maxHardAbility: 0, highScore: 0, runCount: 0 }));
+                saveUsers(users);
+                break;
+            case 'delete':
+                if (!body.confirm) { sendJSON(res, 400, { error: 'confirm: true required to delete' }); return; }
+                delete users[email];
+                saveUsers(users);
+                console.log('[ADMIN] Deleted user: ' + email);
+                addAuditLog('admin', 'delete', email, before, null);
+                sendJSON(res, 200, { success: true, message: 'User deleted' });
+                return;
+            default:
+                sendJSON(res, 400, { error: 'Unknown action: ' + action }); return;
+        }
+        const after = JSON.parse(JSON.stringify(users[email]));
+        addAuditLog('admin', action, email, before, after);
+        const g = normalizeGameData(users[email].gameData);
+        sendJSON(res, 200, { success: true, email: u.email, username: u.username, verified: !!u.verified, banned: !!u.banned, gameData: g });
+        return;
+    }
+
+    // GET /api/admin/audit
+    if (pathname === '/api/admin/audit' && method === 'GET') {
+        if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
+        var limit = parseInt(parsedUrl.searchParams.get('limit'), 10) || 200;
+        if (limit > 5000) limit = 5000;
+        const log = loadAuditLog();
+        sendJSON(res, 200, log.slice(-limit));
+        return;
+    }
+
+    // GET /api/admin/pvp/status
+    if (pathname === '/api/admin/pvp/status' && method === 'GET') {
+        if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
+        var pvpData = httpGet('http://127.0.0.1:3001/admin/pvp-status').then(function(d) {
+            sendJSON(res, 200, d);
+        }).catch(function() {
+            sendJSON(res, 200, { error: 'PVP server offline', rooms: 0, players: 0, roomsList: [] });
+        });
         return;
     }
 
@@ -399,7 +771,6 @@ async function handleRequest(req, res) {
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="60">' +
           '<defs><filter id="blur"><feGaussianBlur stdDeviation="0.4"/></filter></defs>' +
           '<rect width="200" height="60" fill="#1a1a2e" rx="8"/>' +
-          // Background noise
           Array.from({length: 30}, function() {
             return '<circle cx="' + Math.random()*200 + '" cy="' + Math.random()*60 +
               '" r="' + (1+Math.random()*2) + '" fill="rgba(255,255,255,' + (0.05+Math.random()*0.1) + ')"/>';
@@ -539,6 +910,7 @@ async function handleRequest(req, res) {
             sendJSON(res, 403, { error: 'Please verify your email first (check code)' });
             return;
         }
+        if (user.banned) { sendJSON(res, 403, { error: 'Account is banned. Contact support.' }); return; }
 
         const token = generateToken();
         user.sessionToken = token;
@@ -619,86 +991,7 @@ async function handleRequest(req, res) {
     }
 
     // ---- ADMIN: SET COINS ----
-    if (pathname === '/api/admin-set-coins' && method === 'POST') {
-        if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
-        const body = await parseBody(req);
-        const { email, coins } = body;
-        if (!email || coins === undefined) { sendJSON(res, 400, { error: 'Email and coins required' }); return; }
-        const users = getUsers();
-        if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
-        const gd = users[email].gameData || {};
-        gd.coins = Math.max(0, Math.floor(coins));
-        gd.totalCoins = Math.max(gd.totalCoins || 0, gd.coins);
-        users[email].gameData = gd;
-        saveUsers(users);
-        console.log('[ADMIN] Set coins for ' + email + ': ' + gd.coins);
-        sendJSON(res, 200, { message: email + ' coins set to ' + gd.coins });
-        return;
-    }
 
-    // ---- ADMIN: SET CREDITS ----
-    if (pathname === '/api/admin-set-credits' && method === 'POST') {
-        if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
-        const body = await parseBody(req);
-        const { email, credits } = body;
-        if (!email || credits === undefined) { sendJSON(res, 400, { error: 'Email and credits required' }); return; }
-        const users = getUsers();
-        if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
-        const gd = users[email].gameData || {};
-        gd.credits = Math.max(0, Math.floor(credits));
-        users[email].gameData = gd;
-        saveUsers(users);
-        console.log('[ADMIN] Set credits for ' + email + ': ' + gd.credits);
-        sendJSON(res, 200, { message: email + ' credits set to ' + gd.credits });
-        return;
-    }
-
-    if (pathname === '/api/admin-set-game-data' && method === 'POST') {
-        if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
-        const body = await parseBody(req);
-        const { email } = body;
-        if (!email) { sendJSON(res, 400, { error: 'Email required' }); return; }
-        const users = getUsers();
-        if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
-        const existing = normalizeGameData(users[email].gameData);
-        const ownedCharacters = Array.isArray(body.ownedCharacters) && body.ownedCharacters.length ? body.ownedCharacters : existing.ownedCharacters;
-        if (ownedCharacters.indexOf('runner') < 0) ownedCharacters.unshift('runner');
-        const selectedCharacter = body.selectedCharacter && ownedCharacters.indexOf(body.selectedCharacter) >= 0 ? body.selectedCharacter : 'runner';
-        users[email].gameData = normalizeGameData(Object.assign({}, existing, {
-            coins: body.coins !== undefined ? Math.max(0, Math.floor(body.coins)) : existing.coins,
-            credits: body.credits !== undefined ? Math.max(0, Math.floor(body.credits)) : existing.credits,
-            totalCoins: Math.max(existing.totalCoins || 0, body.coins || 0),
-            maxDistance: body.maxDistance !== undefined ? Math.max(0, Math.floor(body.maxDistance)) : existing.maxDistance,
-            highScore: body.maxDistance !== undefined ? Math.max(0, Math.floor(body.maxDistance)) : existing.highScore,
-            maxEasy: body.maxEasy !== undefined ? Math.max(0, Math.floor(body.maxEasy)) : existing.maxEasy,
-            maxMedium: body.maxMedium !== undefined ? Math.max(0, Math.floor(body.maxMedium)) : existing.maxMedium,
-            maxHard: body.maxHard !== undefined ? Math.max(0, Math.floor(body.maxHard)) : existing.maxHard,
-            runCount: body.runCount !== undefined ? Math.max(0, Math.floor(body.runCount)) : existing.runCount,
-            ownedAbilities: Array.isArray(body.ownedAbilities) && body.ownedAbilities.length ? body.ownedAbilities : existing.ownedAbilities,
-            equippedAbility: body.equippedAbility !== undefined ? Math.max(0, Math.floor(body.equippedAbility)) : existing.equippedAbility,
-            ownedCharacters: ownedCharacters,
-            selectedCharacter: selectedCharacter
-        }));
-        saveUsers(users);
-        console.log('[ADMIN] Set game data for ' + email);
-        sendJSON(res, 200, { message: email + ' game data updated', gameData: users[email].gameData });
-        return;
-    }
-
-    // ---- ADMIN: VERIFY USER ----
-    if (pathname === '/api/admin-verify-user' && method === 'POST') {
-        if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
-        const body = await parseBody(req);
-        const { email } = body;
-        if (!email) { sendJSON(res, 400, { error: 'Email required' }); return; }
-        const users = getUsers();
-        if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
-        users[email].verified = true;
-        saveUsers(users);
-        console.log('[ADMIN] Verified user: ' + email);
-        sendJSON(res, 200, { message: 'Verified: ' + email });
-        return;
-    }
 
     sendJSON(res, 404, { error: 'Not found' });
 }

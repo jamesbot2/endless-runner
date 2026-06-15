@@ -1,6 +1,7 @@
 // ===== ENDLESS RUNNER - Shared Auth / Data Helpers =====
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
@@ -59,4 +60,13 @@ function normalizeGameData(g) {
   };
 }
 
-module.exports = { DATA_DIR, USERS_FILE, readDB, writeDB, getUsers, saveUsers, getAuthUser, validateToken, defaultGameData, normalizeGameData };
+function generateId() { return crypto.randomBytes(8).toString('hex'); }
+function htmlEscape(str) { return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function atomicWriteFile(filePath, data) {
+  const tmp = filePath + '.tmp.' + Date.now();
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
+  fs.renameSync(tmp, filePath);
+}
+function saveUsersAtomic(users) { atomicWriteFile(USERS_FILE, users); }
+
+module.exports = { DATA_DIR, USERS_FILE, readDB, writeDB, getUsers, saveUsers, getAuthUser, validateToken, defaultGameData, normalizeGameData, generateId, htmlEscape, atomicWriteFile, saveUsersAtomic };
