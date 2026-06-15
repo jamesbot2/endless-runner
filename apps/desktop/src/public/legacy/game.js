@@ -4621,9 +4621,10 @@
             id: room.id || room.roomId || ('ROOM-' + Math.floor(1000 + Math.random() * 9000)),
             name: room.name || 'Cyber Sprint',
             host: room.host || room.hostName || '',
-            localHost: !!room.localHost || room.host === localName || room.hostName === localName,
+            localHost: !!room.localHost || room.hostId === SG.state.pvpLocalPlayerId || room.host === localName || room.hostName === localName,
             players: players,
             maxPlayers: room.maxPlayers || 3,
+            status: room.status || 'waiting',
             locked: !!room.locked
         };
     }
@@ -4650,6 +4651,13 @@
     SG.isPvpRoomReady = function(room) {
         if (!room || room.players.length < 1) return false;
         if (room.localHost && room.players.length === 1) return true;
+        if (room.localHost && room.players.length > 1) {
+            for (var h = 0; h < room.players.length; h++) {
+                if (room.players[h].local) continue;
+                if (!room.players[h].ready) return false;
+            }
+            return true;
+        }
         for (var i = 0; i < room.players.length; i++) {
             if (!room.players[i].ready) return false;
         }
@@ -4715,9 +4723,10 @@
                 html += '<div style="margin-top:12px;padding:10px 12px;border-radius:6px;background:rgba(255,216,77,.08);border:1px solid rgba(255,216,77,.22);color:rgba(255,239,181,.9);font-size:12px;">Waiting for real server players. Local AI placeholders are disabled.</div>';
             }
             var ready = SG.isPvpRoomReady(room);
+            var canStart = !!(room.localHost && ready);
             html += '<div style="display:flex;gap:10px;margin-top:16px;">' +
                 '<button id="pvp-ready" style="flex:1;height:40px;border-radius:6px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.08);color:#fff;font-weight:900;cursor:pointer;">Ready</button>' +
-                '<button id="pvp-start" ' + (!room.localHost || !ready ? 'disabled' : '') + ' style="flex:1;height:40px;border-radius:6px;border:0;background:' + (room.localHost && ready ? 'linear-gradient(90deg,#ff2ccf,#8d35ff)' : 'rgba(255,255,255,.12)') + ';color:#fff;font-weight:900;cursor:' + (room.localHost && ready ? 'pointer' : 'not-allowed') + ';">Start Game</button>' +
+                '<button id="pvp-start" ' + (!canStart ? 'disabled' : '') + ' style="flex:1;height:40px;border-radius:6px;border:0;background:' + (canStart ? 'linear-gradient(90deg,#ff2ccf,#8d35ff)' : 'rgba(255,255,255,.12)') + ';color:#fff;font-weight:900;cursor:' + (canStart ? 'pointer' : 'not-allowed') + ';">Start Game</button>' +
                 '<button id="pvp-leave" style="height:40px;padding:0 14px;border-radius:6px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;font-weight:800;cursor:pointer;">Leave</button>' +
             '</div></section>';
             html += '<aside style="border:1px solid rgba(141,53,255,.32);border-radius:8px;padding:16px;background:rgba(0,0,0,.22);font-size:13px;color:rgba(241,237,255,.82);line-height:1.5;">' +
@@ -4815,35 +4824,6 @@
         head.position.y = 1.62;
         head.renderOrder = 80;
         group.add(head);
-        var chest = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.018, 8, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.68, depthWrite: false, blending: THREE.AdditiveBlending }));
-        chest.position.y = 1.12;
-        chest.rotation.x = Math.PI / 2;
-        chest.renderOrder = 82;
-        group.add(chest);
-        var halo = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.62, 32), new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.78, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
-        halo.position.y = 0.05;
-        halo.rotation.x = Math.PI / 2;
-        halo.renderOrder = 81;
-        group.add(halo);
-        var labelCanvas = document.createElement('canvas');
-        labelCanvas.width = 256;
-        labelCanvas.height = 64;
-        var labelCtx = labelCanvas.getContext('2d');
-        labelCtx.fillStyle = 'rgba(0,0,0,0.2)';
-        labelCtx.fillRect(0, 0, 256, 64);
-        labelCtx.font = '700 28px Arial';
-        labelCtx.textAlign = 'center';
-        labelCtx.textBaseline = 'middle';
-        labelCtx.fillStyle = '#ffffff';
-        labelCtx.shadowColor = '#' + color.toString(16).padStart(6, '0');
-        labelCtx.shadowBlur = 14;
-        labelCtx.fillText(name, 128, 32);
-        var labelTex = new THREE.CanvasTexture(labelCanvas);
-        var label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex, transparent: true, depthWrite: false }));
-        label.position.y = 2.1;
-        label.scale.set(1.6, 0.4, 1);
-        label.renderOrder = 83;
-        group.add(label);
         group.position.set(SG.LANE_POSITIONS[lane], SG.PLAYER_Y, -2);
         group.renderOrder = 80;
         return group;
@@ -5120,6 +5100,12 @@
         }, 1900);
     };
 
+    SG.setPvpResultActions = function(on) {
+        if (SG.restartBtnEl) SG.restartBtnEl.textContent = on ? 'BACK TO ROOM' : 'TAP TO RETRY';
+        var quit = document.getElementById('quit-btn');
+        if (quit) quit.textContent = 'RETURN TO MENU';
+    };
+
     SG.finishPvpMatch = function() {
         if (!SG.state.pvpMode) return;
         SG.state.pvpSpectating = false;
@@ -5140,11 +5126,14 @@
                 }).join('');
                 SG.gameOverEl.insertBefore(ranks, SG.restartBtnEl || null);
             }
+            if (SG.setPvpResultActions) SG.setPvpResultActions(true);
             SG.gameOverEl.classList.add('visible');
         }
     };
 
     SG.exitPvpToLobby = function() {
+        if (SG.forfeitPvpMatch) SG.forfeitPvpMatch();
+        if (SG.resetPvpRoomForLobby) SG.resetPvpRoomForLobby();
         SG.stopBgMusic();
         SG.state.pvpMode = false;
         SG.state.started = false;
@@ -5154,6 +5143,7 @@
         SG.state.pvpSpectating = false;
         SG.state.pvpLocalDead = false;
         SG.state.pvpSpectateIndex = 0;
+        if (SG.setPvpResultActions) SG.setPvpResultActions(false);
         if (SG.pvpHudEl) SG.pvpHudEl.style.display = 'none';
         if (SG.pvpExitBtnEl) SG.pvpExitBtnEl.style.display = 'none';
         if (SG.pvpDeathFeedEl) SG.pvpDeathFeedEl.style.display = 'none';
@@ -6666,30 +6656,11 @@
 
     SG.updatePvpPlayerAura = function() {
         if (!SG.player || !THREE) return;
-        if (!SG.pvpPlayerAura) {
-            var aura = new THREE.Group();
-            aura.name = 'pvp-player-neon-aura';
-            aura.userData.pvpPlayerAura = true;
-            var ring = new THREE.Mesh(
-                new THREE.RingGeometry(0.58, 0.72, 36),
-                new THREE.MeshBasicMaterial({ color: 0x22e7ff, transparent: true, opacity: 0.72, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
-            );
-            ring.rotation.x = Math.PI / 2;
-            ring.position.y = 0.03;
-            ring.renderOrder = 78;
-            aura.add(ring);
-            var spine = new THREE.Mesh(
-                new THREE.BoxGeometry(0.05, 1.55, 0.05),
-                new THREE.MeshBasicMaterial({ color: 0xff2ccf, transparent: true, opacity: 0.42, depthWrite: false, blending: THREE.AdditiveBlending })
-            );
-            spine.position.y = 0.95;
-            spine.position.z = -0.12;
-            spine.renderOrder = 78;
-            aura.add(spine);
-            SG.pvpPlayerAura = aura;
-            SG.player.add(aura);
+        if (SG.pvpPlayerAura) {
+            SG.player.remove(SG.pvpPlayerAura);
+            if (SG.disposeObject) SG.disposeObject(SG.pvpPlayerAura);
+            SG.pvpPlayerAura = null;
         }
-        SG.pvpPlayerAura.visible = !!SG.state.pvpMode && !SG.state.pvpLocalDead;
     };
 
     SG.resetCyberMode = function() {
@@ -6716,6 +6687,9 @@
     SG.quitToMenu = function() {
         if (SG.cancelStartCountdown) SG.cancelStartCountdown();
         SG.stopPoliceChase();
+        if ((SG.state.pvpMode || SG.state.pvpRoom || SG.state.pvpResult) && SG.leavePvpRoom) {
+            SG.leavePvpRoom();
+        }
         SG.state.pvpMode = false;
         SG.state.pvpRoom = null;
         SG.state.pvpResult = null;
@@ -6736,6 +6710,7 @@
         SG.state.started = false;
         SG.state.countdownActive = false;
         SG.state.paused = false;
+        if (SG.setPvpResultActions) SG.setPvpResultActions(false);
         SG.state.currentLane = 1;
         SG.state.targetLane = 1;
         SG.state.laneLerp = 1;
@@ -6925,10 +6900,12 @@
                 }).join('');
                 SG.gameOverEl.insertBefore(ranks, SG.restartBtnEl || null);
             }
+            if (SG.setPvpResultActions) SG.setPvpResultActions(true);
         } else {
             SG.state.pvpResult = null;
             var staleRanks = document.getElementById('pvp-results');
             if (staleRanks) staleRanks.remove();
+            if (SG.setPvpResultActions) SG.setPvpResultActions(false);
         }
 
         var multipliers = [1, 5, 10];
@@ -7727,7 +7704,7 @@
             },
             body: JSON.stringify({
                 gameData: {
-                    coins: SG.state.coins || 0,
+                    coins: SG.state.totalCoins || SG.state.coins || 0,
                     credits: SG.state.credits || 0,
                     equippedAbility: SG.state.equippedAbility || 0,
                     ownedAbilities: owned,
@@ -7761,6 +7738,7 @@
         if (!SG.account.loggedIn || !SG.account.token) { if (callback) callback(); return; }
         var url = API + '/api/load';
         fetch(url, {
+            cache: 'no-store',
             headers: { 'Authorization': 'Bearer ' + SG.account.token }
         }).then(function(r) {
             if (r.status === 401) {
@@ -7778,7 +7756,7 @@
         }).then(function(data) {
             if (!data || !data.gameData) { if (callback) callback(); return; }
             SG.applyGameData(data.gameData);
-            if (callback) callback();
+            if (callback) callback(data.gameData);
         }).catch(function(){ if (callback) callback(); });
     };
 
@@ -7793,12 +7771,12 @@
             document.body.appendChild(overlay);
         }
         overlay.style.display = 'flex';
-        overlay.innerHTML = '<div class="menu-content"><div style="color:#888;padding:20px;">Loading...</div></div>';
+        overlay.innerHTML = '<div class="menu-content"><div style="color:#888;padding:20px;">Loading server profile...</div></div>';
 
         // Load fresh data from server first, then render
-        SG.loadAccountData(function() {
+        SG.loadAccountData(function(serverGameData) {
             try {
-                SG._renderProfile(overlay);
+                SG._renderProfile(overlay, serverGameData);
             } catch(e) {
                 // Fallback: render anyway even if _renderProfile fails
                 overlay.innerHTML = '<div class="menu-content"><h1 class="menu-title">👤 PROFILE</h1>' +
@@ -7808,23 +7786,25 @@
         });
     };
 
-    SG._renderProfile = function(overlay) {
-        var s = SG.state;
+    SG._renderProfile = function(overlay, serverGameData) {
+        var s = serverGameData || SG.state;
         SG.account.email = localStorage.getItem('subwayEmail');
         SG.account.username = localStorage.getItem('subwayUsername') || (SG.account.email || '').split('@')[0] || 'Player';
         var names = {0:'None',1:'Double Jump',2:'Jetpack',3:'Roof Walk'};
         var ability = names[s.equippedAbility] || 'None';
         var owned = [];
-        if (s.canDoubleJump) owned.push('Double Jump');
-        if (s.canJetpack) owned.push('Jetpack');
-        if (s.canRoofWalk) owned.push('Roof Walk');
+        var ownedAbilityIds = Array.isArray(s.ownedAbilities) ? s.ownedAbilities : null;
+        if ((ownedAbilityIds && ownedAbilityIds.indexOf(1) >= 0) || s.canDoubleJump) owned.push('Double Jump');
+        if ((ownedAbilityIds && ownedAbilityIds.indexOf(2) >= 0) || s.canJetpack) owned.push('Jetpack');
+        if ((ownedAbilityIds && ownedAbilityIds.indexOf(3) >= 0) || s.canRoofWalk) owned.push('Roof Walk');
+        var profileCoins = s.coins !== undefined ? s.coins : (s.totalCoins || 0);
 
         var html = '<div class="menu-content" style="max-width:380px;text-align:left;">';
         html += '<h1 class="menu-title" style="font-size:24px;text-align:center;margin-bottom:10px;">👤 PROFILE</h1>';
         html += '<div class="bento-grid">';
         html += '<div class="bento-card"><div class="bento-label">Player</div><div class="bento-value">' + SG.escapeHtml(SG.account.username || '-') + '</div></div>';
         html += '<div class="bento-card"><div class="bento-label">Credits</div><div class="bento-value gold">' + (s.credits || 0) + '</div></div>';
-        html += '<div class="bento-card"><div class="bento-label">Total Coins</div><div class="bento-value gold">' + (s.totalCoins || 0) + '</div></div>';
+        html += '<div class="bento-card"><div class="bento-label">Coins</div><div class="bento-value gold">' + (profileCoins || 0) + '</div></div>';
         html += '<div class="bento-card"><div class="bento-label">Equipped</div><div class="bento-value cyan" style="font-size:16px;">' + ability + '</div></div>';
         html += '<div class="bento-card"><div class="bento-label">Owned</div><div class="bento-value" style="font-size:14px;">' + (owned.length ? owned.join(', ') : 'None') + '</div></div>';
         html += '<div class="bento-card"><div class="bento-label">Runs</div><div class="bento-value">' + (s.runCount || 0) + '</div></div>';
@@ -7947,12 +7927,12 @@
         if (origEnd) {
             SG.gameOver = function() {
                 if (origEnd) origEnd();
-                if (SG.state.legitRun !== false) {
+                if (!SG.state.pvpMode && SG.state.legitRun !== false) {
                     var score = Math.floor(SG.state.score || 0);
                     SG.state.maxLegitDistance = Math.max(SG.state.maxLegitDistance || 0, score);
                     SG.state.bestScore = Math.max(SG.state.bestScore || 0, SG.state.maxLegitDistance);
+                    SG.accountSave();
                 }
-                SG.accountSave();
             };
         }
     };
@@ -8104,6 +8084,30 @@
         send({ type: 'room:list' });
     };
 
+    SG.forfeitPvpMatch = function() {
+        if (active && roomId) {
+            send({ type: 'match:dead', roomId: roomId, distance: Math.floor(SG.state.score || 0) });
+        }
+        stopSnapshots();
+        active = false;
+    };
+
+    SG.resetPvpRoomForLobby = function() {
+        if (roomId) {
+            send({ type: 'room:reset', roomId: roomId });
+            send({ type: 'room:list' });
+        }
+        if (SG.state && SG.state.pvpRoom) {
+            SG.state.pvpRoom.status = 'waiting';
+            if (Array.isArray(SG.state.pvpRoom.players)) {
+                for (var i = 0; i < SG.state.pvpRoom.players.length; i++) {
+                    SG.state.pvpRoom.players[i].ready = false;
+                    SG.state.pvpRoom.players[i].alive = true;
+                }
+            }
+        }
+    };
+
     function markLocalPlayer(room) {
         if (!room || !SG.account) return room;
         SG.state.pvpLocalPlayerId = SG.account.email;
@@ -8146,7 +8150,7 @@
                 markLocalPlayer(msg.room);
                 SG.state.pvpSeed = msg.seed || '';
                 if (SG.setPvpRoomFromServer) SG.setPvpRoomFromServer(msg.room || msg);
-                if (SG.state.pvpRoom) SG.state.pvpRoom.localHost = true;
+                if (SG.state.pvpRoom) SG.state.pvpRoom.localHost = !!(msg.room && msg.room.hostId === SG.state.pvpLocalPlayerId);
                 stopSnapshots();
                 startSnapshots();
                 if (typeof SG._originalStartPvpRace === 'function') SG._originalStartPvpRace();
@@ -8164,9 +8168,16 @@
             case 'match:finish':
                 stopSnapshots();
                 active = false;
-                SG.state.pvpRoom = null;
                 SG.state.pvpResult = msg.ranking || [];
+            if (SG.state.pvpRoom && Array.isArray(SG.state.pvpRoom.players)) {
+                for (var mf = 0; mf < SG.state.pvpRoom.players.length; mf++) {
+                    SG.state.pvpRoom.players[mf].ready = false;
+                    SG.state.pvpRoom.players[mf].alive = true;
+                }
+                SG.state.pvpRoom.status = 'waiting';
+            }
                 showServerRanking(msg.ranking || []);
+                send({ type: 'room:list' });
                 break;
         }
     }
@@ -8194,13 +8205,17 @@
         for (var i = 0; i < list.length; i++) {
             if (list[i].id === msg.playerId || list[i].name === msg.name) list[i].alive = false;
         }
-        if (SG.showPvpDeathFeed) SG.showPvpDeathFeed((msg.name || 'Player') + ' is out');
+        if (SG.showPvpDeathNotice) SG.showPvpDeathNotice(msg.name || 'Player');
     }
 
     function showServerRanking(ranking) {
         if (!SG.gameOverEl) return;
         SG.state.gameOver = true;
+        SG.state.started = false;
+        SG.state.pvpSpectating = false;
         if (SG.finalScoreEl) SG.finalScoreEl.textContent = Math.floor(SG.state.score || 0);
+        var title = SG.gameOverEl.querySelector('h1');
+        if (title) title.textContent = 'PVP FINISHED';
         var old = SG.gameOverEl.querySelector('.pvp-ranks');
         if (old) old.remove();
         var html = '';
@@ -8210,7 +8225,8 @@
         var div = document.createElement('div');
         div.className = 'pvp-ranks';
         div.innerHTML = html;
-        SG.gameOverEl.appendChild(div);
+        SG.gameOverEl.insertBefore(div, SG.restartBtnEl || null);
+        if (SG.setPvpResultActions) SG.setPvpResultActions(true);
         SG.gameOverEl.classList.add('visible');
     }
 
@@ -8253,7 +8269,16 @@
 
         SG.startPvpRace = function() {
             if (roomId) {
-                send({ type: 'room:start', roomId: roomId });
+                var needsReset = !!(SG.state && SG.state.pvpRoom && SG.state.pvpRoom.status && SG.state.pvpRoom.status !== 'waiting');
+                if (needsReset) {
+                    SG.state.pvpRoom.status = 'waiting';
+                    send({ type: 'room:reset', roomId: roomId });
+                    setTimeout(function() {
+                        send({ type: 'room:start', roomId: roomId });
+                    }, 80);
+                } else {
+                    send({ type: 'room:start', roomId: roomId });
+                }
                 return;
             }
             if (SG._originalStartPvpRace) SG._originalStartPvpRace.apply(this, arguments);

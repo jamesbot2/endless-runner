@@ -955,8 +955,8 @@ async function handleRequest(req, res) {
         var existing = normalizeGameData(users[userKey].gameData);
         gd = normalizeGameData(gd);
         users[userKey].gameData = {
-            coins: gd.coins ?? existing.coins,
-            credits: gd.credits ?? existing.credits,
+            coins: Math.max(gd.coins ?? 0, gd.totalCoins ?? 0, existing.coins ?? 0),
+            credits: Math.max(gd.credits ?? 0, existing.credits ?? 0),
             totalCoins: Math.max(gd.totalCoins ?? 0, gd.coins ?? 0, existing.totalCoins ?? 0),
             equippedAbility: gd.equippedAbility ?? existing.equippedAbility,
             ownedAbilities: gd.ownedAbilities ?? existing.ownedAbilities,
