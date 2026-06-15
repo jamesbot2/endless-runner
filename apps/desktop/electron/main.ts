@@ -22,6 +22,7 @@ const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('-
 const userDataPath = app.getPath('userData')
 const settingsFile = join(userDataPath, 'settings.json')
 const saveFile = join(userDataPath, 'save.json')
+const appIconPath = join(__dirname, '../../build/icon.ico')
 
 // ── Input Validation Helpers ────────────────────────────
 
@@ -99,6 +100,7 @@ function createWindow(): void {
     minWidth: 960,
     minHeight: 540,
     title: 'Endless Runner',
+    icon: appIconPath,
     show: false,
     webPreferences: {
       preload: join(__dirname, 'preload.js'),

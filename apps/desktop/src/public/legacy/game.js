@@ -84,7 +84,6 @@
         gameTime: 0,
         scoreTimer: 0,
         instructionTimer: 8,
-        hasStartedTouch: false,
         started: false,
         countdownActive: false,
         paused: false,
@@ -3510,7 +3509,6 @@
             SG.shopOverlay.id = 'shop-overlay';
             SG.shopOverlay.className = 'overlay';
             SG.shopOverlay.onclick = function(e) { if (e.target === SG.shopOverlay || e.target.closest('.modal-close-btn')) { SG.shopOverlay.style.display = 'none'; SG.updateMenuCredits(); } };
-            SG.shopOverlay.addEventListener('touchend', function(e) { if (e.target === SG.shopOverlay || e.target.closest('.modal-close-btn')) { e.preventDefault(); SG.shopOverlay.style.display = 'none'; SG.updateMenuCredits(); } });
         }
         // showShop continues below...
         var prices = [0, 10000, 50000, 100000];
@@ -3683,7 +3681,6 @@
             SG.characterOverlay.id = 'characters-overlay';
             SG.characterOverlay.className = 'overlay';
             SG.characterOverlay.onclick = function(e) { if (e.target === SG.characterOverlay || e.target.closest('.modal-close-btn')) SG.characterOverlay.style.display = 'none'; };
-            SG.characterOverlay.addEventListener('touchend', function(e) { if (e.target === SG.characterOverlay || e.target.closest('.modal-close-btn')) { e.preventDefault(); SG.characterOverlay.style.display = 'none'; } });
             document.body.appendChild(SG.characterOverlay);
         }
 
@@ -3779,7 +3776,6 @@
             overlay.id = 'settings-overlay';
             overlay.className = 'overlay';
             overlay.onclick = function(e) { if (e.target === overlay || e.target.closest('.modal-close-btn')) overlay.style.display = 'none'; };
-            overlay.addEventListener('touchend', function(e) { if (e.target === overlay || e.target.closest('.modal-close-btn')) { e.preventDefault(); overlay.style.display = 'none'; } });
             document.body.appendChild(overlay);
         }
         var music = parseFloat(localStorage.getItem('subwayMusicVol') || '0.5');
@@ -3998,7 +3994,7 @@
                 '<section class="menu-main">' +
                     '<h1 class="menu-title">ENDLESS RUNNER</h1>' +
                     '<p class="menu-subtitle">Neo Edition</p>' +
-                    '<div class="tap-to-start pulse">TAP TO START</div>' +
+                    '<div class="tap-to-start pulse">START RUN</div>' +
                     '<div class="diff-select">' +
                         '<button class="diff-btn" data-diff="0">EASY</button>' +
                         '<button class="diff-btn" data-diff="1">MEDIUM</button>' +
@@ -4011,7 +4007,6 @@
                         '<span class="key">↓</span> Roll' +
                     '</div>' +
                     '<div class="menu-keys">ESC / P = Pause &nbsp;|&nbsp; M = Menu &nbsp;|&nbsp; 👁 FPV</div>' +
-                    '<div class="menu-mobile-hint">Swipe to play on mobile</div>' +
                 '</section>' +
             '</div>';
         SG.uiOverlay.appendChild(SG.menuOverlay);
@@ -4065,11 +4060,6 @@
             e.stopPropagation();
             if (SG.exitPvpToLobby) SG.exitPvpToLobby();
         });
-        pvpExit.addEventListener('touchend', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (SG.exitPvpToLobby) SG.exitPvpToLobby();
-        });
         document.body.appendChild(pvpExit);
         SG.pvpExitBtnEl = pvpExit;
 
@@ -4093,7 +4083,6 @@
         fpvBtn.style.display = 'none';
         SG.uiOverlay.appendChild(fpvBtn);
         fpvBtn.addEventListener('click', function() { SG.state.firstPerson = !SG.state.firstPerson; fpvBtn.textContent = SG.state.firstPerson ? '\uD83D\uDC41' : '\uD83D\uDC41'; });
-        fpvBtn.addEventListener('touchend', function(e) { e.preventDefault(); SG.state.firstPerson = !SG.state.firstPerson; });
 
         // ===== CONSOLE BUTTON =====
         var conBtn = document.createElement('div');
@@ -4102,7 +4091,6 @@
         conBtn.style.display = 'none';
         SG.uiOverlay.appendChild(conBtn);
         conBtn.addEventListener('click', SG.toggleConsole);
-        conBtn.addEventListener('touchend', function(e) { e.preventDefault(); SG.toggleConsole(); });
 
         // ===== MUTE BUTTON =====
         (function() {
@@ -4113,7 +4101,6 @@
             btn.style.cssText = 'position:absolute;top:16px;left:66px;width:40px;height:40px;font-size:18px;cursor:pointer;z-index:15;pointer-events:auto;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);border-radius:10px;border:1px solid rgba(255,255,255,0.08);transition:all 0.2s;color:rgba(255,255,255,0.7);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);text-align:center;line-height:40px;';
             SG.uiOverlay.appendChild(btn);
             btn.addEventListener('click', function() { SG.toggleMute(); });
-            btn.addEventListener('touchend', function(e) { e.preventDefault(); SG.toggleMute(); });
         })();
 
         // ===== POLICE DISTANCE INDICATOR =====
@@ -4123,20 +4110,6 @@
         policeEl.textContent = '\uD83D\uDE94 DISTANCE: 8.0m';
         SG.uiOverlay.appendChild(policeEl);
         SG.policeIndicatorEl = policeEl;
-
-        // ===== MOBILE CONTROLS =====
-        var mobileCtrl = document.createElement('div');
-        mobileCtrl.id = 'mobile-controls';
-        mobileCtrl.innerHTML = '' +
-            '<div class="m-row">' +
-                '<button class="m-btn" id="m-jump">▲</button>' +
-            '</div>' +
-            '<div class="m-row">' +
-                '<button class="m-btn" id="m-left">◀</button>' +
-                '<button class="m-btn" id="m-roll">▼</button>' +
-                '<button class="m-btn" id="m-right">▶</button>' +
-            '</div>';
-        SG.uiOverlay.appendChild(mobileCtrl);
 
         // ===== SCORE DISPLAY =====
         var scoreDiv = document.createElement('div');
@@ -4282,7 +4255,7 @@
             '<span class="key">←</span> <span class="key">→</span> Move &nbsp;|&nbsp;' +
             '<span class="key">↑</span> Jump &nbsp;|&nbsp;' +
             '<span class="key">↓</span> Roll<br>' +
-            'Swipe on mobile';
+            'Keyboard controls';
         SG.uiOverlay.appendChild(instrDiv);
         SG.instructionsEl = instrDiv;
 
@@ -4296,19 +4269,13 @@
 
         // ===== EVENT LISTENERS =====
         SG.restartBtnEl.addEventListener('click', SG.restartGame);
-        SG.restartBtnEl.addEventListener('touchend', function(e) { e.preventDefault(); SG.restartGame(); });
 
         var quitBtnEl = document.getElementById('quit-btn');
         if (quitBtnEl) {
             quitBtnEl.addEventListener('click', SG.quitToMenu);
-            quitBtnEl.addEventListener('touchend', function(e) { e.preventDefault(); SG.quitToMenu(); });
         }
 
         SG.menuOverlay.addEventListener('click', function(e) { if (e.target.closest('.tap-to-start')) SG.startGameFromMenu(); });
-        SG.menuOverlay.addEventListener('touchend', function(e) {
-            e.preventDefault();
-            if (e.target.closest('.tap-to-start')) SG.startGameFromMenu();
-        });
 
         document.querySelectorAll('.diff-btn').forEach(function(btn) {
             var setDiff = function() {
@@ -4317,67 +4284,51 @@
                 btn.classList.add('active');
             };
             btn.addEventListener('click', setDiff);
-            btn.addEventListener('touchend', function(e) { e.preventDefault(); setDiff(); });
         });
 
         var shopBtnMenu = document.getElementById('shop-btn-menu');
         if (shopBtnMenu) {
             shopBtnMenu.addEventListener('click', function(e) { e.stopPropagation(); SG.showShop(); });
-            shopBtnMenu.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showShop(); });
         }
         var charactersBtn = document.getElementById('characters-btn');
         if (charactersBtn) {
             charactersBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showCharacters(); });
-            charactersBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showCharacters(); });
         }
         var profileBtn = document.getElementById('profile-btn');
         if (profileBtn) {
             profileBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showProfile(); });
-            profileBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showProfile(); });
         }
         var leaderboardBtn = document.getElementById('leaderboard-btn');
         if (leaderboardBtn) {
             leaderboardBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showLeaderboard(); });
-            leaderboardBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showLeaderboard(); });
         }
         var pvpBtn = document.getElementById('pvp-btn-menu');
         if (pvpBtn) {
             pvpBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showPvpLobby(); });
-            pvpBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showPvpLobby(); });
         }
         var settingsBtn = document.getElementById('settings-btn-menu');
         if (settingsBtn) {
             settingsBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showSettings(); });
-            settingsBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showSettings(); });
         }
         var signoutBtn = document.getElementById('signout-btn');
         if (signoutBtn) {
             signoutBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.accountLogout(); });
-            signoutBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.accountLogout(); });
         }
 
         var pauseTapBtn = SG.pauseOverlay.querySelector('.tap-to-start');
         if (pauseTapBtn) {
             pauseTapBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.togglePause(); });
-            pauseTapBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.togglePause(); });
         }
         SG.pauseOverlay.addEventListener('click', function(e) {
             if (e.target.closest('.menu-btn')) return;
             if (e.target === SG.pauseOverlay) SG.togglePause();
         });
-        SG.pauseOverlay.addEventListener('touchend', function(e) {
-            if (e.target.closest('.menu-btn')) return;
-            e.preventDefault();
-            if (e.target === SG.pauseOverlay) SG.togglePause();
-        });
 
         SG.pauseBtnEl.addEventListener('click', SG.togglePause);
-        SG.pauseBtnEl.addEventListener('touchend', function(e) { e.preventDefault(); SG.togglePause(); });
 
         var pauseMenuBtn = document.getElementById('pause-menu-btn');
         if (pauseMenuBtn) {
             pauseMenuBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.quitToMenu(); });
-            pauseMenuBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.quitToMenu(); });
         }
 
         var conInput = document.getElementById('console-input');
@@ -4522,26 +4473,6 @@
             });
         }
 
-        // ===== MOBILE BUTTONS =====
-        function bindMobileBtn(id, action, key) {
-            var btn = document.getElementById(id);
-            if (!btn) return;
-            var start = function(e) {
-                e.preventDefault(); e.stopPropagation();
-                if (key) SG.keys[key] = true;
-                if (SG.state.started && !SG.state.paused && !SG.state.gameOver) action();
-            };
-            var end = function(e) { if (key) SG.keys[key] = false; };
-            btn.addEventListener('touchstart', start, { passive: false });
-            btn.addEventListener('touchend', end, { passive: false });
-            btn.addEventListener('touchcancel', end, { passive: false });
-            btn.addEventListener('mousedown', start);
-            btn.addEventListener('mouseup', end);
-        }
-        bindMobileBtn('m-left', SG.moveLeft, 'ArrowLeft');
-        bindMobileBtn('m-right', SG.moveRight, 'ArrowRight');
-        bindMobileBtn('m-jump', SG.jump, 'w');
-        bindMobileBtn('m-roll', SG.roll, 's');
     };
 
     // ===== PVP room shell =====
@@ -5688,56 +5619,9 @@
             if (!SG.shootGun || e.button !== 0) return;
             if (!SG.state.started || SG.state.paused || SG.state.gameOver) return;
             var target = e.target;
-            if (target && target.closest && target.closest('#menu-overlay,#pause-overlay,#game-over-screen,#settings-overlay,#characters-overlay,#dev-console,button,input,textarea,select,.mobile-btn')) return;
+            if (target && target.closest && target.closest('#menu-overlay,#pause-overlay,#game-over-screen,#settings-overlay,#characters-overlay,#dev-console,button,input,textarea,select')) return;
             if (SG.shootGun()) e.preventDefault();
         });
-
-        // Touch controls
-        var touchStartX = 0, touchStartY = 0, touchStartTime = 0;
-        var isTouching = false;
-
-        document.addEventListener('touchstart', function(e) {
-            if (SG.state.gameOver) return;
-            var touch = e.changedTouches[0];
-            touchStartX = touch.clientX;
-            touchStartY = touch.clientY;
-            touchStartTime = Date.now();
-            isTouching = true;
-            SG.state.hasStartedTouch = true;
-            if (!SG.audioCtx) SG.initAudio();
-            e.preventDefault();
-        }, { passive: false });
-
-        document.addEventListener('touchmove', function(e) {
-            e.preventDefault();
-        }, { passive: false });
-
-        document.addEventListener('touchend', function(e) {
-            if (SG.state.gameOver) return;
-            if (!isTouching) return;
-            isTouching = false;
-
-            var touch = e.changedTouches[0];
-            var dx = touch.clientX - touchStartX;
-            var dy = touch.clientY - touchStartY;
-            var elapsed = Date.now() - touchStartTime;
-
-            if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy) * 0.7) {
-                if (dx > 0) SG.moveRight();
-                else SG.moveLeft();
-            } else if (dy < -40 && Math.abs(dy) > Math.abs(dx) * 0.7) {
-                SG.jump();
-            } else if (dy > 40 && Math.abs(dy) > Math.abs(dx) * 0.7) {
-                SG.roll();
-            } else if (Math.abs(dx) < 30 && Math.abs(dy) < 30 && elapsed < 300) {
-                var third = window.innerWidth / 3;
-                if (touch.clientX < third) SG.moveLeft();
-                else if (touch.clientX > third * 2) SG.moveRight();
-                else SG.jump();
-            }
-
-            e.preventDefault();
-        }, { passive: false });
     };
 })();
 
@@ -6695,6 +6579,9 @@
     // ===== QUIT TO MENU =====
     SG.quitToMenu = function() {
         if (SG.cancelStartCountdown) SG.cancelStartCountdown();
+        if ((SG.state.pvpMode || SG.state.pvpRoom || SG.state.pvpResult) && SG.leavePvpRoom) {
+            SG.leavePvpRoom({ silent: true });
+        }
         SG.stopPoliceChase();
         SG.state.pvpMode = false;
         SG.state.pvpRoom = null;
@@ -6731,7 +6618,6 @@
         SG.state.scoreTimer = 0;
         SG.state.instructionTimer = 8;
         SG.state.cameraShake = 0;
-        SG.state.hasStartedTouch = false;
         SG.state.onRoof = false;
         SG.state.hasDoubleJumped = false;
         SG.state.jumpingFromRoof = false;
@@ -6814,7 +6700,6 @@
         SG.state.gameTime = 0;
         SG.state.scoreTimer = 0;
         SG.state.cameraShake = 0;
-        SG.state.hasStartedTouch = false;
         SG.state.hasDoubleJumped = false;
         SG.state.jumpingFromRoof = false;
         SG.state.jetpackFuel = 0;
@@ -7769,7 +7654,6 @@
             overlay.id = 'profile-overlay';
             overlay.className = 'overlay';
             overlay.onclick = function(e) { if (e.target === overlay || e.target.closest('.modal-close-btn')) overlay.style.display = 'none'; };
-            overlay.addEventListener('touchend', function(e) { if (e.target === overlay || e.target.closest('.modal-close-btn')) { e.preventDefault(); overlay.style.display = 'none'; } });
             document.body.appendChild(overlay);
         }
         overlay.style.display = 'flex';
@@ -7832,7 +7716,6 @@
             overlay.id = 'lb-overlay';
             overlay.className = 'overlay';
             overlay.onclick = function(e) { if (e.target === overlay || e.target.closest('.modal-close-btn')) overlay.style.display = 'none'; };
-            overlay.addEventListener('touchend', function(e) { if (e.target === overlay || e.target.closest('.modal-close-btn')) { e.preventDefault(); overlay.style.display = 'none'; } });
             document.body.appendChild(overlay);
         }
         overlay.style.display = 'flex';
@@ -7956,6 +7839,7 @@
     var pendingStartAfterCreate = false;
     var recoveringStaleRoom = false;
     var leaveCreateAttempts = 0;
+    var suppressNextRoomLeftRender = false;
 
     SG.pvpRooms = [];
 
@@ -8103,18 +7987,25 @@
         setStatus('offline');
     };
 
-    SG.leavePvpRoom = function() {
+    SG.leavePvpRoom = function(options) {
+        var silent = !!(options && options.silent);
+        var hadRoom = !!roomId;
+        suppressNextRoomLeftRender = silent && hadRoom;
         if (roomId) send({ type: 'room:leave', roomId: roomId });
         roomId = null;
-        pending = [];
+        pendingCreateAfterLeave = false;
+        pendingStartAfterCreate = false;
+        pendingStartAfterReset = false;
+        recoveringStaleRoom = false;
+        leaveCreateAttempts = 0;
         stopSnapshots();
         if (SG.state) {
             SG.state.pvpRoom = null;
             SG.state.pvpResult = null;
         }
         if (SG.setPvpRoomsFromServer) SG.setPvpRoomsFromServer([]);
-        if (SG.renderPvpLobby) SG.renderPvpLobby();
-        send({ type: 'room:list' });
+        if (!silent && SG.renderPvpLobby) SG.renderPvpLobby();
+        if (!silent) send({ type: 'room:list' });
     };
 
     function markLocalPlayer(room) {
@@ -8181,14 +8072,16 @@
                 }
                 break;
             case 'room:left':
+                var wasSilentLeave = suppressNextRoomLeftRender;
                 roomId = null;
                 if (SG.state) SG.state.pvpRoom = null;
-                if (SG.renderPvpLobby) SG.renderPvpLobby();
+                if (!wasSilentLeave && SG.renderPvpLobby) SG.renderPvpLobby();
+                suppressNextRoomLeftRender = false;
                 if (pendingCreateAfterLeave) {
                     pendingCreateAfterLeave = false;
                     createServerRoom(pendingStartAfterCreate);
                 }
-                send({ type: 'room:list' });
+                if (!wasSilentLeave) send({ type: 'room:list' });
                 break;
             case 'match:start':
                 roomId = (msg.room && msg.room.id) || msg.roomId || roomId;
