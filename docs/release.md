@@ -29,9 +29,10 @@
 
 ```cmd
 set ENDLESS_RUNNER_API_BASE_URL=http://your-server:3000
-> Legacy: `SUBWAY_API_BASE_URL` also works as a backward-compatible alias.
 "Endless Runner.exe"
 ```
+
+> Legacy: `SUBWAY_API_BASE_URL` also works as a backward-compatible alias.
 
 ---
 
