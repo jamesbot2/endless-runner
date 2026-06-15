@@ -7516,6 +7516,9 @@
 
             overlay.innerHTML = html;
             document.body.appendChild(overlay);
+            ['click', 'dblclick', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend'].forEach(function(type) {
+                overlay.addEventListener(type, function(e) { e.stopPropagation(); });
+            });
 
             // Enter key triggers login
             document.getElementById('login-pass').addEventListener('keydown', function(e) {

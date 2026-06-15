@@ -77,14 +77,33 @@ function verifyPassword(password, storedHash, salt) {
 
 function generateToken() { return crypto.randomBytes(32).toString('hex'); }
 function generateCode() { return String(Math.floor(100000 + crypto.randomInt(900000))); }
+
+function normalizeEmailInput(email) {
+    return String(email || '')
+        .trim()
+        .replace(/\uFF20/g, '@')
+        .replace(/[。．｡]/g, '.')
+        .toLowerCase();
+}
+
+function findUserKeyByEmail(users, email) {
+    var normalized = normalizeEmailInput(email);
+    if (users[normalized]) return normalized;
+    for (var key in users) {
+        if (normalizeEmailInput(key) === normalized) return key;
+    }
+    return null;
+}
+
 function validateEmail(email) {
+    email = normalizeEmailInput(email);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
+    var domain = email.split('@')[1];
     // Reject phone numbers as email usernames
-    if (/^\d{6,}@/.test(email)) return false;
+    if (/^\d{6,}@/.test(email) && domain !== 'qq.com') return false;
     // Reject obviously fake domains
     if (/@(test|example|fake|temp|dispostable|mailinator|guerrillamail|yopmail|10minute|trashmail|sharklasers|spam)\./i.test(email)) return false;
     // Require valid TLD (2+ chars)
-    var domain = email.split('@')[1];
     if (!domain || domain.split('.').length < 2) return false;
     var tld = domain.split('.').pop();
     if (!tld || tld.length < 2) return false;
@@ -321,7 +340,8 @@ async function handleRequest(req, res) {
         h += 'var msg=document.getElementById("msg");';
         h += 'var AUTH="Basic ' + Buffer.from('admin:admin123').toString('base64') + '";';
         h += 'function msgOk(t){msg.textContent=t;setTimeout(function(){location.reload()},500)};';
-        h += 'function apiPost(url,body){return fetch(url,{method:"POST",headers:{"Content-Type":"application/json",Authorization:AUTH},body:JSON.stringify(body)}).then(function(r){return r.json()})};';
+        h += 'function clean(t){return String(t||"").replace(/<[^>]*>/g,"")}';
+        h += 'function apiPost(url,body){msg.textContent="Working...";return fetch(url,{method:"POST",headers:{"Content-Type":"application/json",Authorization:AUTH},body:JSON.stringify(body)}).then(function(r){return r.json().catch(function(){return{error:"HTTP "+r.status}}).then(function(d){if(!r.ok&&!d.error)d.error="HTTP "+r.status;return d})}).catch(function(e){return{error:e.message||"Request failed"}})};';
         // Set Game Data
         h += 'function csvNums(v){return String(v||"").split(",").map(function(x){return parseInt(x,10)}).filter(function(x){return !isNaN(x)})};';
         h += 'function csvText(v){return String(v||"").split(",").map(function(x){return x.trim()}).filter(Boolean)};';
@@ -331,7 +351,7 @@ async function handleRequest(req, res) {
         h += 'var eid=em.replace(/[^a-zA-Z0-9]/g,"_");';
         h += 'var body={email:em,coins:parseInt(document.getElementById("cns-"+eid).value)||0,credits:parseInt(document.getElementById("crd-"+eid).value)||0,maxDistance:parseInt(document.getElementById("max-"+eid).value)||0,runCount:parseInt(document.getElementById("run-"+eid).value)||0,ownedAbilities:csvNums(document.getElementById("abl-"+eid).value),ownedCharacters:csvText(document.getElementById("chr-"+eid).value),selectedCharacter:document.getElementById("sel-"+eid).value.trim()||"runner"};';
         h += 'apiPost("/api/admin-set-game-data",body).then(function(d){';
-        h += 'msg.textContent=(d.message||d.error||"Updated data").replace(/<[^>]*>/g,"");';
+        h += 'msg.textContent=clean(d.message||d.error||"Updated data");';
         h += 'if(!d.error)msgOk("Data updated for "+em)})})});';
         // Set Password
         h += 'document.querySelectorAll(".pw-btn").forEach(function(b){';
@@ -340,23 +360,15 @@ async function handleRequest(req, res) {
         h += 'var p=prompt("New password for "+em);';
         h += 'if(!p||p.length<4)return;';
         h += 'apiPost("/api/admin-reset-password",{email:em,newPassword:p}).then(function(d){';
-        h += 'msg.textContent=(d.error||"Password updated").replace(/<[^>]*>/g,"");';
+        h += 'msg.textContent=clean(d.error||"Password updated");';
         h += 'if(!d.error)msgOk("PW updated for "+em)})})});';
         // Verify
-        h += 'document.querySelectorAll("[data-action=verify]").forEach(function(b){';
-        h += 'b.addEventListener("click",function(){';
-        h += 'var em=this.getAttribute("data-email");';
-        h += 'apiPost("/api/admin-verify-user",{email:em}).then(function(d){';
-        h += 'msg.textContent=(d.message||d.error||"").replace(/<[^>]*>/g,"");';
-        h += 'if(!d.error)msgOk("Verified "+em)})})});';
-        // Delete
-        h += 'document.querySelectorAll("[data-action=delete]").forEach(function(b){';
-        h += 'b.addEventListener("click",function(){';
-        h += 'var em=this.getAttribute("data-email");';
-        h += 'if(!confirm("Delete "+em+"?"))return;';
-        h += 'apiPost("/api/admin-delete-user",{email:em}).then(function(d){';
-        h += 'msg.textContent=(d.message||d.error||"").replace(/<[^>]*>/g,"");';
-        h += 'if(!d.error)msgOk("Deleted "+em)})})});';
+        h += 'document.addEventListener("click",function(ev){';
+        h += 'var b=ev.target.closest("[data-action]");if(!b)return;';
+        h += 'var action=b.getAttribute("data-action");var em=b.getAttribute("data-email");';
+        h += 'if(action==="verify"){apiPost("/api/admin-verify-user",{email:em}).then(function(d){msg.textContent=clean(d.message||d.error||"");if(!d.error)msgOk("Verified "+em)});return}';
+        h += 'if(action==="delete"){if(!confirm("Delete "+em+"?"))return;apiPost("/api/admin-delete-user",{email:em}).then(function(d){msg.textContent=clean(d.message||d.error||"");if(!d.error)msgOk("Deleted "+em)});return}';
+        h += '});';
         h += '})();</script></body></html>';
         sendHTML(res, h);
         return;
@@ -366,11 +378,12 @@ async function handleRequest(req, res) {
     if (pathname === '/api/admin-delete-user' && method === 'POST') {
         if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
         const body = await parseBody(req);
-        const { email } = body;
+        const email = normalizeEmailInput(body.email);
         if (!email) { sendJSON(res, 400, { error: 'Email required' }); return; }
         const users = getUsers();
-        if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
-        delete users[email];
+        const userKey = findUserKeyByEmail(users, email);
+        if (!userKey) { sendJSON(res, 404, { error: 'User not found' }); return; }
+        delete users[userKey];
         saveUsers(users);
         console.log('[ADMIN] Deleted user: ' + email);
         sendJSON(res, 200, { message: 'User deleted: ' + email });
@@ -381,14 +394,16 @@ async function handleRequest(req, res) {
     if (pathname === '/api/admin-reset-password' && method === 'POST') {
         if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
         const body = await parseBody(req);
-        const { email, newPassword } = body;
+        const email = normalizeEmailInput(body.email);
+        const { newPassword } = body;
         if (!email || !newPassword) { sendJSON(res, 400, { error: 'Email and new password required' }); return; }
         if (newPassword.length < 4) { sendJSON(res, 400, { error: 'Password too short (min 4)' }); return; }
         const users = getUsers();
-        if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
+        const userKey = findUserKeyByEmail(users, email);
+        if (!userKey) { sendJSON(res, 404, { error: 'User not found' }); return; }
         const { hash, salt } = hashPassword(newPassword);
-        users[email].passwordHash = hash;
-        users[email].passwordSalt = salt;
+        users[userKey].passwordHash = hash;
+        users[userKey].passwordSalt = salt;
         saveUsers(users);
         console.log('[ADMIN] Password reset for: ' + email);
         sendJSON(res, 200, { message: 'Password updated for ' + email });
@@ -458,7 +473,9 @@ async function handleRequest(req, res) {
 
     if (pathname === '/api/register' && method === 'POST') {
         const body = await parseBody(req);
-        const { email, password, username, captchaId, captchaAnswer } = body;
+        const email = normalizeEmailInput(body.email);
+        const username = String(body.username || '').trim();
+        const { password, captchaId, captchaAnswer } = body;
 
         if (!email || !password || !username) { sendJSON(res, 400, { error: 'Email, username and password required' }); return; }
         if (username.length < 2 || username.length > 16) { sendJSON(res, 400, { error: 'Username must be 2-16 characters' }); return; }
@@ -482,7 +499,7 @@ async function handleRequest(req, res) {
         }
         delete captchaStore[captchaId];
 
-        if (users[email]) { sendJSON(res, 409, { error: 'Email already registered' }); return; }
+        if (findUserKeyByEmail(users, email)) { sendJSON(res, 409, { error: 'Email already registered' }); return; }
 
         // Generate verification code
         const code = generateCode();
@@ -525,7 +542,8 @@ async function handleRequest(req, res) {
     // ---- VERIFY CODE ----
     if (pathname === '/api/verify-code' && method === 'POST') {
         const body = await parseBody(req);
-        const { email, code } = body;
+        const email = normalizeEmailInput(body.email);
+        const { code } = body;
 
         if (!email || !code) { sendJSON(res, 400, { error: 'Email and code required' }); return; }
 
@@ -541,8 +559,9 @@ async function handleRequest(req, res) {
         // Mark user as verified
         delete verifyCodes[email];
         const users = getUsers();
-        if (users[email]) {
-            users[email].verified = true;
+        const userKey = findUserKeyByEmail(users, email);
+        if (userKey) {
+            users[userKey].verified = true;
             saveUsers(users);
         }
 
@@ -554,10 +573,12 @@ async function handleRequest(req, res) {
     // ---- LOGIN ----
     if (pathname === '/api/login' && method === 'POST') {
         const body = await parseBody(req);
-        const { email, password } = body;
+        const email = normalizeEmailInput(body.email);
+        const { password } = body;
 
         const users = getUsers();
-        const user = users[email];
+        const userKey = findUserKeyByEmail(users, email);
+        const user = userKey ? users[userKey] : null;
         if (!user || !verifyPassword(password, user.passwordHash, user.passwordSalt)) {
             sendJSON(res, 401, { error: 'Invalid email or password' });
             return;
@@ -649,14 +670,16 @@ async function handleRequest(req, res) {
     if (pathname === '/api/admin-set-coins' && method === 'POST') {
         if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
         const body = await parseBody(req);
-        const { email, coins } = body;
+        const email = normalizeEmailInput(body.email);
+        const { coins } = body;
         if (!email || coins === undefined) { sendJSON(res, 400, { error: 'Email and coins required' }); return; }
         const users = getUsers();
-        if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
-        const gd = users[email].gameData || {};
+        const userKey = findUserKeyByEmail(users, email);
+        if (!userKey) { sendJSON(res, 404, { error: 'User not found' }); return; }
+        const gd = users[userKey].gameData || {};
         gd.coins = Math.max(0, Math.floor(coins));
         gd.totalCoins = Math.max(gd.totalCoins || 0, gd.coins);
-        users[email].gameData = gd;
+        users[userKey].gameData = gd;
         saveUsers(users);
         console.log('[ADMIN] Set coins for ' + email + ': ' + gd.coins);
         sendJSON(res, 200, { message: email + ' coins set to ' + gd.coins });
@@ -667,13 +690,15 @@ async function handleRequest(req, res) {
     if (pathname === '/api/admin-set-credits' && method === 'POST') {
         if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
         const body = await parseBody(req);
-        const { email, credits } = body;
+        const email = normalizeEmailInput(body.email);
+        const { credits } = body;
         if (!email || credits === undefined) { sendJSON(res, 400, { error: 'Email and credits required' }); return; }
         const users = getUsers();
-        if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
-        const gd = users[email].gameData || {};
+        const userKey = findUserKeyByEmail(users, email);
+        if (!userKey) { sendJSON(res, 404, { error: 'User not found' }); return; }
+        const gd = users[userKey].gameData || {};
         gd.credits = Math.max(0, Math.floor(credits));
-        users[email].gameData = gd;
+        users[userKey].gameData = gd;
         saveUsers(users);
         console.log('[ADMIN] Set credits for ' + email + ': ' + gd.credits);
         sendJSON(res, 200, { message: email + ' credits set to ' + gd.credits });
@@ -683,15 +708,16 @@ async function handleRequest(req, res) {
     if (pathname === '/api/admin-set-game-data' && method === 'POST') {
         if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
         const body = await parseBody(req);
-        const { email } = body;
+        const email = normalizeEmailInput(body.email);
         if (!email) { sendJSON(res, 400, { error: 'Email required' }); return; }
         const users = getUsers();
-        if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
-        const existing = normalizeGameData(users[email].gameData);
+        const userKey = findUserKeyByEmail(users, email);
+        if (!userKey) { sendJSON(res, 404, { error: 'User not found' }); return; }
+        const existing = normalizeGameData(users[userKey].gameData);
         const ownedCharacters = Array.isArray(body.ownedCharacters) && body.ownedCharacters.length ? body.ownedCharacters : existing.ownedCharacters;
         if (ownedCharacters.indexOf('runner') < 0) ownedCharacters.unshift('runner');
         const selectedCharacter = body.selectedCharacter && ownedCharacters.indexOf(body.selectedCharacter) >= 0 ? body.selectedCharacter : 'runner';
-        users[email].gameData = normalizeGameData(Object.assign({}, existing, {
+        users[userKey].gameData = normalizeGameData(Object.assign({}, existing, {
             coins: body.coins !== undefined ? Math.max(0, Math.floor(body.coins)) : existing.coins,
             credits: body.credits !== undefined ? Math.max(0, Math.floor(body.credits)) : existing.credits,
             totalCoins: Math.max(existing.totalCoins || 0, body.coins || 0),
@@ -708,7 +734,7 @@ async function handleRequest(req, res) {
         }));
         saveUsers(users);
         console.log('[ADMIN] Set game data for ' + email);
-        sendJSON(res, 200, { message: email + ' game data updated', gameData: users[email].gameData });
+        sendJSON(res, 200, { message: email + ' game data updated', gameData: users[userKey].gameData });
         return;
     }
 
@@ -716,11 +742,12 @@ async function handleRequest(req, res) {
     if (pathname === '/api/admin-verify-user' && method === 'POST') {
         if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
         const body = await parseBody(req);
-        const { email } = body;
+        const email = normalizeEmailInput(body.email);
         if (!email) { sendJSON(res, 400, { error: 'Email required' }); return; }
         const users = getUsers();
-        if (!users[email]) { sendJSON(res, 404, { error: 'User not found' }); return; }
-        users[email].verified = true;
+        const userKey = findUserKeyByEmail(users, email);
+        if (!userKey) { sendJSON(res, 404, { error: 'User not found' }); return; }
+        users[userKey].verified = true;
         saveUsers(users);
         console.log('[ADMIN] Verified user: ' + email);
         sendJSON(res, 200, { message: 'Verified: ' + email });

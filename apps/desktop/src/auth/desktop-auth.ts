@@ -22,6 +22,14 @@ export function initDesktopAuth(
   let captchaId: string | null = null
   let pendingEmail = ''
 
+  function normalizeEmail(value: string | undefined | null): string {
+    return String(value || '')
+      .trim()
+      .replace(/\uFF20/g, '@')
+      .replace(/[。．｡]/g, '.')
+      .toLowerCase()
+  }
+
   // ── Load captcha ────────────────────────────────────
   async function loadCaptcha(): Promise<void> {
     try {
@@ -128,7 +136,9 @@ export function initDesktopAuth(
   // ── Login ───────────────────────────────────────────
   async function doLogin(): Promise<void> {
     clearMsg('dc-login-msg')
-    const email = (document.getElementById('dc-login-email') as HTMLInputElement)?.value.trim()
+    const emailEl = document.getElementById('dc-login-email') as HTMLInputElement
+    const email = normalizeEmail(emailEl?.value)
+    if (emailEl) emailEl.value = email
     const pass = (document.getElementById('dc-login-pass') as HTMLInputElement)?.value
     if (!email || !pass) { setMsg('dc-login-msg', 'Email and password required', true); return }
 
@@ -156,7 +166,9 @@ export function initDesktopAuth(
   async function doRegister(): Promise<void> {
     clearMsg('dc-reg-msg')
     const name = (document.getElementById('dc-reg-name') as HTMLInputElement)?.value.trim()
-    const email = (document.getElementById('dc-reg-email') as HTMLInputElement)?.value.trim()
+    const emailEl = document.getElementById('dc-reg-email') as HTMLInputElement
+    const email = normalizeEmail(emailEl?.value)
+    if (emailEl) emailEl.value = email
     const pass = (document.getElementById('dc-reg-pass') as HTMLInputElement)?.value
     const pass2 = (document.getElementById('dc-reg-pass2') as HTMLInputElement)?.value
     const captchaAnswer = (document.getElementById('dc-reg-captcha') as HTMLInputElement)?.value.trim()
@@ -246,6 +258,12 @@ export function initDesktopAuth(
 
   // ── Bind events ─────────────────────────────────────
   function bindEvents(overlay: HTMLElement): void {
+    ;['click', 'dblclick', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend'].forEach((type) => {
+      overlay.addEventListener(type, (e) => {
+        e.stopPropagation()
+      })
+    })
+
     // Tab switches
     overlay.querySelectorAll('.dc-tab').forEach(el => {
       el.addEventListener('click', () => {
@@ -304,7 +322,7 @@ export function initDesktopAuth(
     const legacyPass = (document.getElementById('login-pass') as HTMLInputElement)?.value
     if (legacyEmail) {
       const dcEmail = document.getElementById('dc-login-email') as HTMLInputElement
-      if (dcEmail) dcEmail.value = legacyEmail
+      if (dcEmail) dcEmail.value = normalizeEmail(legacyEmail)
     }
     if (legacyPass) {
       const dcPass = document.getElementById('dc-login-pass') as HTMLInputElement
