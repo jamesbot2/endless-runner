@@ -135,6 +135,7 @@
     };
 
     SG.canPlaceGunPickup = function(lane, z) {
+        if (SG.state.pvpMode) return false;
         if (SG.state.homelander) return false;
         if (!SG.canPlaceCoinAt || !SG.canPlaceCoinAt(lane, z, null)) return false;
         for (var i = 0; i < SG.state.gunPickups.length; i++) {
@@ -144,6 +145,7 @@
     };
 
     SG.spawnGunPickups = function(delta) {
+        if (SG.state.pvpMode) return;
         if (!SG.state.started || SG.state.gameOver || SG.state.paused || SG.state.homelander) return;
         SG.state.gunSpawnTimer -= delta;
         if (SG.state.gunSpawnTimer > 0) return;
@@ -164,6 +166,7 @@
     };
 
     SG.collectGunPickup = function(pickup) {
+        if (SG.state.pvpMode) return false;
         if (!pickup || pickup.userData.collected || SG.state.homelander) return false;
         var def = SG.getGunDef(pickup.userData.gunId);
         pickup.userData.collected = true;
@@ -242,10 +245,10 @@
 
     SG.updateGunViewModel = function() {
         if (!SG.gunViewModel || !SG.camera) return;
-        var show = !!(SG.state.firstPerson && SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander && SG.state.started && !SG.state.paused && !SG.state.gameOver);
+        var show = !!(SG.state.firstPerson && SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander && !SG.state.pvpMode && SG.state.started && !SG.state.paused && !SG.state.gameOver);
         SG.gunViewModel.visible = show;
         if (SG.playerGunModel) {
-            SG.playerGunModel.visible = !!(!SG.state.firstPerson && SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander && SG.state.started && !SG.state.paused && !SG.state.gameOver);
+            SG.playerGunModel.visible = !!(!SG.state.firstPerson && SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander && !SG.state.pvpMode && SG.state.started && !SG.state.paused && !SG.state.gameOver);
         }
         if (SG.updateGunCrosshair) SG.updateGunCrosshair();
         if (!show) return;
@@ -460,6 +463,10 @@
     };
 
     SG.updateGunSystem = function(delta) {
+        if (SG.state.pvpMode) {
+            if ((SG.state.gunPickups && SG.state.gunPickups.length) || SG.state.activeGun) SG.clearGunSystem();
+            return;
+        }
         SG.spawnGunPickups(delta);
 
         for (var i = SG.state.gunPickups.length - 1; i >= 0; i--) {

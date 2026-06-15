@@ -15,6 +15,9 @@
     SG.homelanderVoiceGain = null;
     SG.HOMELANDER_VOICE_GAIN = 4.4;
     SG.pendingHomelanderVoice = false;
+    SG.pvpCountdownAudioPath = SG.pvpCountdownAudioPath || 'audio/countdown-from-10.mp3';
+    SG.pvpCountdownAudio = null;
+    SG.PVP_COUNTDOWN_AUDIO_OFFSET = SG.PVP_COUNTDOWN_AUDIO_OFFSET || 0;
 
     SG.initAudio = function() {
         try {
@@ -329,6 +332,49 @@
                 SG.homelanderVoiceAudio.currentTime = 0;
             } catch(e) {}
         }
+    };
+
+    SG.ensurePvpCountdownAudio = function() {
+        if (SG.pvpCountdownAudio || typeof Audio === 'undefined') return;
+        SG.pvpCountdownAudio = new Audio(SG.pvpCountdownAudioPath);
+        SG.pvpCountdownAudio.loop = false;
+        SG.pvpCountdownAudio.preload = 'auto';
+    };
+
+    SG.updatePvpCountdownAudioVolume = function() {
+        if (!SG.pvpCountdownAudio) return;
+        var sfx = typeof SG.state.sfxVolume === 'number' ? SG.state.sfxVolume : 0.8;
+        SG.pvpCountdownAudio.volume = SG.state.muted ? 0 : Math.min(1, Math.max(0.22, sfx * 1.25));
+    };
+
+    SG.getPvpCountdownStepMs = function() {
+        SG.ensurePvpCountdownAudio();
+        var seconds = SG.state && SG.state.pvpCountdownSeconds ? SG.state.pvpCountdownSeconds : 10;
+        var duration = SG.pvpCountdownAudio && Number.isFinite(SG.pvpCountdownAudio.duration) ? SG.pvpCountdownAudio.duration : 0;
+        if (duration > 0) {
+            return Math.max(900, Math.min(1300, Math.round(duration * 1000 / seconds)));
+        }
+        return SG.PVP_COUNTDOWN_STEP_MS || 1100;
+    };
+
+    SG.playPvpCountdownVoice = function() {
+        SG.ensurePvpCountdownAudio();
+        SG.updatePvpCountdownAudioVolume();
+        if (!SG.pvpCountdownAudio || SG.state.muted) return;
+        try {
+            SG.pvpCountdownAudio.pause();
+            SG.pvpCountdownAudio.currentTime = SG.PVP_COUNTDOWN_AUDIO_OFFSET || 0;
+            var p = SG.pvpCountdownAudio.play();
+            if (p && p.catch) p.catch(function() {});
+        } catch(e) {}
+    };
+
+    SG.stopPvpCountdownVoice = function() {
+        if (!SG.pvpCountdownAudio) return;
+        try {
+            SG.pvpCountdownAudio.pause();
+            SG.pvpCountdownAudio.currentTime = 0;
+        } catch(e) {}
     };
 
     SG.updateBgMusic = function(delta) {

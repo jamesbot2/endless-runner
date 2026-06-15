@@ -54,11 +54,11 @@ if (window.desktopAPI) {
       })
       online = resp.ok
       if (s2) {
-        s2.serverOnline = resp.ok
-        s2.offlineMode = false
+        s2.serverOnline = online
+        s2.offlineMode = !online
       }
-      console.log('[Endless Runner] Server online:', resp.ok)
-      document.title = `Endless Runner [${apiUrl}] ✓`
+      console.log('[Endless Runner] Server online:', online)
+      document.title = online ? `Endless Runner [online]` : `Endless Runner [offline]`
     } catch {
       if (s2) {
         s2.serverOnline = false
@@ -175,8 +175,25 @@ if (window.desktopAPI) {
         localStorage.setItem('subwayToken', data.token)
         localStorage.setItem('subwayEmail', data.email)
 
-        if (data.gameData && typeof s3.applyGameData === 'function') {
-          s3.applyGameData(data.gameData)
+        if (typeof s3.applyGameData === 'function') {
+          s3.applyGameData(data.gameData || {
+            coins: 0,
+            credits: 0,
+            totalCoins: 0,
+            equippedAbility: 0,
+            ownedAbilities: [0],
+            maxDistance: 0,
+            maxEasy: 0,
+            maxMedium: 0,
+            maxHard: 0,
+            maxEasyAbility: 0,
+            maxMediumAbility: 0,
+            maxHardAbility: 0,
+            runCount: 0,
+            highScore: 0,
+            ownedCharacters: ['runner'],
+            selectedCharacter: 'runner',
+          })
         }
 
         s3.account.username = data.username || data.email.split('@')[0]
@@ -271,7 +288,7 @@ if (window.desktopAPI) {
 
 // ── Status Bar ──────────────────────────────────────────
 
-function createStatusBar(apiUrl: string): void {
+function createStatusBar(_apiUrl: string): void {
   const bar = document.createElement('div')
   bar.id = 'electron-status-bar'
   bar.style.cssText = [
@@ -296,7 +313,7 @@ function createStatusBar(apiUrl: string): void {
   bar.innerHTML = [
     '<span id="es-status-icon">⏳</span>',
     '<span id="es-status-text">Checking server…</span>',
-    '<span id="es-url" style="color:rgba(255,255,255,0.35)">' + apiUrl + '</span>',
+    '<span id="es-pvp-status" style="display:none;color:rgba(255,255,255,0.5)">PVP offline</span>',
     '<span id="es-save-status" style="color:rgba(255,255,255,0.35)">local save ✓</span>',
   ].join('')
 
@@ -316,6 +333,25 @@ function updateStatusBar(el: HTMLElement, online: boolean | undefined, _apiUrl: 
       icon.setAttribute('style', 'color:#FF9800')
       text.textContent = 'offline — local save only'
     }
+  }
+}
+
+const pvpStatusOwner = SG()
+if (pvpStatusOwner) {
+  pvpStatusOwner.updatePvpStatusBar = function (state: string) {
+    const el = document.getElementById('es-pvp-status')
+    if (!el) return
+    if (state === 'online') {
+      el.textContent = 'PVP online'
+      el.style.color = '#4CAF50'
+    } else if (state === 'reconnecting') {
+      el.textContent = 'reconnecting'
+      el.style.color = '#FFA500'
+    } else {
+      el.textContent = 'PVP offline'
+      el.style.color = 'rgba(255,255,255,0.5)'
+    }
+    el.style.display = 'inline'
   }
 }
 

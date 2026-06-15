@@ -1,4 +1,5 @@
 // ===== ENDLESS RUNNER - Constants =====
+// ===== ENDLESS RUNNER - Constants =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -47,7 +48,7 @@
     };
 })();
 
-
+// ===== ENDLESS RUNNER - State =====
 // ===== ENDLESS RUNNER - Game State =====
 (function() {
     'use strict';
@@ -148,7 +149,7 @@
     };
 })();
 
-
+// ===== ENDLESS RUNNER - Audio =====
 // ===== ENDLESS RUNNER - Audio System =====
 (function() {
     'use strict';
@@ -166,6 +167,9 @@
     SG.homelanderVoiceGain = null;
     SG.HOMELANDER_VOICE_GAIN = 4.4;
     SG.pendingHomelanderVoice = false;
+    SG.pvpCountdownAudioPath = SG.pvpCountdownAudioPath || 'audio/countdown-from-10.mp3';
+    SG.pvpCountdownAudio = null;
+    SG.PVP_COUNTDOWN_AUDIO_OFFSET = SG.PVP_COUNTDOWN_AUDIO_OFFSET || 0;
 
     SG.initAudio = function() {
         try {
@@ -482,6 +486,49 @@
         }
     };
 
+    SG.ensurePvpCountdownAudio = function() {
+        if (SG.pvpCountdownAudio || typeof Audio === 'undefined') return;
+        SG.pvpCountdownAudio = new Audio(SG.pvpCountdownAudioPath);
+        SG.pvpCountdownAudio.loop = false;
+        SG.pvpCountdownAudio.preload = 'auto';
+    };
+
+    SG.updatePvpCountdownAudioVolume = function() {
+        if (!SG.pvpCountdownAudio) return;
+        var sfx = typeof SG.state.sfxVolume === 'number' ? SG.state.sfxVolume : 0.8;
+        SG.pvpCountdownAudio.volume = SG.state.muted ? 0 : Math.min(1, Math.max(0.22, sfx * 1.25));
+    };
+
+    SG.getPvpCountdownStepMs = function() {
+        SG.ensurePvpCountdownAudio();
+        var seconds = SG.state && SG.state.pvpCountdownSeconds ? SG.state.pvpCountdownSeconds : 10;
+        var duration = SG.pvpCountdownAudio && Number.isFinite(SG.pvpCountdownAudio.duration) ? SG.pvpCountdownAudio.duration : 0;
+        if (duration > 0) {
+            return Math.max(900, Math.min(1300, Math.round(duration * 1000 / seconds)));
+        }
+        return SG.PVP_COUNTDOWN_STEP_MS || 1100;
+    };
+
+    SG.playPvpCountdownVoice = function() {
+        SG.ensurePvpCountdownAudio();
+        SG.updatePvpCountdownAudioVolume();
+        if (!SG.pvpCountdownAudio || SG.state.muted) return;
+        try {
+            SG.pvpCountdownAudio.pause();
+            SG.pvpCountdownAudio.currentTime = SG.PVP_COUNTDOWN_AUDIO_OFFSET || 0;
+            var p = SG.pvpCountdownAudio.play();
+            if (p && p.catch) p.catch(function() {});
+        } catch(e) {}
+    };
+
+    SG.stopPvpCountdownVoice = function() {
+        if (!SG.pvpCountdownAudio) return;
+        try {
+            SG.pvpCountdownAudio.pause();
+            SG.pvpCountdownAudio.currentTime = 0;
+        } catch(e) {}
+    };
+
     SG.updateBgMusic = function(delta) {
         if (!SG.bgMusicState.running || !SG.audioCtx || SG.state.muted) return;
         if (SG.state.paused || !SG.state.started) return;
@@ -534,7 +581,7 @@
     };
 })();
 
-
+// ===== ENDLESS RUNNER - Textures =====
 // ===== ENDLESS RUNNER - Textures =====
 (function() {
     'use strict';
@@ -910,7 +957,7 @@
     };
 })();
 
-
+// ===== ENDLESS RUNNER - Scene =====
 // ===== ENDLESS RUNNER - Scene Setup =====
 (function() {
     'use strict';
@@ -1014,7 +1061,7 @@
     };
 })();
 
-
+// ===== ENDLESS RUNNER - Player =====
 // ===== ENDLESS RUNNER - Player =====
 (function() {
     'use strict';
@@ -1416,7 +1463,7 @@
     };
 })();
 
-
+// ===== ENDLESS RUNNER - Track =====
 // ===== ENDLESS RUNNER - Track System =====
 (function() {
     'use strict';
@@ -1429,7 +1476,7 @@
 
         var isPvp = !!(SG.state && SG.state.pvpMode);
         var groundMat = isPvp
-            ? new THREE.MeshPhongMaterial({ color: 0x05060b, emissive: 0x14031f, shininess: 96, transparent: true, opacity: 0.88 })
+            ? new THREE.MeshPhongMaterial({ color: 0x020407, emissive: 0x071528, specular: 0x6eefff, shininess: 142, transparent: true, opacity: 0.94 })
             : (SG.createTrackGroundMaterial ? SG.createTrackGroundMaterial() : new THREE.MeshLambertMaterial({ color: 0x4a4a4e }));
         var ground = new THREE.Mesh(new THREE.BoxGeometry(SG.GROUND_WIDTH, 0.2, SG.TRACK_SEGMENT_LENGTH), groundMat);
         ground.position.y = -0.1;
@@ -1438,7 +1485,7 @@
         group.add(ground);
 
         var markMat = isPvp
-            ? new THREE.MeshBasicMaterial({ color: 0x8d35ff, transparent: true, opacity: 0.92 })
+            ? new THREE.MeshBasicMaterial({ color: 0x22e7ff, transparent: true, opacity: 0.72, blending: THREE.AdditiveBlending })
             : (SG.createLanePaintMaterial ? SG.createLanePaintMaterial() : new THREE.MeshBasicMaterial({ color: 0x6a6a6e }));
         for (var lane = -1; lane <= 1; lane += 2) {
             var mark = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.01, SG.TRACK_SEGMENT_LENGTH - 2), markMat);
@@ -1447,7 +1494,7 @@
         }
 
         var curbMat = isPvp
-            ? new THREE.MeshBasicMaterial({ color: 0xff2ccf })
+            ? new THREE.MeshBasicMaterial({ color: 0xff2ccf, transparent: true, opacity: 0.92 })
             : (SG.createCurbMaterial ? SG.createCurbMaterial() : new THREE.MeshLambertMaterial({ color: 0x5a5a5a }));
         for (var side = -1; side <= 1; side += 2) {
             var curb = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, SG.TRACK_SEGMENT_LENGTH), curbMat);
@@ -1456,13 +1503,21 @@
             curb.userData.pvpNeonEdge = isPvp;
             group.add(curb);
             if (isPvp) {
+                var railGlow = side < 0 ? 0xff2ccf : 0x8d35ff;
                 var glow = new THREE.Mesh(
                     new THREE.BoxGeometry(0.08, 0.04, SG.TRACK_SEGMENT_LENGTH),
-                    new THREE.MeshBasicMaterial({ color: side < 0 ? 0xff2ccf : 0x9b4dff, transparent: true, opacity: 0.82 })
+                    new THREE.MeshBasicMaterial({ color: railGlow, transparent: true, opacity: 0.82, blending: THREE.AdditiveBlending })
                 );
                 glow.position.set(side * (SG.GROUND_WIDTH / 2 + 0.46), 0.24, 0);
                 glow.userData.pvpNeonGlow = true;
                 group.add(glow);
+                var cyanTrim = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.035, 0.03, SG.TRACK_SEGMENT_LENGTH),
+                    new THREE.MeshBasicMaterial({ color: 0x22e7ff, transparent: true, opacity: 0.48, blending: THREE.AdditiveBlending })
+                );
+                cyanTrim.position.set(side * (SG.GROUND_WIDTH / 2 + 0.64), 0.3, 0);
+                cyanTrim.userData.pvpNeonGlow = true;
+                group.add(cyanTrim);
             }
         }
 
@@ -1479,7 +1534,7 @@
     };
 })();
 
-
+// ===== ENDLESS RUNNER - Buildings =====
 // ===== ENDLESS RUNNER - Buildings & Scenery =====
 (function() {
     'use strict';
@@ -1569,6 +1624,83 @@
         return group;
     }
 
+    function createPvpCyberScenery(x, z) {
+        var group = new THREE.Group();
+        group.position.set(x, 0, z);
+        var side = x < 0 ? -1 : 1;
+        var neonColors = [0x22e7ff, 0xff2ccf, 0x8d35ff, 0x00ffd5];
+        var accent = neonColors[Math.floor(Math.random() * neonColors.length)];
+        var accent2 = neonColors[(neonColors.indexOf(accent) + 1 + Math.floor(Math.random() * 2)) % neonColors.length];
+        var towerCount = Math.random() > 0.62 ? 2 : 1;
+        var maxDepth = 0;
+
+        for (var t = 0; t < towerCount; t++) {
+            var w = 1.35 + Math.random() * 0.95;
+            var d = 1.55 + Math.random() * 1.15;
+            var h = 8.5 + Math.random() * 13.5;
+            var tx = t === 0 ? 0 : side * (1.5 + Math.random() * 0.9);
+            var tz = t === 0 ? 0 : (Math.random() - 0.5) * 2.8;
+            var tower = new THREE.Mesh(
+                new THREE.BoxGeometry(w, h, d),
+                new THREE.MeshPhongMaterial({
+                    color: 0x07111e,
+                    emissive: 0x031326,
+                    specular: 0x3be9ff,
+                    shininess: 76
+                })
+            );
+            tower.position.set(tx, h / 2, tz);
+            tower.castShadow = true;
+            tower.receiveShadow = true;
+            group.add(tower);
+            maxDepth = Math.max(maxDepth, d + Math.abs(tz));
+
+            var stripMatA = new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.78, blending: THREE.AdditiveBlending });
+            var stripMatB = new THREE.MeshBasicMaterial({ color: accent2, transparent: true, opacity: 0.58, blending: THREE.AdditiveBlending });
+            for (var s = -1; s <= 1; s += 2) {
+                var strip = new THREE.Mesh(new THREE.BoxGeometry(0.035, h * 0.82, 0.035), stripMatA);
+                strip.position.set(tx + s * (w / 2 + 0.02), h * 0.52, tz + d / 2 + 0.03);
+                group.add(strip);
+            }
+            for (var y = 1.5; y < h - 0.8; y += 1.4) {
+                var win = new THREE.Mesh(new THREE.BoxGeometry(w * 0.64, 0.045, 0.04), stripMatB);
+                win.position.set(tx, y, tz + d / 2 + 0.04);
+                group.add(win);
+            }
+        }
+
+        if (Math.random() > 0.22) {
+            var adW = 1.55 + Math.random() * 0.85;
+            var adH = 0.58 + Math.random() * 0.38;
+            var adMat = new THREE.MeshBasicMaterial({
+                color: accent2,
+                transparent: true,
+                opacity: 0.64,
+                side: THREE.DoubleSide,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            var ad = new THREE.Mesh(new THREE.PlaneGeometry(adW, adH), adMat);
+            ad.position.set(-side * 0.08, 4.2 + Math.random() * 4.6, -0.9 + Math.random() * 1.8);
+            ad.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+            ad.renderOrder = 70;
+            group.add(ad);
+
+            var frameMat = new THREE.MeshBasicMaterial({ color: 0xff2ccf, transparent: true, opacity: 0.62, blending: THREE.AdditiveBlending });
+            var frame = new THREE.Mesh(new THREE.BoxGeometry(0.05, adH + 0.18, adW + 0.18), frameMat);
+            frame.position.copy(ad.position);
+            frame.rotation.y = ad.rotation.y;
+            frame.renderOrder = 69;
+            group.add(frame);
+        }
+
+        group.userData.sceneryType = 'pvpCyber';
+        group.userData.depth = Math.max(5.0, maxDepth + 1.8);
+        group.userData.pvpNeonStyled = true;
+        SG.scene.add(group);
+        return group;
+    }
+
     SG.THEME_COLORS = [
         { // 0: City
             bg: 0x87CEEB, fog: 0x87CEEB, ground: 0x4a4a4e, laneMark: 0x6a6a6e, curb: 0x5a5a5a,
@@ -1595,6 +1727,7 @@
     };
 
     SG.createScenery = function(x, z) {
+        if (SG.state && SG.state.pvpMode) return createPvpCyberScenery(x, z);
         var group = new THREE.Group();
         group.position.set(x, 0, z);
         var theme = SG.state.theme || 0;
@@ -1693,12 +1826,14 @@
     };
 
     SG.getScenerySpacing = function(theme) {
+        if (SG.state && SG.state.pvpMode) return 9.4;
         if (theme === 0) return 10.8;
         if (theme === 1) return 5.2;
         return 6.5;
     };
 
     SG.getSceneryRowCount = function(theme) {
+        if (SG.state && SG.state.pvpMode) return Math.random() > 0.58 ? 2 : 1;
         if (theme === 0) return 1;
         if (theme === 1 && Math.random() > 0.45) return 2;
         return 1;
@@ -1706,11 +1841,12 @@
 
     SG.spawnSceneryRow = function(z, side, row) {
         var theme = SG.state.theme || 0;
-        var base = SG.GROUND_WIDTH / 2 + (theme === 0 ? 2.25 : 1.7);
-        var laneOffset = theme === 0 ? row * 3.9 : row * 2.25;
-        var jitter = theme === 0 ? 0 : (Math.random() - 0.5) * 0.7;
+        var isPvp = !!(SG.state && SG.state.pvpMode);
+        var base = SG.GROUND_WIDTH / 2 + (isPvp ? 2.45 : (theme === 0 ? 2.25 : 1.7));
+        var laneOffset = isPvp ? row * 3.8 : (theme === 0 ? row * 3.9 : row * 2.25);
+        var jitter = theme === 0 && !isPvp ? 0 : (Math.random() - 0.5) * (isPvp ? 0.45 : 0.7);
         var x = side * (base + laneOffset + jitter);
-        var zJitter = theme === 0 ? 0 : (Math.random() - 0.5) * 0.9;
+        var zJitter = theme === 0 && !isPvp ? 0 : (Math.random() - 0.5) * (isPvp ? 1.4 : 0.9);
         return SG.createScenery(x, z + zJitter);
     };
 
@@ -1729,10 +1865,11 @@
 
     SG.addSceneryRow = function(z, side, row) {
         var theme = SG.state.theme || 0;
-        var base = SG.GROUND_WIDTH / 2 + (theme === 0 ? 2.25 : 1.7);
-        var laneOffset = theme === 0 ? row * 3.9 : row * 2.25;
+        var isPvp = !!(SG.state && SG.state.pvpMode);
+        var base = SG.GROUND_WIDTH / 2 + (isPvp ? 2.45 : (theme === 0 ? 2.25 : 1.7));
+        var laneOffset = isPvp ? row * 3.8 : (theme === 0 ? row * 3.9 : row * 2.25);
         var x = side * (base + laneOffset);
-        var expectedDepth = theme === 0 ? 7.0 : 3.5;
+        var expectedDepth = isPvp ? 6.0 : (theme === 0 ? 7.0 : 3.5);
         if (!SG.canPlaceScenery(x, z, expectedDepth)) return null;
         var scenery = SG.spawnSceneryRow(z, side, row);
         if (!scenery) return null;
@@ -1842,7 +1979,7 @@
     };
 })();
 
-
+// ===== ENDLESS RUNNER - Obstacles =====
 // ===== ENDLESS RUNNER - Obstacles =====
 (function() {
     'use strict';
@@ -2453,7 +2590,7 @@
     };
 })();
 
-
+// ===== ENDLESS RUNNER - Coins =====
 // ===== ENDLESS RUNNER - Coins =====
 (function() {
     'use strict';
@@ -2569,7 +2706,7 @@
     };
 })();
 
-
+// ===== ENDLESS RUNNER - Guns =====
 // ===== ENDLESS RUNNER - Gun Pickups =====
 (function() {
     'use strict';
@@ -2707,6 +2844,7 @@
     };
 
     SG.canPlaceGunPickup = function(lane, z) {
+        if (SG.state.pvpMode) return false;
         if (SG.state.homelander) return false;
         if (!SG.canPlaceCoinAt || !SG.canPlaceCoinAt(lane, z, null)) return false;
         for (var i = 0; i < SG.state.gunPickups.length; i++) {
@@ -2716,6 +2854,7 @@
     };
 
     SG.spawnGunPickups = function(delta) {
+        if (SG.state.pvpMode) return;
         if (!SG.state.started || SG.state.gameOver || SG.state.paused || SG.state.homelander) return;
         SG.state.gunSpawnTimer -= delta;
         if (SG.state.gunSpawnTimer > 0) return;
@@ -2736,6 +2875,7 @@
     };
 
     SG.collectGunPickup = function(pickup) {
+        if (SG.state.pvpMode) return false;
         if (!pickup || pickup.userData.collected || SG.state.homelander) return false;
         var def = SG.getGunDef(pickup.userData.gunId);
         pickup.userData.collected = true;
@@ -2814,10 +2954,10 @@
 
     SG.updateGunViewModel = function() {
         if (!SG.gunViewModel || !SG.camera) return;
-        var show = !!(SG.state.firstPerson && SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander && SG.state.started && !SG.state.paused && !SG.state.gameOver);
+        var show = !!(SG.state.firstPerson && SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander && !SG.state.pvpMode && SG.state.started && !SG.state.paused && !SG.state.gameOver);
         SG.gunViewModel.visible = show;
         if (SG.playerGunModel) {
-            SG.playerGunModel.visible = !!(!SG.state.firstPerson && SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander && SG.state.started && !SG.state.paused && !SG.state.gameOver);
+            SG.playerGunModel.visible = !!(!SG.state.firstPerson && SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander && !SG.state.pvpMode && SG.state.started && !SG.state.paused && !SG.state.gameOver);
         }
         if (SG.updateGunCrosshair) SG.updateGunCrosshair();
         if (!show) return;
@@ -3032,6 +3172,10 @@
     };
 
     SG.updateGunSystem = function(delta) {
+        if (SG.state.pvpMode) {
+            if ((SG.state.gunPickups && SG.state.gunPickups.length) || SG.state.activeGun) SG.clearGunSystem();
+            return;
+        }
         SG.spawnGunPickups(delta);
 
         for (var i = SG.state.gunPickups.length - 1; i >= 0; i--) {
@@ -3066,7 +3210,7 @@
     };
 })();
 
-
+// ===== ENDLESS RUNNER - Particles =====
 // ===== ENDLESS RUNNER - Particles =====
 (function() {
     'use strict';
@@ -3151,7 +3295,7 @@
     };
 })();
 
-
+// ===== ENDLESS RUNNER - Collision =====
 // ===== ENDLESS RUNNER - Collision Detection =====
 (function() {
     'use strict';
@@ -3309,7 +3453,7 @@
     };
 })();
 
-
+// ===== ENDLESS RUNNER - Ui =====
 // ===== ENDLESS RUNNER - UI System =====
 (function() {
     'use strict';
@@ -3907,9 +4051,33 @@
 
         var pvpHud = document.createElement('div');
         pvpHud.id = 'pvp-hud';
-        pvpHud.style.cssText = 'position:absolute;top:16px;right:16px;display:none;min-width:220px;max-width:280px;padding:10px 12px;border-radius:8px;background:rgba(4,5,12,0.52);border:1px solid rgba(255,44,207,0.34);box-shadow:0 0 18px rgba(155,77,255,0.2);color:rgba(245,247,255,0.92);font:700 12px/1.45 Arial,sans-serif;pointer-events:none;text-shadow:0 1px 7px rgba(0,0,0,0.9);';
+        pvpHud.style.cssText = 'position:absolute;top:16px;left:16px;display:none;min-width:220px;max-width:280px;padding:10px 12px;border-radius:8px;background:rgba(4,5,12,0.52);border:1px solid rgba(34,231,255,0.34);box-shadow:0 0 18px rgba(34,231,255,0.16),0 0 22px rgba(255,44,207,0.12);color:rgba(245,247,255,0.92);font:700 12px/1.45 Arial,sans-serif;pointer-events:none;text-shadow:0 1px 7px rgba(0,0,0,0.9);';
         SG.uiOverlay.appendChild(pvpHud);
         SG.pvpHudEl = pvpHud;
+
+        var pvpExit = document.createElement('button');
+        pvpExit.id = 'pvp-exit-btn';
+        pvpExit.type = 'button';
+        pvpExit.textContent = 'EXIT';
+        pvpExit.style.cssText = 'position:fixed;right:18px;bottom:18px;display:none;z-index:100000;height:40px;padding:0 18px;border-radius:6px;border:1px solid rgba(255,44,207,0.72);background:rgba(5,7,16,0.86);box-shadow:0 0 18px rgba(255,44,207,0.4),0 0 22px rgba(34,231,255,0.2);color:#fff;font:900 12px/40px Arial,sans-serif;letter-spacing:0;cursor:pointer;pointer-events:auto;text-shadow:0 0 10px rgba(255,44,207,0.9);';
+        pvpExit.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (SG.exitPvpToLobby) SG.exitPvpToLobby();
+        });
+        pvpExit.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (SG.exitPvpToLobby) SG.exitPvpToLobby();
+        });
+        document.body.appendChild(pvpExit);
+        SG.pvpExitBtnEl = pvpExit;
+
+        var pvpDeath = document.createElement('div');
+        pvpDeath.id = 'pvp-death-feed';
+        pvpDeath.style.cssText = 'position:absolute;top:96px;left:50%;transform:translateX(-50%);display:none;z-index:40;pointer-events:none;padding:7px 16px;border-radius:6px;background:rgba(4,5,12,0.45);border:1px solid rgba(255,216,77,0.32);box-shadow:0 0 20px rgba(255,44,207,0.18),0 0 14px rgba(34,231,255,0.12);color:#fff3a6;font:900 18px/1.25 Arial,sans-serif;text-shadow:0 0 12px rgba(255,44,207,0.85),0 1px 8px rgba(0,0,0,0.95);letter-spacing:0;';
+        SG.uiOverlay.appendChild(pvpDeath);
+        SG.pvpDeathFeedEl = pvpDeath;
 
         // ===== PAUSE BUTTON =====
         SG.pauseBtnEl = document.createElement('div');
@@ -4376,11 +4544,9 @@
         bindMobileBtn('m-roll', SG.roll, 's');
     };
 
-    // ===== PVP Phase 1 local room prototype =====
-    SG.pvpRooms = SG.pvpRooms || [
-        { id: 'R-101', name: 'Neon Rush', host: 'Astra', players: [{ name: 'Astra', ready: true }, { name: 'Byte', ready: false }], maxPlayers: 3, locked: false },
-        { id: 'R-204', name: 'Glass Track', host: 'Vector', players: [{ name: 'Vector', ready: true }, { name: 'Echo', ready: true }, { name: 'Nova', ready: false }], maxPlayers: 3, locked: false }
-    ];
+    // ===== PVP room shell =====
+    SG.pvpRooms = SG.pvpRooms || [];
+    SG.pvpRequiresServer = true;
 
     SG.getLocalPvpName = function() {
         return (SG.state && SG.state.username) || localStorage.getItem('subwayUsername') || 'You';
@@ -4393,9 +4559,7 @@
             host: SG.getLocalPvpName(),
             localHost: true,
             players: [
-                { name: SG.getLocalPvpName(), ready: true, local: true, lane: 1, startOffset: 0 },
-                { name: 'Echo', ready: false, invited: false, bot: true, lane: 0, startOffset: -4 },
-                { name: 'Vector', ready: false, invited: false, bot: true, lane: 2, startOffset: -8 }
+                { name: SG.getLocalPvpName(), ready: false, local: true, lane: 1, startOffset: 0 }
             ],
             maxPlayers: 3,
             locked: false
@@ -4415,8 +4579,8 @@
             name: room.name,
             host: room.host,
             localHost: false,
-            players: room.players.slice(0, 2).map(function(p, idx) {
-                return { name: p.name, ready: !!p.ready, bot: true, lane: idx === 0 ? 0 : 2, startOffset: idx === 0 ? -4 : -8 };
+            players: room.players.filter(function(p) { return p && !p.bot; }).slice(0, 2).map(function(p, idx) {
+                return { name: p.name, ready: !!p.ready, lane: typeof p.lane === 'number' ? p.lane : idx, startOffset: typeof p.startOffset === 'number' ? p.startOffset : (-4 - idx * 4), characterId: p.characterId };
             }),
             maxPlayers: 3,
             locked: room.locked
@@ -4426,13 +4590,52 @@
         SG.renderPvpLobby();
     };
 
-    SG.invitePvpBot = function(index, accept) {
-        var room = SG.state.pvpRoom;
-        if (!room || !room.players[index]) return;
-        room.players[index].invited = true;
-        room.players[index].ready = !!accept;
-        room.players[index].declined = !accept;
+    SG.invitePvpBot = function() {
+        // Local AI opponents were removed for server-backed PVP testing.
         SG.renderPvpLobby();
+    };
+
+    function sanitizePvpPlayer(player, idx, localName) {
+        if (!player || player.bot) return null;
+        var name = player.name || player.username || player.id || ('Player ' + (idx + 1));
+        var isLocal = !!player.local || name === localName || player.id === SG.state.pvpLocalPlayerId;
+        return {
+            id: player.id || player.playerId || name,
+            name: name,
+            ready: !!player.ready,
+            local: isLocal,
+            lane: typeof player.lane === 'number' ? Math.max(0, Math.min(2, player.lane)) : (isLocal ? 1 : (idx % 2 ? 2 : 0)),
+            startOffset: typeof player.startOffset === 'number' ? player.startOffset : (isLocal ? 0 : -4 - idx * 4),
+            characterId: player.characterId || player.character || 'runner',
+            alive: player.alive !== false
+        };
+    }
+
+    function sanitizePvpRoom(room) {
+        if (!room) return null;
+        var localName = SG.getLocalPvpName();
+        var players = (room.players || []).map(function(player, idx) {
+            return sanitizePvpPlayer(player, idx, localName);
+        }).filter(Boolean);
+        return {
+            id: room.id || room.roomId || ('ROOM-' + Math.floor(1000 + Math.random() * 9000)),
+            name: room.name || 'Cyber Sprint',
+            host: room.host || room.hostName || '',
+            localHost: !!room.localHost || room.host === localName || room.hostName === localName,
+            players: players,
+            maxPlayers: room.maxPlayers || 3,
+            locked: !!room.locked
+        };
+    }
+
+    SG.setPvpRoomsFromServer = function(rooms) {
+        SG.pvpRooms = (Array.isArray(rooms) ? rooms : []).map(sanitizePvpRoom).filter(Boolean);
+        if (SG.pvpOverlay && SG.pvpOverlay.style.display !== 'none' && !SG.state.pvpRoom) SG.renderPvpLobby();
+    };
+
+    SG.setPvpRoomFromServer = function(room) {
+        SG.state.pvpRoom = sanitizePvpRoom(room);
+        if (SG.pvpOverlay && SG.pvpOverlay.style.display !== 'none') SG.renderPvpLobby();
     };
 
     SG.togglePvpReady = function() {
@@ -4445,11 +4648,30 @@
     };
 
     SG.isPvpRoomReady = function(room) {
-        if (!room || room.players.length < 2) return false;
+        if (!room || room.players.length < 1) return false;
+        if (room.localHost && room.players.length === 1) return true;
         for (var i = 0; i < room.players.length; i++) {
             if (!room.players[i].ready) return false;
         }
         return true;
+    };
+
+    SG.closePvpLobby = function() {
+        if (SG.leavePvpRoom && SG.state && SG.state.pvpRoom) {
+            SG.leavePvpRoom();
+        } else if (SG.state) {
+            SG.state.pvpRoom = null;
+        }
+        if (SG.state) {
+            SG.state.pvpMode = false;
+            SG.state.pvpResult = null;
+            SG.state.pvpSpectating = false;
+            SG.state.pvpLocalDead = false;
+            SG.state.pvpSpectateIndex = 0;
+        }
+        if (SG.quitToMenu) SG.quitToMenu();
+        if (SG.pvpOverlay) SG.pvpOverlay.style.display = 'none';
+        if (SG.menuOverlay) SG.menuOverlay.style.display = 'flex';
     };
 
     SG.renderPvpLobby = function() {
@@ -4458,13 +4680,17 @@
         var room = SG.state.pvpRoom;
         var html = '<div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px;">' +
             '<div><div style="font-size:28px;font-weight:900;color:#fff;letter-spacing:0;">PVP Rooms</div>' +
-            '<div style="color:rgba(231,224,255,.72);font-size:13px;margin-top:4px;">Phase 1 local prototype - server sync lands in Phase 2</div></div>' +
+            '<div style="color:rgba(231,224,255,.72);font-size:13px;margin-top:4px;">Server-backed rooms only. No local AI opponents.</div></div>' +
             '<button id="pvp-close" style="height:38px;padding:0 16px;border-radius:6px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#fff;font-weight:800;cursor:pointer;">Close</button></div>';
         if (!room) {
             html += '<button id="pvp-create" style="width:100%;height:44px;margin-bottom:16px;border:0;border-radius:6px;background:linear-gradient(90deg,#ff2ccf,#8d35ff);color:#fff;font-weight:900;cursor:pointer;">Create Room</button>';
             html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;">';
-            for (var r = 0; r < SG.pvpRooms.length; r++) {
-                var listed = SG.pvpRooms[r];
+            var listedRooms = (SG.pvpRooms || []).filter(function(listedRoom) { return listedRoom && !listedRoom.localOnly && !listedRoom.bot; });
+            if (!listedRooms.length) {
+                html += '<div style="grid-column:1/-1;border:1px solid rgba(141,53,255,.28);background:rgba(255,255,255,.04);border-radius:8px;padding:18px;color:rgba(231,224,255,.76);font-size:13px;line-height:1.5;">No server rooms loaded yet. Start the PVP server bridge, then refresh this panel or create a room.</div>';
+            }
+            for (var r = 0; r < listedRooms.length; r++) {
+                var listed = listedRooms[r];
                 html += '<div style="border:1px solid rgba(141,53,255,.35);background:rgba(255,255,255,.05);border-radius:8px;padding:14px;">' +
                     '<div style="font-size:17px;font-weight:900;color:#fff;">' + listed.name + '</div>' +
                     '<div style="font-size:12px;color:rgba(231,224,255,.7);margin:5px 0 12px;">Host: ' + listed.host + ' | ' + listed.players.length + '/' + listed.maxPlayers + '</div>' +
@@ -4482,12 +4708,11 @@
                 var status = player.declined ? 'DECLINED' : (player.ready ? 'READY' : (player.invited ? 'INVITED' : 'WAITING'));
                 html += '<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;margin:8px 0;padding:10px;border-radius:6px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);">' +
                     '<div><strong>' + player.name + '</strong><span style="margin-left:8px;color:' + (player.ready ? '#68ffcc' : '#ffd36b') + ';">' + status + '</span><div style="font-size:11px;color:rgba(231,224,255,.58);">Lane ' + (player.lane + 1) + '</div></div>';
-                if (room.localHost && player.bot && !player.ready) {
-                    html += '<div><button class="pvp-invite-accept" data-index="' + p + '" style="height:30px;margin-right:6px;border:0;border-radius:5px;background:#25d6a2;color:#06120f;font-weight:900;cursor:pointer;">Accept</button><button class="pvp-invite-decline" data-index="' + p + '" style="height:30px;border:0;border-radius:5px;background:#36243d;color:#fff;font-weight:800;cursor:pointer;">Refuse</button></div>';
-                } else {
-                    html += '<div></div>';
-                }
+                html += '<div></div>';
                 html += '</div>';
+            }
+            if (room.players.length < 2) {
+                html += '<div style="margin-top:12px;padding:10px 12px;border-radius:6px;background:rgba(255,216,77,.08);border:1px solid rgba(255,216,77,.22);color:rgba(255,239,181,.9);font-size:12px;">Waiting for real server players. Local AI placeholders are disabled.</div>';
             }
             var ready = SG.isPvpRoomReady(room);
             html += '<div style="display:flex;gap:10px;margin-top:16px;">' +
@@ -4496,27 +4721,29 @@
                 '<button id="pvp-leave" style="height:40px;padding:0 14px;border-radius:6px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;font-weight:800;cursor:pointer;">Leave</button>' +
             '</div></section>';
             html += '<aside style="border:1px solid rgba(141,53,255,.32);border-radius:8px;padding:16px;background:rgba(0,0,0,.22);font-size:13px;color:rgba(241,237,255,.82);line-height:1.5;">' +
-                '<strong style="display:block;color:#fff;font-size:16px;margin-bottom:8px;">Phase 1 Rules</strong>' +
-                '<div>Scene: cyber glass track</div><div>Difficulty: medium obstacles</div><div>Countdown: 10 seconds</div><div>Pause and console disabled</div><div>Players: no body collision</div><div>Ghosts: local placeholders now, realtime sync next</div></aside>';
+                '<strong style="display:block;color:#fff;font-size:16px;margin-bottom:8px;">PVP Rules</strong>' +
+                '<div>Scene: cyber glass track</div><div>Difficulty: medium obstacles</div><div>Countdown: 10 seconds</div><div>Pause and console disabled</div><div>Players: no body collision</div><div>Opponents: server snapshots only</div></aside>';
             html += '</div>';
         }
         panel.innerHTML = html;
         var close = document.getElementById('pvp-close');
-        if (close) close.onclick = function() { SG.pvpOverlay.style.display = 'none'; };
+        if (close) close.onclick = SG.closePvpLobby;
         var create = document.getElementById('pvp-create');
         if (create) create.onclick = SG.createLocalPvpRoom;
         var leave = document.getElementById('pvp-leave');
-        if (leave) leave.onclick = function() { SG.state.pvpRoom = null; SG.renderPvpLobby(); };
+        if (leave) leave.onclick = function() {
+            if (SG.leavePvpRoom) SG.leavePvpRoom();
+            else {
+                SG.state.pvpRoom = null;
+                SG.renderPvpLobby();
+            }
+        };
         var readyBtn = document.getElementById('pvp-ready');
         if (readyBtn) readyBtn.onclick = SG.togglePvpReady;
         var startBtn = document.getElementById('pvp-start');
         if (startBtn) startBtn.onclick = SG.startPvpRace;
         var joins = panel.querySelectorAll('.pvp-join');
         for (var j = 0; j < joins.length; j++) joins[j].onclick = function() { SG.joinLocalPvpRoom(this.getAttribute('data-room')); };
-        var accepts = panel.querySelectorAll('.pvp-invite-accept');
-        for (var a = 0; a < accepts.length; a++) accepts[a].onclick = function() { SG.invitePvpBot(parseInt(this.getAttribute('data-index'), 10), true); };
-        var declines = panel.querySelectorAll('.pvp-invite-decline');
-        for (var d = 0; d < declines.length; d++) declines[d].onclick = function() { SG.invitePvpBot(parseInt(this.getAttribute('data-index'), 10), false); };
     };
 
     SG.showPvpLobby = function() {
@@ -4630,12 +4857,13 @@
         var characterIds = ['punk', 'swat', 'adventurer'];
         for (var i = 0; i < room.players.length; i++) {
             var p = room.players[i];
-            if (p.local) continue;
+            if (p.local || p.bot) continue;
             var opponent = {
+                id: p.id || p.playerId || p.name,
                 name: p.name,
                 lane: typeof p.lane === 'number' ? p.lane : (i % 3),
                 targetLane: typeof p.lane === 'number' ? p.lane : (i % 3),
-                distance: 0,
+                distance: typeof p.distance === 'number' ? p.distance : 0,
                 speedBias: 0.9 + i * 0.18,
                 startOffset: typeof p.startOffset === 'number' ? p.startOffset : (-4 - SG.state.pvpGhosts.length * 4),
                 isJumping: false,
@@ -4643,9 +4871,10 @@
                 jumpTimer: 0,
                 rollTimer: 0,
                 laneTimer: 0.9 + i * 0.55,
-                alive: true,
+                alive: p.alive !== false,
                 status: 'RUN',
                 colorIndex: i,
+                serverControlled: true,
                 group: SG.createPvpGhostGroup(p.name, typeof p.lane === 'number' ? p.lane : (i % 3), colors[i % colors.length])
             };
             opponent.group.position.z = opponent.startOffset;
@@ -4658,6 +4887,11 @@
 
     SG.updatePvpOpponentState = function(opponent, index, delta) {
         if (!opponent || !opponent.alive) return;
+        if (opponent.serverControlled) {
+            opponent.status = !opponent.alive ? 'OUT' : (opponent.isJumping ? 'JUMP' : (opponent.isRolling ? 'ROLL' : (opponent.targetLane !== opponent.lane ? 'LANE' : 'RUN')));
+            return;
+        }
+        return;
         opponent.laneTimer -= delta;
         if (opponent.laneTimer <= 0) {
             opponent.laneTimer = 1.0 + ((index + Math.floor(SG.state.gameTime * 2)) % 3) * 0.45;
@@ -4685,12 +4919,14 @@
         if (opponent.distance > 520 + index * 110) {
             opponent.alive = false;
             opponent.status = 'OUT';
+            if (SG.showPvpDeathNotice) SG.showPvpDeathNotice(opponent.name);
             if (opponent.group) opponent.group.visible = false;
         }
     };
 
     SG.applyPvpOpponentSnapshot = function(opponent, snapshot) {
         if (!opponent || !snapshot) return;
+        var wasAlive = opponent.alive !== false;
         if (typeof snapshot.lane === 'number') opponent.targetLane = Math.max(0, Math.min(2, snapshot.lane));
         if (typeof snapshot.distance === 'number') opponent.distance = Math.max(opponent.distance || 0, snapshot.distance);
         if (typeof snapshot.isJumping === 'boolean') {
@@ -4701,8 +4937,48 @@
             opponent.isRolling = snapshot.isRolling;
             if (snapshot.isRolling && opponent.rollTimer <= 0) opponent.rollTimer = 0.45;
         }
-        if (typeof snapshot.alive === 'boolean') opponent.alive = snapshot.alive;
+        if (typeof snapshot.alive === 'boolean') {
+            opponent.alive = snapshot.alive;
+            if (wasAlive && opponent.alive === false && SG.showPvpDeathNotice) SG.showPvpDeathNotice(opponent.name);
+        }
         opponent.status = !opponent.alive ? 'OUT' : (opponent.isJumping ? 'JUMP' : (opponent.isRolling ? 'ROLL' : (opponent.targetLane !== opponent.lane ? 'LANE' : 'RUN')));
+    };
+
+    SG.upsertPvpOpponentFromServer = function(snapshot) {
+        if (!snapshot || snapshot.local || snapshot.bot || !SG.scene) return null;
+        var id = snapshot.id || snapshot.playerId || snapshot.name;
+        if (!id) return null;
+        var opponent = null;
+        for (var i = 0; i < SG.state.pvpOpponents.length; i++) {
+            if (SG.state.pvpOpponents[i].id === id || SG.state.pvpOpponents[i].name === id) opponent = SG.state.pvpOpponents[i];
+        }
+        if (!opponent) {
+            var lane = typeof snapshot.lane === 'number' ? Math.max(0, Math.min(2, snapshot.lane)) : 0;
+            opponent = {
+                id: id,
+                name: snapshot.name || id,
+                lane: lane,
+                targetLane: lane,
+                distance: 0,
+                startOffset: typeof snapshot.startOffset === 'number' ? snapshot.startOffset : -4 - SG.state.pvpOpponents.length * 4,
+                isJumping: false,
+                isRolling: false,
+                jumpTimer: 0,
+                rollTimer: 0,
+                alive: true,
+                status: 'RUN',
+                colorIndex: SG.state.pvpOpponents.length,
+                serverControlled: true,
+                group: SG.createPvpGhostGroup(snapshot.name || id, lane, [0xff2ccf, 0x8d35ff, 0x42f5ff][SG.state.pvpOpponents.length % 3])
+            };
+            opponent.group.position.z = opponent.startOffset;
+            SG.scene.add(opponent.group);
+            SG.state.pvpGhosts.push(opponent);
+            SG.state.pvpOpponents.push(opponent);
+            SG.loadPvpOpponentModel(opponent, snapshot.characterId || snapshot.character || 'runner');
+        }
+        SG.applyPvpOpponentSnapshot(opponent, snapshot);
+        return opponent;
     };
 
     SG.getLocalPvpSnapshot = function() {
@@ -4735,7 +5011,6 @@
             SG.updatePvpOpponentState(ghost, i, delta);
             if (ghost.mixer) ghost.mixer.update(delta);
             if (!ghost.alive) continue;
-            ghost.distance += (SG.getDistanceRate ? SG.getDistanceRate(SG.state.speed) : 8) * ghost.speedBias * delta;
             var lead = Math.max(-12, Math.min(8, ghost.startOffset + (ghost.distance - playerDistance) * 0.22));
             if (ghost.group) {
                 ghost.group.position.x += (SG.LANE_POSITIONS[ghost.targetLane] - ghost.group.position.x) * 0.12;
@@ -4803,6 +5078,7 @@
     };
 
     SG.enterPvpSpectator = function() {
+        if (SG.showPvpDeathNotice) SG.showPvpDeathNotice(SG.getLocalPvpName ? SG.getLocalPvpName() : 'You');
         SG.state.pvpLocalDead = true;
         SG.state.pvpSpectating = true;
         SG.state.pvpSpectateIndex = 0;
@@ -4819,6 +5095,29 @@
             SG.pvpHudEl.style.display = 'block';
             SG.pvpHudEl.innerHTML = 'SPECTATING: ' + SG.getPvpSpectateTargetName();
         }
+        if (SG.pvpExitBtnEl) SG.pvpExitBtnEl.style.display = 'block';
+    };
+
+    SG.showPvpDeathNotice = function(name) {
+        if (!SG.state.pvpMode || !SG.pvpDeathFeedEl) return;
+        var safeName = String(name || 'PLAYER').replace(/[<>&]/g, '');
+        SG.pvpDeathFeedEl.textContent = safeName + ' DIED';
+        SG.pvpDeathFeedEl.style.display = 'block';
+        SG.pvpDeathFeedEl.style.opacity = '1';
+        SG.pvpDeathFeedEl.style.transform = 'translateX(-50%) translateY(0) scale(1.02)';
+        if (SG.pvpDeathFeedTimer) clearTimeout(SG.pvpDeathFeedTimer);
+        SG.pvpDeathFeedTimer = setTimeout(function() {
+            if (!SG.pvpDeathFeedEl) return;
+            SG.pvpDeathFeedEl.style.transition = 'opacity 220ms ease, transform 220ms ease';
+            SG.pvpDeathFeedEl.style.opacity = '0';
+            SG.pvpDeathFeedEl.style.transform = 'translateX(-50%) translateY(-6px) scale(0.98)';
+            SG.pvpDeathFeedTimer = setTimeout(function() {
+                if (!SG.pvpDeathFeedEl) return;
+                SG.pvpDeathFeedEl.style.display = 'none';
+                SG.pvpDeathFeedEl.style.transition = '';
+                SG.pvpDeathFeedEl.style.transform = 'translateX(-50%)';
+            }, 240);
+        }, 1900);
     };
 
     SG.finishPvpMatch = function() {
@@ -4851,14 +5150,19 @@
         SG.state.started = false;
         SG.state.gameOver = false;
         SG.state.countdownActive = false;
+        SG.state.pvpResult = null;
         SG.state.pvpSpectating = false;
         SG.state.pvpLocalDead = false;
         SG.state.pvpSpectateIndex = 0;
         if (SG.pvpHudEl) SG.pvpHudEl.style.display = 'none';
+        if (SG.pvpExitBtnEl) SG.pvpExitBtnEl.style.display = 'none';
+        if (SG.pvpDeathFeedEl) SG.pvpDeathFeedEl.style.display = 'none';
         if (SG.gameOverEl) {
             SG.gameOverEl.classList.remove('visible');
             var title = SG.gameOverEl.querySelector('h1');
             if (title) title.textContent = 'GAME OVER';
+            var oldRanks = document.getElementById('pvp-results');
+            if (oldRanks) oldRanks.remove();
         }
         SG.resetAllGameObjects();
         SG.resetCyberMode();
@@ -4891,6 +5195,7 @@
         SG.state.pvpSpectating = false;
         SG.state.pvpLocalDead = false;
         SG.state.pvpSpectateIndex = 0;
+        if (SG.pvpDeathFeedEl) SG.pvpDeathFeedEl.style.display = 'none';
         SG.state.currentLane = 1;
         SG.state.targetLane = 1;
         SG.state.laneLerp = 1;
@@ -4912,6 +5217,8 @@
         var con = document.getElementById('con-btn');
         if (con) con.style.display = 'none';
         if (SG.pvpHudEl) SG.pvpHudEl.style.display = 'block';
+        if (SG.pvpExitBtnEl) SG.pvpExitBtnEl.style.display = 'block';
+        if (SG.clearGunSystem) SG.clearGunSystem();
         SG.applyPvpScene(true);
         SG.spawnInitialTrack();
         SG.spawnBuildings();
@@ -4925,7 +5232,7 @@
     SG.countdownSequence = ['3', '2', '1', 'RUN!'];
     SG.COUNTDOWN_STEP_MS = SG.COUNTDOWN_STEP_MS || 720;
     SG.COUNTDOWN_RUN_MS = SG.COUNTDOWN_RUN_MS || 560;
-    SG.PVP_COUNTDOWN_STEP_MS = SG.PVP_COUNTDOWN_STEP_MS || 1000;
+    SG.PVP_COUNTDOWN_STEP_MS = SG.PVP_COUNTDOWN_STEP_MS || 1100;
     SG.PVP_COUNTDOWN_RUN_MS = SG.PVP_COUNTDOWN_RUN_MS || 650;
 
     SG.getCountdownSequence = function() {
@@ -4941,6 +5248,7 @@
             clearTimeout(SG.countdownTimer);
             SG.countdownTimer = null;
         }
+        if (SG.stopPvpCountdownVoice) SG.stopPvpCountdownVoice();
         SG.state.countdownActive = false;
         if (SG.countdownOverlay) SG.countdownOverlay.style.display = 'none';
     };
@@ -4957,6 +5265,7 @@
         SG.state.started = false;
         SG.state.paused = false;
         var seq = SG.getCountdownSequence ? SG.getCountdownSequence() : (SG.countdownSequence || ['3', '2', '1', 'RUN!']);
+        if (SG.state.pvpMode && SG.playPvpCountdownVoice) SG.playPvpCountdownVoice();
         var index = 0;
         var overlay = SG.countdownOverlay || document.getElementById('start-countdown');
         function showNext() {
@@ -4976,7 +5285,7 @@
             index++;
             var delay = seq[index - 1] === 'RUN!'
                 ? (SG.state.pvpMode ? SG.PVP_COUNTDOWN_RUN_MS : SG.COUNTDOWN_RUN_MS)
-                : (SG.state.pvpMode ? SG.PVP_COUNTDOWN_STEP_MS : SG.COUNTDOWN_STEP_MS);
+                : (SG.state.pvpMode && SG.getPvpCountdownStepMs ? SG.getPvpCountdownStepMs() : (SG.state.pvpMode ? SG.PVP_COUNTDOWN_STEP_MS : SG.COUNTDOWN_STEP_MS));
             SG.countdownTimer = setTimeout(function() {
                 if (index >= seq.length) {
                     overlay.style.opacity = '0';
@@ -5096,7 +5405,7 @@
     };
 })();
 
-
+// ===== ENDLESS RUNNER - Controls =====
 // ===== ENDLESS RUNNER - Controls =====
 (function() {
     'use strict';
@@ -5432,7 +5741,7 @@
     };
 })();
 
-
+// ===== ENDLESS RUNNER - Homelander =====
 // ===== ENDLESS RUNNER - Homelander Easter Egg =====
 (function() {
     'use strict';
@@ -5929,7 +6238,7 @@
     };
 })();
 
-
+// ===== ENDLESS RUNNER - Police =====
 // ===== ENDLESS RUNNER - Police Chase System =====
 (function() {
     'use strict';
@@ -6136,7 +6445,7 @@
     };
 })();
 
-
+// ===== ENDLESS RUNNER - Main =====
 // ===== ENDLESS RUNNER - Main Game Loop & Init =====
 (function() {
     'use strict';
@@ -6236,32 +6545,63 @@
         if (!SG.scene) return;
         if (active) {
             SG.state.cyberMode = true;
-            if (SG.scene.background) SG.scene.background.setHex(0x02030a);
+            if (SG.scene.background) SG.scene.background.setHex(0x01040b);
             if (SG.scene.fog) {
-                SG.scene.fog.color.setHex(0x05000a);
+                SG.scene.fog.color.setHex(0x020816);
                 SG.scene.fog.near = 24;
-                SG.scene.fog.far = 82;
+                SG.scene.fog.far = 96;
             }
             if (SG.updateSkyDome) SG.updateSkyDome(0, 'cyber');
             if (SG.updateLightRigForTheme) SG.updateLightRigForTheme(3);
+            if (SG.ambientLight) SG.ambientLight.intensity = 0.18;
+            if (SG.hemiLight) {
+                SG.hemiLight.color.setHex(0x65f5ff);
+                SG.hemiLight.groundColor.setHex(0x1d002e);
+                SG.hemiLight.intensity = 0.5;
+            }
+            if (SG.dirLight) {
+                SG.dirLight.color.setHex(0xb7f7ff);
+                SG.dirLight.intensity = 0.42;
+                SG.dirLight.position.set(-5, 13, 8);
+            }
+            if (SG.renderer) SG.renderer.toneMappingExposure = 1.18;
+            if (SG.ensurePvpLightRig) SG.ensurePvpLightRig();
             return;
         }
         SG.resetCyberMode();
     };
 
+    SG.ensurePvpLightRig = function() {
+        if (!THREE || !SG.scene || SG.pvpLightRig) return;
+        var rig = new THREE.Group();
+        rig.name = 'pvp-neon-light-rig';
+        var colors = [0xff149f, 0x8d35ff, 0x00eaff, 0xff2ccf];
+        for (var i = 0; i < 6; i++) {
+            var light = new THREE.PointLight(colors[i % colors.length], 1.65, 18, 2.2);
+            light.position.set((i % 2 ? 1 : -1) * (SG.GROUND_WIDTH / 2 + 2.2), 2.4 + (i % 3) * 1.3, -12 - i * 18);
+            rig.add(light);
+        }
+        SG.scene.add(rig);
+        SG.pvpLightRig = rig;
+    };
+
     SG.applyPvpNeonStyleToObject = function(obj, kind, colorIndex) {
         if (!obj || obj.userData.pvpNeonStyled) return;
         var palettes = {
-            obstacle: [0xff2ccf, 0x8d35ff, 0x22e7ff, 0xffd84d],
-            building: [0x14051f, 0x1b0730, 0x071b2e, 0x23071a],
+            obstacle: [0x22e7ff, 0xff2ccf, 0x8d35ff, 0x00ffd5, 0xffd84d],
+            building: [0x06111f, 0x081729, 0x100821, 0x071b2e, 0x12051f],
             player: [0xffffff, 0x9ffcff],
-            ghost: [0xff2ccf, 0x8d35ff, 0x22e7ff]
+            ghost: [0xff2ccf, 0x8d35ff, 0x22e7ff],
+            opponent: [0xff2ccf, 0x22e7ff, 0x8d35ff]
         };
+        var emissivePalette = [0x22e7ff, 0xff2ccf, 0x8d35ff, 0x00ffd5];
         var palette = palettes[kind] || palettes.obstacle;
         var color = palette[Math.abs(colorIndex || 0) % palette.length];
-        var emissive = kind === 'building' ? (colorIndex % 2 ? 0x8d35ff : 0xff2ccf) : color;
+        var emissive = kind === 'building' ? emissivePalette[Math.abs(colorIndex || 0) % emissivePalette.length] : color;
+        var bloomTargets = [];
         obj.traverse(function(child) {
             if (!child.isMesh || !child.material) return;
+            if (child.name === 'pvp-obstacle-bloom-shell') return;
             var mats = Array.isArray(child.material) ? child.material : [child.material];
             var styled = mats.map(function(mat) {
                 if (!mat || !mat.clone) return mat;
@@ -6269,24 +6609,47 @@
                 clone.userData = clone.userData || {};
                 if (clone.color) {
                     if (kind === 'building') clone.color.setHex(color);
-                    else if (kind === 'obstacle') clone.color.lerp(new THREE.Color(color), 0.62);
+                    else if (kind === 'obstacle') clone.color.lerp(new THREE.Color(color), 0.48);
                 }
                 if (clone.emissive) {
                     clone.emissive.setHex(emissive);
-                    clone.emissiveIntensity = kind === 'building' ? 0.5 : 0.42;
+                    clone.emissiveIntensity = kind === 'building' ? 0.75 : (kind === 'obstacle' ? 1.35 : 0.62);
                 }
-                if (kind === 'ghost') {
+                if (kind === 'ghost' || kind === 'opponent') {
                     clone.transparent = true;
-                    clone.opacity = 0.74;
-                    clone.depthWrite = false;
-                    clone.blending = THREE.AdditiveBlending;
+                    clone.opacity = kind === 'opponent' ? 0.92 : 0.74;
+                    if (kind === 'ghost') {
+                        clone.depthWrite = false;
+                        clone.blending = THREE.AdditiveBlending;
+                    }
                 }
                 clone.needsUpdate = true;
                 return clone;
             });
             child.material = Array.isArray(child.material) ? styled : styled[0];
-            if (kind === 'ghost') child.renderOrder = 80;
+            if (kind === 'obstacle' && !child.userData.pvpBloomShell && child.geometry) {
+                bloomTargets.push(child);
+            }
+            if (kind === 'ghost' || kind === 'opponent') child.renderOrder = 80;
         });
+        for (var bi = 0; bi < bloomTargets.length; bi++) {
+            var target = bloomTargets[bi];
+            var glow = new THREE.Mesh(
+                target.geometry,
+                new THREE.MeshBasicMaterial({
+                    color: emissive,
+                    transparent: true,
+                    opacity: 0.22,
+                    depthWrite: false,
+                    blending: THREE.AdditiveBlending
+                })
+            );
+            glow.name = 'pvp-obstacle-bloom-shell';
+            glow.scale.set(1.11, 1.11, 1.11);
+            glow.renderOrder = 72;
+            target.add(glow);
+            target.userData.pvpBloomShell = true;
+        }
         obj.userData.pvpNeonStyled = true;
     };
 
@@ -6333,6 +6696,11 @@
         if (SG.applyCyberColors) SG.applyCyberColors(false);
         SG.state.cyberMode = false;
         if (SG.scene) {
+            if (SG.pvpLightRig) {
+                SG.scene.remove(SG.pvpLightRig);
+                SG.disposeObject(SG.pvpLightRig);
+                SG.pvpLightRig = null;
+            }
             if (SG.scene.background) SG.scene.background.setHex(0x87CEEB);
             if (SG.updateSkyDome) SG.updateSkyDome(0, 'normal');
             if (SG.scene.fog) {
@@ -6341,6 +6709,7 @@
                 SG.scene.fog.far = 120;
             }
         }
+        if (SG.updateLightRigForTheme) SG.updateLightRigForTheme(SG.state.theme || 0);
     };
 
     // ===== QUIT TO MENU =====
@@ -6355,6 +6724,9 @@
         SG.state.pvpSpectateIndex = 0;
         if (SG.pvpPlayerAura) SG.pvpPlayerAura.visible = false;
         if (SG.pvpHudEl) SG.pvpHudEl.style.display = 'none';
+        if (SG.pvpExitBtnEl) SG.pvpExitBtnEl.style.display = 'none';
+        var quitRanks = document.getElementById('pvp-results');
+        if (quitRanks) quitRanks.remove();
         SG.resetCyberMode();
         SG.resetAllGameObjects();
         SG.state.score = 0;
@@ -6433,6 +6805,10 @@
             return;
         }
         SG.stopPoliceChase();
+        SG.state.pvpResult = null;
+        var restartRanks = document.getElementById('pvp-results');
+        if (restartRanks) restartRanks.remove();
+        if (SG.pvpExitBtnEl) SG.pvpExitBtnEl.style.display = 'none';
         SG.resetCyberMode();
         SG.resetAllGameObjects();
 
@@ -6549,6 +6925,10 @@
                 }).join('');
                 SG.gameOverEl.insertBefore(ranks, SG.restartBtnEl || null);
             }
+        } else {
+            SG.state.pvpResult = null;
+            var staleRanks = document.getElementById('pvp-results');
+            if (staleRanks) staleRanks.remove();
         }
 
         var multipliers = [1, 5, 10];
@@ -6606,14 +6986,18 @@
         if (SG.updatePvpGhosts) SG.updatePvpGhosts(delta);
         if (SG.updatePlayerModelAnimation) SG.updatePlayerModelAnimation(delta);
 
+        var localPvpOut = !!(SG.state.pvpMode && SG.state.pvpLocalDead);
+
         // Speed increase
-        if (SG.state.speed < SG.MAX_SPEED) {
+        if (!localPvpOut && SG.state.speed < SG.MAX_SPEED) {
             SG.state.speed += SG.getDifficultySpeedIncrement() * delta * 60;
             if (SG.state.speed > SG.MAX_SPEED) SG.state.speed = SG.MAX_SPEED;
         }
 
         // Distance is meters; faster speeds cover more meters per second.
-        SG.state.score += SG.getDistanceRate(SG.state.speed) * delta;
+        if (!localPvpOut) {
+            SG.state.score += SG.getDistanceRate(SG.state.speed) * delta;
+        }
 
         SG.state.policeTotalDistance += delta * SG.state.speed * 60;
 
@@ -7115,12 +7499,14 @@
     // Init triggered by account.js after override
 })();
 
-
+// ===== ENDLESS RUNNER - Account =====
 // ===== ENDLESS RUNNER - Account System v2 =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
-    var API = 'http://' + (window.location.hostname || '35.212.200.85') + ':3000';
+    var API = (window.__ENDLESS_RUNNER_CONFIG__ && window.__ENDLESS_RUNNER_CONFIG__.API_BASE_URL) ||
+        (window.__SUBWAY_CONFIG__ && window.__SUBWAY_CONFIG__.API_BASE_URL) ||
+        'http://' + (window.location.hostname || '35.212.200.85') + ':3000';
 
     SG.account = {
         token: localStorage.getItem('subwayToken') || null,
@@ -7185,8 +7571,8 @@
     SG.applyGameData = function(g) {
         if (!g) return;
         var best = Math.max(g.maxDistance || 0, g.highScore || 0, g.maxEasy || 0, g.maxMedium || 0, g.maxHard || 0);
-        SG.state.bestScore = Math.max(SG.state.bestScore || 0, best);
-        SG.state.maxLegitDistance = Math.max(SG.state.maxLegitDistance || 0, best);
+        SG.state.bestScore = best;
+        SG.state.maxLegitDistance = best;
         SG.state.credits = g.credits || 0;
         SG.state.totalCoins = Math.max(g.totalCoins || 0, g.coins || 0);
         SG.state.equippedAbility = g.equippedAbility || 0;
@@ -7201,18 +7587,18 @@
         SG.state.canDoubleJump = owned.indexOf(1) >= 0;
         SG.state.canJetpack = owned.indexOf(2) >= 0;
         SG.state.canRoofWalk = owned.indexOf(3) >= 0;
-        if (Array.isArray(g.ownedCharacters) && g.ownedCharacters.length) {
-            SG.state.ownedCharacters = g.ownedCharacters;
-            localStorage.setItem('subwayOwnedCharacters', JSON.stringify(g.ownedCharacters));
-        }
-        if (g.selectedCharacter) {
-            SG.state.selectedCharacter = g.selectedCharacter;
-            localStorage.setItem('subwaySelectedCharacter', g.selectedCharacter);
-            if (SG.selectCharacter && SG.characterIsOwned(g.selectedCharacter)) SG.selectCharacter(g.selectedCharacter);
-        }
+        var ownedCharacters = Array.isArray(g.ownedCharacters) && g.ownedCharacters.length ? g.ownedCharacters.slice() : ['runner'];
+        if (ownedCharacters.indexOf('runner') < 0) ownedCharacters.unshift('runner');
+        SG.state.ownedCharacters = ownedCharacters;
+        localStorage.setItem('subwayOwnedCharacters', JSON.stringify(ownedCharacters));
+        var selectedCharacter = g.selectedCharacter && ownedCharacters.indexOf(g.selectedCharacter) >= 0 ? g.selectedCharacter : 'runner';
+        SG.state.selectedCharacter = selectedCharacter;
+        localStorage.setItem('subwaySelectedCharacter', selectedCharacter);
+        if (SG.selectCharacter) SG.selectCharacter(selectedCharacter);
         localStorage.setItem('subwayCredits', String(SG.state.credits));
         localStorage.setItem('subwayTotalCoins', String(SG.state.totalCoins));
         localStorage.setItem('subwayBest', String(SG.state.bestScore || 0));
+        if (SG.saveShopData) SG.saveShopData();
         if (SG.updateMenuCredits) SG.updateMenuCredits();
     };
 
@@ -7283,12 +7669,48 @@
     SG.accountLogout = function() {
         SG.account.token = null;
         SG.account.email = null;
+        SG.account.username = null;
         SG.account.loggedIn = false;
         localStorage.removeItem('subwayToken');
         localStorage.removeItem('subwayEmail');
+        localStorage.removeItem('subwayUsername');
         localStorage.removeItem('subwayRemember');
-        window.location.href = 'http://' + window.location.hostname + ':3000/';
+        localStorage.removeItem('subwayCredits');
+        localStorage.removeItem('subwayTotalCoins');
+        localStorage.removeItem('subwayOwnedCharacters');
+        localStorage.removeItem('subwaySelectedCharacter');
+        localStorage.removeItem('subwayShop');
+        var resetData = defaultLogoutData();
+        SG.applyGameData(resetData);
+        if (window.desktopAPI && window.desktopAPI.save && window.desktopAPI.save.setLocal) {
+            try { window.desktopAPI.save.setLocal(resetData); } catch(e) {}
+        }
+        if (SG.menuOverlay) SG.menuOverlay.style.display = 'none';
+        if (SG.pvpOverlay) SG.pvpOverlay.style.display = 'none';
+        if (SG.disconnectPvp) SG.disconnectPvp();
+        if (SG.showLogin) SG.showLogin(true);
     };
+
+    function defaultLogoutData() {
+        return {
+            coins: 0,
+            credits: 0,
+            totalCoins: 0,
+            equippedAbility: 0,
+            ownedAbilities: [0],
+            maxDistance: 0,
+            maxEasy: 0,
+            maxMedium: 0,
+            maxHard: 0,
+            maxEasyAbility: 0,
+            maxMediumAbility: 0,
+            maxHardAbility: 0,
+            runCount: 0,
+            highScore: 0,
+            ownedCharacters: ['runner'],
+            selectedCharacter: 'runner'
+        };
+    }
 
     SG.accountSave = function() {
         if (!SG.account.loggedIn || !SG.account.token) return;
@@ -7535,4 +7957,313 @@
         }
     };
     SG.init();
+})();
+
+// ===== ENDLESS RUNNER - Pvp-client =====
+// ===== ENDLESS RUNNER - PVP Client (WebSocket bridge) =====
+(function() {
+    'use strict';
+    var SG = window.__SG = window.__SG || {};
+    var ws = null;
+    var roomId = null;
+    var snapTimer = null;
+    var active = false;
+    var authenticated = false;
+    var pending = [];
+
+    SG.pvpRooms = [];
+
+    function apiBase() {
+        return SG.apiBaseUrl ||
+            (window.__ENDLESS_RUNNER_CONFIG__ && window.__ENDLESS_RUNNER_CONFIG__.API_BASE_URL) ||
+            (window.__SUBWAY_CONFIG__ && window.__SUBWAY_CONFIG__.API_BASE_URL) ||
+            'http://35.212.200.85:3000';
+    }
+
+    function wsUrl() {
+        var base = apiBase();
+        var host = base.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
+        return base.indexOf('https://') === 0 ? 'wss://' + host + '/pvp' : 'ws://' + host + ':3001/pvp';
+    }
+
+    function setStatus(state) {
+        if (SG.updatePvpStatusBar) SG.updatePvpStatusBar(state);
+    }
+
+    function send(data) {
+        if (ws && ws.readyState === WebSocket.OPEN && authenticated) {
+            ws.send(JSON.stringify(data));
+        } else {
+            pending.push(data);
+        }
+    }
+
+    function sendNow(data) {
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
+    }
+
+    function flushPending() {
+        var items = pending.splice(0);
+        for (var i = 0; i < items.length; i++) send(items[i]);
+    }
+
+    function stopSnapshots() {
+        active = false;
+        if (snapTimer) {
+            clearInterval(snapTimer);
+            snapTimer = null;
+        }
+    }
+
+    function startSnapshots() {
+        stopSnapshots();
+        active = true;
+        snapTimer = setInterval(function() {
+            if (!roomId || !ws || ws.readyState !== WebSocket.OPEN) {
+                active = false;
+                return;
+            }
+            var snapshot = SG.getLocalPvpSnapshot ? SG.getLocalPvpSnapshot() : null;
+            if (snapshot) send({ type: 'match:snapshot', roomId: roomId, snapshot: snapshot });
+        }, 50);
+    }
+
+    SG.getLocalPvpSnapshot = function() {
+        if (!SG.state || (!SG.state.started && !SG.state.pvpMode) || (!active && !SG.state.pvpMode)) return null;
+        return {
+            lane: typeof SG.state.currentLane === 'number' ? SG.state.currentLane : 1,
+            distance: Math.floor(SG.state.score || 0),
+            isJumping: !!SG.state.isJumping,
+            isRolling: !!SG.state.isRolling,
+            alive: !SG.state.gameOver && !SG.state.pvpLocalDead,
+            spectating: !!SG.state.pvpSpectating,
+            characterId: SG.state.selectedCharacter || 'runner',
+            timestamp: Date.now()
+        };
+    };
+
+    SG.connectPvp = function() {
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+        if (!SG.account || !SG.account.token) {
+            setStatus('offline');
+            return;
+        }
+        try {
+            ws = new WebSocket(wsUrl());
+        } catch(e) {
+            setStatus('reconnecting');
+            setTimeout(SG.connectPvp, 3000);
+            return;
+        }
+        setStatus('reconnecting');
+        ws.onopen = function() {
+            sendNow({ type: 'hello', token: SG.account.token });
+        };
+        ws.onmessage = function(evt) {
+            try { handleMessage(JSON.parse(evt.data)); } catch(e) {}
+        };
+        ws.onclose = function(evt) {
+            ws = null;
+            authenticated = false;
+            stopSnapshots();
+            if (evt.code !== 4001 && evt.code !== 1000) {
+                setStatus('reconnecting');
+                setTimeout(SG.connectPvp, 3000);
+            } else {
+                setStatus('offline');
+            }
+        };
+    };
+
+    SG.disconnectPvp = function() {
+        stopSnapshots();
+        active = false;
+        authenticated = false;
+        pending = [];
+        roomId = null;
+        SG.pvpRooms = [];
+        if (SG.state) SG.state.pvpRoom = null;
+        if (ws) {
+            ws.close(1000);
+            ws = null;
+        }
+        setStatus('offline');
+    };
+
+    SG.leavePvpRoom = function() {
+        if (roomId) send({ type: 'room:leave', roomId: roomId });
+        roomId = null;
+        pending = [];
+        stopSnapshots();
+        if (SG.state) {
+            SG.state.pvpRoom = null;
+            SG.state.pvpResult = null;
+        }
+        if (SG.setPvpRoomsFromServer) SG.setPvpRoomsFromServer([]);
+        if (SG.renderPvpLobby) SG.renderPvpLobby();
+        send({ type: 'room:list' });
+    };
+
+    function markLocalPlayer(room) {
+        if (!room || !SG.account) return room;
+        SG.state.pvpLocalPlayerId = SG.account.email;
+        for (var i = 0; i < (room.players || []).length; i++) {
+            if (room.players[i].id === SG.account.email) room.players[i].local = true;
+        }
+        return room;
+    }
+
+    function handleMessage(msg) {
+        switch (msg.type) {
+            case 'hello:ok':
+                authenticated = true;
+                setStatus('online');
+                SG.state.pvpLocalPlayerId = msg.userId;
+                flushPending();
+                send({ type: 'room:list' });
+                break;
+            case 'error':
+                console.log('[PVP]', msg.error);
+                break;
+            case 'room:list':
+                if (SG.setPvpRoomsFromServer) SG.setPvpRoomsFromServer(msg.rooms || []);
+                break;
+            case 'room:update':
+                markLocalPlayer(msg.room);
+                if (msg.room && SG.account && (msg.room.players || []).some(function(p) { return p.id === SG.account.email; })) {
+                    roomId = msg.room.id;
+                }
+                if (SG.setPvpRoomFromServer) SG.setPvpRoomFromServer(msg.room);
+                break;
+            case 'room:left':
+                roomId = null;
+                if (SG.state) SG.state.pvpRoom = null;
+                if (SG.renderPvpLobby) SG.renderPvpLobby();
+                send({ type: 'room:list' });
+                break;
+            case 'match:start':
+                roomId = (msg.room && msg.room.id) || msg.roomId || roomId;
+                markLocalPlayer(msg.room);
+                SG.state.pvpSeed = msg.seed || '';
+                if (SG.setPvpRoomFromServer) SG.setPvpRoomFromServer(msg.room || msg);
+                if (SG.state.pvpRoom) SG.state.pvpRoom.localHost = true;
+                stopSnapshots();
+                startSnapshots();
+                if (typeof SG._originalStartPvpRace === 'function') SG._originalStartPvpRace();
+                break;
+            case 'match:snapshot':
+                if (msg.players && Array.isArray(msg.players)) {
+                    for (var i = 0; i < msg.players.length; i++) upsertOpponent(msg.players[i]);
+                } else {
+                    upsertOpponent(msg);
+                }
+                break;
+            case 'match:dead':
+                applyDead(msg);
+                break;
+            case 'match:finish':
+                stopSnapshots();
+                active = false;
+                SG.state.pvpRoom = null;
+                SG.state.pvpResult = msg.ranking || [];
+                showServerRanking(msg.ranking || []);
+                break;
+        }
+    }
+
+    function upsertOpponent(data) {
+        if (!data || (!data.id && !data.playerId)) return;
+        var id = data.id || data.playerId;
+        var list = SG.state.pvpOpponents || [];
+        for (var i = 0; i < list.length; i++) {
+            var o = list[i];
+            if (o.id === id || o.name === data.name) {
+                o.distance = data.distance || 0;
+                o.lane = typeof data.lane === 'number' ? data.lane : o.lane;
+                o.isJumping = !!data.isJumping;
+                o.isRolling = !!data.isRolling;
+                o.alive = data.alive !== false;
+                o.characterId = data.characterId || o.characterId || 'runner';
+                return;
+            }
+        }
+    }
+
+    function applyDead(msg) {
+        var list = SG.state.pvpOpponents || [];
+        for (var i = 0; i < list.length; i++) {
+            if (list[i].id === msg.playerId || list[i].name === msg.name) list[i].alive = false;
+        }
+        if (SG.showPvpDeathFeed) SG.showPvpDeathFeed((msg.name || 'Player') + ' is out');
+    }
+
+    function showServerRanking(ranking) {
+        if (!SG.gameOverEl) return;
+        SG.state.gameOver = true;
+        if (SG.finalScoreEl) SG.finalScoreEl.textContent = Math.floor(SG.state.score || 0);
+        var old = SG.gameOverEl.querySelector('.pvp-ranks');
+        if (old) old.remove();
+        var html = '';
+        for (var i = 0; i < ranking.length; i++) {
+            html += '<div style="color:#fff;font-size:14px;margin:4px 0">' + (i + 1) + '. ' + ranking[i].name + ' - ' + ranking[i].distance + 'm</div>';
+        }
+        var div = document.createElement('div');
+        div.className = 'pvp-ranks';
+        div.innerHTML = html;
+        SG.gameOverEl.appendChild(div);
+        SG.gameOverEl.classList.add('visible');
+    }
+
+    setTimeout(function() {
+        var originalShow = SG.showPvpLobby;
+        var originalToggleReady = SG.togglePvpReady;
+        var originalGameOver = SG.gameOver;
+        SG._originalStartPvpRace = SG.startPvpRace;
+
+        SG.showPvpLobby = function() {
+            SG.connectPvp();
+            if (originalShow) originalShow.apply(this, arguments);
+            setTimeout(function() { send({ type: 'room:list' }); }, 250);
+        };
+
+        SG.createLocalPvpRoom = function() {
+            SG.connectPvp();
+            send({ type: 'room:create', name: 'Cyber Sprint', characterId: SG.state.selectedCharacter || 'runner' });
+        };
+
+        SG.joinLocalPvpRoom = function(id) {
+            SG.connectPvp();
+            send({ type: 'room:join', roomId: id, characterId: SG.state.selectedCharacter || 'runner' });
+        };
+
+        SG.togglePvpReady = function() {
+            if (roomId && SG.state.pvpRoom) {
+                var mine = null;
+                for (var i = 0; i < SG.state.pvpRoom.players.length; i++) {
+                    if (SG.state.pvpRoom.players[i].local) mine = SG.state.pvpRoom.players[i];
+                }
+                var ready = mine ? !mine.ready : true;
+                send({ type: 'room:ready', roomId: roomId, ready: ready });
+                if (mine) mine.ready = ready;
+                if (SG.renderPvpLobby) SG.renderPvpLobby();
+                return;
+            }
+            if (originalToggleReady) originalToggleReady.apply(this, arguments);
+        };
+
+        SG.startPvpRace = function() {
+            if (roomId) {
+                send({ type: 'room:start', roomId: roomId });
+                return;
+            }
+            if (SG._originalStartPvpRace) SG._originalStartPvpRace.apply(this, arguments);
+        };
+
+        SG.gameOver = function() {
+            if (active && roomId) send({ type: 'match:dead', roomId: roomId, distance: Math.floor(SG.state.score || 0) });
+            if (originalGameOver) originalGameOver.apply(this, arguments);
+        };
+
+        if (SG.renderPvpLobby && SG.pvpOverlay && SG.pvpOverlay.style.display !== 'none') SG.renderPvpLobby();
+    }, 0);
 })();

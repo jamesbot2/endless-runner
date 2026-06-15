@@ -187,6 +187,9 @@ export function initDesktopAuth(
       setMsg('dc-reg-msg', '', false)
       btn.disabled = false; btn.textContent = 'REGISTER'
       switchTab('verify')
+      if (data.emailSent === false) {
+        setMsg('dc-verify-msg', 'Email delivery failed. Open /verify-codes in admin to get the code.', true)
+      }
     } catch {
       setMsg('dc-reg-msg', 'Cannot reach server. Try again.', true)
       btn.disabled = false; btn.textContent = 'REGISTER'

@@ -87,6 +87,83 @@
         return group;
     }
 
+    function createPvpCyberScenery(x, z) {
+        var group = new THREE.Group();
+        group.position.set(x, 0, z);
+        var side = x < 0 ? -1 : 1;
+        var neonColors = [0x22e7ff, 0xff2ccf, 0x8d35ff, 0x00ffd5];
+        var accent = neonColors[Math.floor(Math.random() * neonColors.length)];
+        var accent2 = neonColors[(neonColors.indexOf(accent) + 1 + Math.floor(Math.random() * 2)) % neonColors.length];
+        var towerCount = Math.random() > 0.62 ? 2 : 1;
+        var maxDepth = 0;
+
+        for (var t = 0; t < towerCount; t++) {
+            var w = 1.35 + Math.random() * 0.95;
+            var d = 1.55 + Math.random() * 1.15;
+            var h = 8.5 + Math.random() * 13.5;
+            var tx = t === 0 ? 0 : side * (1.5 + Math.random() * 0.9);
+            var tz = t === 0 ? 0 : (Math.random() - 0.5) * 2.8;
+            var tower = new THREE.Mesh(
+                new THREE.BoxGeometry(w, h, d),
+                new THREE.MeshPhongMaterial({
+                    color: 0x07111e,
+                    emissive: 0x031326,
+                    specular: 0x3be9ff,
+                    shininess: 76
+                })
+            );
+            tower.position.set(tx, h / 2, tz);
+            tower.castShadow = true;
+            tower.receiveShadow = true;
+            group.add(tower);
+            maxDepth = Math.max(maxDepth, d + Math.abs(tz));
+
+            var stripMatA = new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.78, blending: THREE.AdditiveBlending });
+            var stripMatB = new THREE.MeshBasicMaterial({ color: accent2, transparent: true, opacity: 0.58, blending: THREE.AdditiveBlending });
+            for (var s = -1; s <= 1; s += 2) {
+                var strip = new THREE.Mesh(new THREE.BoxGeometry(0.035, h * 0.82, 0.035), stripMatA);
+                strip.position.set(tx + s * (w / 2 + 0.02), h * 0.52, tz + d / 2 + 0.03);
+                group.add(strip);
+            }
+            for (var y = 1.5; y < h - 0.8; y += 1.4) {
+                var win = new THREE.Mesh(new THREE.BoxGeometry(w * 0.64, 0.045, 0.04), stripMatB);
+                win.position.set(tx, y, tz + d / 2 + 0.04);
+                group.add(win);
+            }
+        }
+
+        if (Math.random() > 0.22) {
+            var adW = 1.55 + Math.random() * 0.85;
+            var adH = 0.58 + Math.random() * 0.38;
+            var adMat = new THREE.MeshBasicMaterial({
+                color: accent2,
+                transparent: true,
+                opacity: 0.64,
+                side: THREE.DoubleSide,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            var ad = new THREE.Mesh(new THREE.PlaneGeometry(adW, adH), adMat);
+            ad.position.set(-side * 0.08, 4.2 + Math.random() * 4.6, -0.9 + Math.random() * 1.8);
+            ad.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+            ad.renderOrder = 70;
+            group.add(ad);
+
+            var frameMat = new THREE.MeshBasicMaterial({ color: 0xff2ccf, transparent: true, opacity: 0.62, blending: THREE.AdditiveBlending });
+            var frame = new THREE.Mesh(new THREE.BoxGeometry(0.05, adH + 0.18, adW + 0.18), frameMat);
+            frame.position.copy(ad.position);
+            frame.rotation.y = ad.rotation.y;
+            frame.renderOrder = 69;
+            group.add(frame);
+        }
+
+        group.userData.sceneryType = 'pvpCyber';
+        group.userData.depth = Math.max(5.0, maxDepth + 1.8);
+        group.userData.pvpNeonStyled = true;
+        SG.scene.add(group);
+        return group;
+    }
+
     SG.THEME_COLORS = [
         { // 0: City
             bg: 0x87CEEB, fog: 0x87CEEB, ground: 0x4a4a4e, laneMark: 0x6a6a6e, curb: 0x5a5a5a,
@@ -113,6 +190,7 @@
     };
 
     SG.createScenery = function(x, z) {
+        if (SG.state && SG.state.pvpMode) return createPvpCyberScenery(x, z);
         var group = new THREE.Group();
         group.position.set(x, 0, z);
         var theme = SG.state.theme || 0;
@@ -211,12 +289,14 @@
     };
 
     SG.getScenerySpacing = function(theme) {
+        if (SG.state && SG.state.pvpMode) return 9.4;
         if (theme === 0) return 10.8;
         if (theme === 1) return 5.2;
         return 6.5;
     };
 
     SG.getSceneryRowCount = function(theme) {
+        if (SG.state && SG.state.pvpMode) return Math.random() > 0.58 ? 2 : 1;
         if (theme === 0) return 1;
         if (theme === 1 && Math.random() > 0.45) return 2;
         return 1;
@@ -224,11 +304,12 @@
 
     SG.spawnSceneryRow = function(z, side, row) {
         var theme = SG.state.theme || 0;
-        var base = SG.GROUND_WIDTH / 2 + (theme === 0 ? 2.25 : 1.7);
-        var laneOffset = theme === 0 ? row * 3.9 : row * 2.25;
-        var jitter = theme === 0 ? 0 : (Math.random() - 0.5) * 0.7;
+        var isPvp = !!(SG.state && SG.state.pvpMode);
+        var base = SG.GROUND_WIDTH / 2 + (isPvp ? 2.45 : (theme === 0 ? 2.25 : 1.7));
+        var laneOffset = isPvp ? row * 3.8 : (theme === 0 ? row * 3.9 : row * 2.25);
+        var jitter = theme === 0 && !isPvp ? 0 : (Math.random() - 0.5) * (isPvp ? 0.45 : 0.7);
         var x = side * (base + laneOffset + jitter);
-        var zJitter = theme === 0 ? 0 : (Math.random() - 0.5) * 0.9;
+        var zJitter = theme === 0 && !isPvp ? 0 : (Math.random() - 0.5) * (isPvp ? 1.4 : 0.9);
         return SG.createScenery(x, z + zJitter);
     };
 
@@ -247,10 +328,11 @@
 
     SG.addSceneryRow = function(z, side, row) {
         var theme = SG.state.theme || 0;
-        var base = SG.GROUND_WIDTH / 2 + (theme === 0 ? 2.25 : 1.7);
-        var laneOffset = theme === 0 ? row * 3.9 : row * 2.25;
+        var isPvp = !!(SG.state && SG.state.pvpMode);
+        var base = SG.GROUND_WIDTH / 2 + (isPvp ? 2.45 : (theme === 0 ? 2.25 : 1.7));
+        var laneOffset = isPvp ? row * 3.8 : (theme === 0 ? row * 3.9 : row * 2.25);
         var x = side * (base + laneOffset);
-        var expectedDepth = theme === 0 ? 7.0 : 3.5;
+        var expectedDepth = isPvp ? 6.0 : (theme === 0 ? 7.0 : 3.5);
         if (!SG.canPlaceScenery(x, z, expectedDepth)) return null;
         var scenery = SG.spawnSceneryRow(z, side, row);
         if (!scenery) return null;

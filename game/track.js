@@ -10,7 +10,7 @@
 
         var isPvp = !!(SG.state && SG.state.pvpMode);
         var groundMat = isPvp
-            ? new THREE.MeshPhongMaterial({ color: 0x05060b, emissive: 0x14031f, shininess: 96, transparent: true, opacity: 0.88 })
+            ? new THREE.MeshPhongMaterial({ color: 0x020407, emissive: 0x071528, specular: 0x6eefff, shininess: 142, transparent: true, opacity: 0.94 })
             : (SG.createTrackGroundMaterial ? SG.createTrackGroundMaterial() : new THREE.MeshLambertMaterial({ color: 0x4a4a4e }));
         var ground = new THREE.Mesh(new THREE.BoxGeometry(SG.GROUND_WIDTH, 0.2, SG.TRACK_SEGMENT_LENGTH), groundMat);
         ground.position.y = -0.1;
@@ -19,7 +19,7 @@
         group.add(ground);
 
         var markMat = isPvp
-            ? new THREE.MeshBasicMaterial({ color: 0x8d35ff, transparent: true, opacity: 0.92 })
+            ? new THREE.MeshBasicMaterial({ color: 0x22e7ff, transparent: true, opacity: 0.72, blending: THREE.AdditiveBlending })
             : (SG.createLanePaintMaterial ? SG.createLanePaintMaterial() : new THREE.MeshBasicMaterial({ color: 0x6a6a6e }));
         for (var lane = -1; lane <= 1; lane += 2) {
             var mark = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.01, SG.TRACK_SEGMENT_LENGTH - 2), markMat);
@@ -28,7 +28,7 @@
         }
 
         var curbMat = isPvp
-            ? new THREE.MeshBasicMaterial({ color: 0xff2ccf })
+            ? new THREE.MeshBasicMaterial({ color: 0xff2ccf, transparent: true, opacity: 0.92 })
             : (SG.createCurbMaterial ? SG.createCurbMaterial() : new THREE.MeshLambertMaterial({ color: 0x5a5a5a }));
         for (var side = -1; side <= 1; side += 2) {
             var curb = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, SG.TRACK_SEGMENT_LENGTH), curbMat);
@@ -37,13 +37,21 @@
             curb.userData.pvpNeonEdge = isPvp;
             group.add(curb);
             if (isPvp) {
+                var railGlow = side < 0 ? 0xff2ccf : 0x8d35ff;
                 var glow = new THREE.Mesh(
                     new THREE.BoxGeometry(0.08, 0.04, SG.TRACK_SEGMENT_LENGTH),
-                    new THREE.MeshBasicMaterial({ color: side < 0 ? 0xff2ccf : 0x9b4dff, transparent: true, opacity: 0.82 })
+                    new THREE.MeshBasicMaterial({ color: railGlow, transparent: true, opacity: 0.82, blending: THREE.AdditiveBlending })
                 );
                 glow.position.set(side * (SG.GROUND_WIDTH / 2 + 0.46), 0.24, 0);
                 glow.userData.pvpNeonGlow = true;
                 group.add(glow);
+                var cyanTrim = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.035, 0.03, SG.TRACK_SEGMENT_LENGTH),
+                    new THREE.MeshBasicMaterial({ color: 0x22e7ff, transparent: true, opacity: 0.48, blending: THREE.AdditiveBlending })
+                );
+                cyanTrim.position.set(side * (SG.GROUND_WIDTH / 2 + 0.64), 0.3, 0);
+                cyanTrim.userData.pvpNeonGlow = true;
+                group.add(cyanTrim);
             }
         }
 

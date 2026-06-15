@@ -137,6 +137,11 @@ app.whenReady().then(async () => {
       r.sgRuntime = window.__SG ? window.__SG.runtime : null
       r.sgApiBaseUrl = window.__SG ? window.__SG.apiBaseUrl : null
       r.sgOfflineMode = window.__SG ? window.__SG.offlineMode : undefined
+      var electronStatusBar = document.getElementById('electron-status-bar')
+      r.statusBarText = electronStatusBar ? electronStatusBar.textContent : ''
+      r.documentTitle = document.title
+      r.statusBarHidesApiUrl = !!(electronStatusBar && r.apiBaseUrl && electronStatusBar.textContent.indexOf(r.apiBaseUrl) === -1)
+      r.titleHidesApiUrl = !!(r.apiBaseUrl && document.title.indexOf(r.apiBaseUrl) === -1)
 
       // 6. F11 handler
       r.f11HandlerWired = window.desktopAPI !== null
@@ -843,9 +848,24 @@ app.whenReady().then(async () => {
         window.__SG.showPvpLobby()
         var pvpOverlay = document.getElementById('pvp-overlay')
         var pvpButton = document.getElementById('pvp-btn-menu')
-        window.__SG.createLocalPvpRoom()
-        window.__SG.invitePvpBot(1, true)
-        window.__SG.invitePvpBot(2, true)
+        var localPvpName = window.__SG.getLocalPvpName ? window.__SG.getLocalPvpName() : 'You'
+        var defaultAiRoomsCleared = Array.isArray(window.__SG.pvpRooms) && window.__SG.pvpRooms.length === 0
+        if (window.__SG.setPvpRoomFromServer) {
+          window.__SG.setPvpRoomFromServer({
+            id: 'SMOKE-ROOM',
+            name: 'Smoke Server Room',
+            host: localPvpName,
+            localHost: true,
+            players: [
+              { id: 'local', name: localPvpName, ready: true, local: true, lane: 1, characterId: 'runner' },
+              { id: 'remote-a', name: 'Remote A', ready: true, lane: 0, startOffset: -4, characterId: 'punk' },
+              { id: 'remote-b', name: 'Remote B', ready: true, lane: 2, startOffset: -8, characterId: 'swat' }
+            ],
+            maxPlayers: 3
+          })
+        } else {
+          window.__SG.createLocalPvpRoom()
+        }
         var roomReady = window.__SG.isPvpRoomReady(window.__SG.state.pvpRoom)
         window.__SG.skipCountdownForTests = true
         window.__SG.startPvpRace()
@@ -926,6 +946,11 @@ app.whenReady().then(async () => {
         window.__SG.gameOver()
         var spectating = !!window.__SG.state.pvpSpectating
         var localDead = !!window.__SG.state.pvpLocalDead
+        var scoreAtDeath = window.__SG.state.score || 0
+        await new Promise(function(resolve) { setTimeout(resolve, 60) })
+        if (window.__SG.update) window.__SG.update()
+        var scoreAfterDeath = window.__SG.state.score || 0
+        var pvpDeadDistanceFrozen = Math.abs(scoreAfterDeath - scoreAtDeath) < 0.001
         var spectateTargetName = window.__SG.getPvpSpectateTargetName ? window.__SG.getPvpSpectateTargetName() : ''
         var beforeCycle = spectateTargetName
         if (window.__SG.cyclePvpSpectateTarget) window.__SG.cyclePvpSpectateTarget(1)
@@ -939,6 +964,8 @@ app.whenReady().then(async () => {
           overlay: !!pvpOverlay,
           localHost: !!(window.__SG.state.pvpRoom && window.__SG.state.pvpRoom.localHost),
           roomReady: roomReady,
+          defaultAiRoomsCleared: defaultAiRoomsCleared,
+          serverRoomBridge: typeof window.__SG.setPvpRoomFromServer === 'function' && typeof window.__SG.upsertPvpOpponentFromServer === 'function',
           countdownSeq: countdownSeq,
           mode: !!window.__SG.state.pvpMode,
           difficulty: window.__SG.state.difficulty,
@@ -966,10 +993,18 @@ app.whenReady().then(async () => {
           pvpHud: !!(window.__SG.pvpHudEl && window.__SG.pvpHudEl.style.display === 'block'),
           pauseDisabled: pauseDisabled,
           consoleDisabled: consoleDisabled,
+          deadDistanceFrozen: pvpDeadDistanceFrozen,
+          exitButtonVisible: !!(window.__SG.pvpExitBtnEl && window.__SG.pvpExitBtnEl.style.display === 'block'),
+          exitButtonFixed: !!(window.__SG.pvpExitBtnEl && getComputedStyle(window.__SG.pvpExitBtnEl).position === 'fixed'),
           resultCount: result.length
         }
+        if (window.__SG.pvpExitBtnEl) window.__SG.pvpExitBtnEl.click()
+        r.pvpPhase1.exitButtonClickable = !window.__SG.state.pvpMode && !!(pvpOverlay && pvpOverlay.style.display === 'flex')
+        var pvpCloseButton = document.getElementById('pvp-close')
+        if (pvpCloseButton) pvpCloseButton.click()
+        r.pvpPhase1.closeReturnsToMenu = !!(window.__SG.menuOverlay && window.__SG.menuOverlay.style.display === 'flex' && pvpOverlay && pvpOverlay.style.display === 'none')
         window.__SG.skipCountdownForTests = false
-        window.__SG.exitPvpToLobby()
+        if (window.__SG.state.pvpMode) window.__SG.exitPvpToLobby()
         if (pvpOverlay) pvpOverlay.style.display = 'none'
       }
       if (window.__SG && window.__SG.restartGame && window.__SG.player) {
@@ -1030,6 +1065,7 @@ app.whenReady().then(async () => {
   check('4c. API_BASE_URL is non-empty', !!state.apiBaseUrl, state.apiBaseUrl || 'empty')
   check('5a. SG.runtime === "electron"', state.sgRuntime === 'electron', state.sgRuntime || 'undefined')
   check('5b. SG.apiBaseUrl set', !!state.sgApiBaseUrl, state.sgApiBaseUrl || 'undefined')
+  check('5b-1. desktop status UI hides API URL', !!state.statusBarHidesApiUrl && !!state.titleHidesApiUrl, state.statusBarText || state.documentTitle || 'missing status')
   check('6. F11 handler wired', !!state.f11HandlerWired)
   check('7. No require() leak', !state.requireLeak)
   check('8. No fs leak', !state.fsLeak)
@@ -1061,7 +1097,7 @@ app.whenReady().then(async () => {
   check("14e-10. third-person speed HUD shows instant vector speed", !!state.speedHud && !!state.speedHudVector, state.speedHudText || state.speedHudBackground || 'missing')
   check("14e-11. first-person pitch setting defaults lower and saves", state.firstPersonPitchDefault === 1 && state.firstPersonPitchSetting === 1 && state.firstPersonPitchButtons === 2 && !!state.firstPersonPitchSaved, `default=${state.firstPersonPitchDefault}, slider=${state.firstPersonPitchSetting}, buttons=${state.firstPersonPitchButtons}`)
   check("14e-12. start countdown overlays 3-2-1-RUN before movement", !!state.startCountdown && !!state.startCountdown.overlay && state.startCountdown.sequence === '3,2,1,RUN!' && !!state.startCountdown.done && !state.startCountdown.active && state.startCountdown.display === 'none' && state.startCountdown.text === 'RUN!', state.startCountdown ? JSON.stringify(state.startCountdown) : 'missing')
-  check("14e-13. PVP Phase 2 opponent models sync state and spectating", !!state.pvpPhase1 && !!state.pvpPhase1.menuButton && !!state.pvpPhase1.overlay && !!state.pvpPhase1.localHost && !!state.pvpPhase1.roomReady && state.pvpPhase1.countdownSeq === '10,9,8,7,6,5,4,3,2,1,RUN!' && !!state.pvpPhase1.mode && state.pvpPhase1.difficulty === 1 && !!state.pvpPhase1.started && state.pvpPhase1.ghosts === 2 && state.pvpPhase1.opponents === 2 && state.pvpPhase1.opponentGroups === 2 && state.pvpPhase1.opponentModelsLoaded >= 1 && !!state.pvpPhase1.track && state.pvpPhase1.neonEdges >= 4 && !!state.pvpPhase1.obstacleNeon && !!state.pvpPhase1.buildingNeon && !!state.pvpPhase1.playerAura && !!state.pvpPhase1.opponentOffsetsUnique && !!state.pvpPhase1.snapshotProtocol && !!state.pvpPhase1.localSnapshot && !!state.pvpPhase1.snapshotSync && !!state.pvpPhase1.remoteStateVisible && !!state.pvpPhase1.spectating && !!state.pvpPhase1.localDead && !!state.pvpPhase1.spectateTarget && !!state.pvpPhase1.spectateCycle && !!state.pvpPhase1.playerHiddenWhenSpectating && !!state.pvpPhase1.cameraFollows && !!state.pvpPhase1.pvpHud && !!state.pvpPhase1.pauseDisabled && !!state.pvpPhase1.consoleDisabled && state.pvpPhase1.resultCount === 3, state.pvpPhase1 ? JSON.stringify(state.pvpPhase1) : 'missing')
+  check("14e-13. PVP Phase 2 opponent models sync state and spectating", !!state.pvpPhase1 && !!state.pvpPhase1.menuButton && !!state.pvpPhase1.overlay && !!state.pvpPhase1.defaultAiRoomsCleared && !!state.pvpPhase1.serverRoomBridge && !!state.pvpPhase1.localHost && !!state.pvpPhase1.roomReady && state.pvpPhase1.countdownSeq === '10,9,8,7,6,5,4,3,2,1,RUN!' && !!state.pvpPhase1.mode && state.pvpPhase1.difficulty === 1 && !!state.pvpPhase1.started && state.pvpPhase1.ghosts === 2 && state.pvpPhase1.opponents === 2 && state.pvpPhase1.opponentGroups === 2 && state.pvpPhase1.opponentModelsLoaded >= 1 && !!state.pvpPhase1.track && state.pvpPhase1.neonEdges >= 4 && !!state.pvpPhase1.obstacleNeon && !!state.pvpPhase1.buildingNeon && !!state.pvpPhase1.playerAura && !!state.pvpPhase1.opponentOffsetsUnique && !!state.pvpPhase1.snapshotProtocol && !!state.pvpPhase1.localSnapshot && !!state.pvpPhase1.snapshotSync && !!state.pvpPhase1.remoteStateVisible && !!state.pvpPhase1.spectating && !!state.pvpPhase1.localDead && !!state.pvpPhase1.spectateTarget && !!state.pvpPhase1.spectateCycle && !!state.pvpPhase1.playerHiddenWhenSpectating && !!state.pvpPhase1.cameraFollows && !!state.pvpPhase1.pvpHud && !!state.pvpPhase1.pauseDisabled && !!state.pvpPhase1.consoleDisabled && !!state.pvpPhase1.deadDistanceFrozen && !!state.pvpPhase1.exitButtonVisible && !!state.pvpPhase1.exitButtonFixed && !!state.pvpPhase1.exitButtonClickable && !!state.pvpPhase1.closeReturnsToMenu && state.pvpPhase1.resultCount === 3, state.pvpPhase1 ? JSON.stringify(state.pvpPhase1) : 'missing')
   check("14f. restart keeps player facing forward", Math.abs(state.restartRotationY - Math.PI) < 0.001, String(state.restartRotationY))
   check("14g. console command runner exists", !!state.executeConsoleCommand)
   check("14h. console includes Homelander easter egg", state.consoleCommands && state.consoleCommands.includes('homelander'), state.consoleCommands ? state.consoleCommands.join(', ') : 'none')

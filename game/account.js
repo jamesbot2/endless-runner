@@ -2,7 +2,9 @@
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
-    var API = 'http://' + (window.location.hostname || '35.212.200.85') + ':3000';
+    var API = (window.__ENDLESS_RUNNER_CONFIG__ && window.__ENDLESS_RUNNER_CONFIG__.API_BASE_URL) ||
+        (window.__SUBWAY_CONFIG__ && window.__SUBWAY_CONFIG__.API_BASE_URL) ||
+        'http://' + (window.location.hostname || '35.212.200.85') + ':3000';
 
     SG.account = {
         token: localStorage.getItem('subwayToken') || null,
@@ -67,8 +69,8 @@
     SG.applyGameData = function(g) {
         if (!g) return;
         var best = Math.max(g.maxDistance || 0, g.highScore || 0, g.maxEasy || 0, g.maxMedium || 0, g.maxHard || 0);
-        SG.state.bestScore = Math.max(SG.state.bestScore || 0, best);
-        SG.state.maxLegitDistance = Math.max(SG.state.maxLegitDistance || 0, best);
+        SG.state.bestScore = best;
+        SG.state.maxLegitDistance = best;
         SG.state.credits = g.credits || 0;
         SG.state.totalCoins = Math.max(g.totalCoins || 0, g.coins || 0);
         SG.state.equippedAbility = g.equippedAbility || 0;
@@ -83,18 +85,18 @@
         SG.state.canDoubleJump = owned.indexOf(1) >= 0;
         SG.state.canJetpack = owned.indexOf(2) >= 0;
         SG.state.canRoofWalk = owned.indexOf(3) >= 0;
-        if (Array.isArray(g.ownedCharacters) && g.ownedCharacters.length) {
-            SG.state.ownedCharacters = g.ownedCharacters;
-            localStorage.setItem('subwayOwnedCharacters', JSON.stringify(g.ownedCharacters));
-        }
-        if (g.selectedCharacter) {
-            SG.state.selectedCharacter = g.selectedCharacter;
-            localStorage.setItem('subwaySelectedCharacter', g.selectedCharacter);
-            if (SG.selectCharacter && SG.characterIsOwned(g.selectedCharacter)) SG.selectCharacter(g.selectedCharacter);
-        }
+        var ownedCharacters = Array.isArray(g.ownedCharacters) && g.ownedCharacters.length ? g.ownedCharacters.slice() : ['runner'];
+        if (ownedCharacters.indexOf('runner') < 0) ownedCharacters.unshift('runner');
+        SG.state.ownedCharacters = ownedCharacters;
+        localStorage.setItem('subwayOwnedCharacters', JSON.stringify(ownedCharacters));
+        var selectedCharacter = g.selectedCharacter && ownedCharacters.indexOf(g.selectedCharacter) >= 0 ? g.selectedCharacter : 'runner';
+        SG.state.selectedCharacter = selectedCharacter;
+        localStorage.setItem('subwaySelectedCharacter', selectedCharacter);
+        if (SG.selectCharacter) SG.selectCharacter(selectedCharacter);
         localStorage.setItem('subwayCredits', String(SG.state.credits));
         localStorage.setItem('subwayTotalCoins', String(SG.state.totalCoins));
         localStorage.setItem('subwayBest', String(SG.state.bestScore || 0));
+        if (SG.saveShopData) SG.saveShopData();
         if (SG.updateMenuCredits) SG.updateMenuCredits();
     };
 
@@ -165,12 +167,48 @@
     SG.accountLogout = function() {
         SG.account.token = null;
         SG.account.email = null;
+        SG.account.username = null;
         SG.account.loggedIn = false;
         localStorage.removeItem('subwayToken');
         localStorage.removeItem('subwayEmail');
+        localStorage.removeItem('subwayUsername');
         localStorage.removeItem('subwayRemember');
-        window.location.href = 'http://' + window.location.hostname + ':3000/';
+        localStorage.removeItem('subwayCredits');
+        localStorage.removeItem('subwayTotalCoins');
+        localStorage.removeItem('subwayOwnedCharacters');
+        localStorage.removeItem('subwaySelectedCharacter');
+        localStorage.removeItem('subwayShop');
+        var resetData = defaultLogoutData();
+        SG.applyGameData(resetData);
+        if (window.desktopAPI && window.desktopAPI.save && window.desktopAPI.save.setLocal) {
+            try { window.desktopAPI.save.setLocal(resetData); } catch(e) {}
+        }
+        if (SG.menuOverlay) SG.menuOverlay.style.display = 'none';
+        if (SG.pvpOverlay) SG.pvpOverlay.style.display = 'none';
+        if (SG.disconnectPvp) SG.disconnectPvp();
+        if (SG.showLogin) SG.showLogin(true);
     };
+
+    function defaultLogoutData() {
+        return {
+            coins: 0,
+            credits: 0,
+            totalCoins: 0,
+            equippedAbility: 0,
+            ownedAbilities: [0],
+            maxDistance: 0,
+            maxEasy: 0,
+            maxMedium: 0,
+            maxHard: 0,
+            maxEasyAbility: 0,
+            maxMediumAbility: 0,
+            maxHardAbility: 0,
+            runCount: 0,
+            highScore: 0,
+            ownedCharacters: ['runner'],
+            selectedCharacter: 'runner'
+        };
+    }
 
     SG.accountSave = function() {
         if (!SG.account.loggedIn || !SG.account.token) return;
