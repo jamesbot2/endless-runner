@@ -129,16 +129,32 @@ function findUserKeyByEmail(users, email) {
 
 function validateEmail(email) {
     email = normalizeEmailInput(email);
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        console.log('[VALIDATE EMAIL] Rejected (basic format): ' + email);
+        return false;
+    }
     var domain = email.split('@')[1];
-    // Reject phone numbers as email usernames
-    if (/^\d{6,}@/.test(email) && domain !== 'qq.com') return false;
-    // Reject obviously fake domains
-    if (/@(test|example|fake|temp|dispostable|mailinator|guerrillamail|yopmail|10minute|trashmail|sharklasers|spam)\./i.test(email)) return false;
+    // Reject phone numbers as email usernames (allow QQ)
+    if (/^\d{6,}@/.test(email) && domain !== 'qq.com') {
+        console.log('[VALIDATE EMAIL] Rejected (phone number username)');
+        return false;
+    }
+    // Reject disposable domains
+    if (/@(test|example|fake|temp|dispostable|mailinator|guerrillamail|yopmail|10minute|trashmail|sharklasers|spam|mail|tempmail)\./i.test(email)) {
+        console.log('[VALIDATE EMAIL] Rejected (disposable domain)');
+        return false;
+    }
     // Require valid TLD (2+ chars)
-    if (!domain || domain.split('.').length < 2) return false;
+    if (!domain || domain.split('.').length < 2) {
+        console.log('[VALIDATE EMAIL] Rejected (no valid TLD): ' + email);
+        return false;
+    }
     var tld = domain.split('.').pop();
-    if (!tld || tld.length < 2) return false;
+    if (!tld || tld.length < 2) {
+        console.log('[VALIDATE EMAIL] Rejected (short TLD): ' + email);
+        return false;
+    }
+    console.log('[VALIDATE EMAIL] Accepted: ' + email);
     return true;
 }
 
