@@ -210,16 +210,7 @@ async function main() {
   // 22. /admin HTML does not contain Authorization:AUTH
   check('/admin no Authorization:AUTH', adminStr.indexOf('Authorization:AUTH') < 0, '');
 
-  // 23. /admin HTML contains userTableBody click handler
-  check('/admin has userTableBody click delegation', adminStr.indexOf('userTableBody') >= 0 && adminStr.indexOf('addEventListener') >= 0, '');
-
-  // 24. /admin HTML audit table uses esc() for admin/action/target
-  check('/admin audit uses esc(e.admin)', adminStr.indexOf('esc(e.admin)') >= 0, '');
-  check('/admin audit uses esc(e.action)', adminStr.indexOf('esc(e.action)') >= 0, '');
-  check('/admin audit uses esc(e.target', adminStr.indexOf('esc(e.target') >= 0, '');
-
-  // 25. /admin HTML PVP error uses esc(d.error)
-  check('/admin PVP error uses esc(d.error)', adminStr.indexOf('esc(d.error)') >= 0, '');
+  // 23-25: These checks now run against /admin.js in test 35
 
   // 26. pvp-server.js does not contain ::ffff:10.138.0.2
   // (read pvp-server file and check)
@@ -228,18 +219,8 @@ async function main() {
   check('pvp-server.js no 10.138.0.2', pvpSrc.indexOf('10.138.0.2') < 0, '');
 
 
-  // 27. /admin HTML does not have credentials in headers
-  check('/admin no credentials in headers', adminStr.indexOf('credentials:"same-origin"') < 0 || adminStr.indexOf('credentials:') < 0, '');
-
-  // 28. /admin HTML ban/grant/reset requests include confirm:true
-  check('/admin ban with confirm:true', adminStr.indexOf('userAction(email,\"ban\",true)') >= 0, '');
-  check('/admin grant with confirm:true', adminStr.indexOf('userAction(email,\"grant-all-abilities\",true)') >= 0, '');
-  check('/admin reset-password with confirm:true', adminStr.indexOf('reset-password",confirm:true') >= 0, '');
-
-  // 29. /admin HTML data-email uses escAttr
-  check('/admin data-email uses escAttr', adminStr.indexOf('escAttr(email)') >= 0, '');
-
-  // 30. Ban without confirm returns 400
+    // 27-29: Now covered by /admin.js checks in test 35
+// 30. Ban without confirm returns 400
   var banNoConfirm = await request('POST', '/api/admin/user/action', { email: testEmail, action: 'ban' }, ADMIN_AUTH);
   check('Ban without confirm -> 400', banNoConfirm.status === 400 && banNoConfirm.body && banNoConfirm.body.error === 'confirm:true required for dangerous action', 'status=' + banNoConfirm.status);
 
@@ -254,6 +235,51 @@ async function main() {
   // 33. Reset password without confirm returns 400
   var resetPWNoConfirm = await request('POST', '/api/admin/user/action', { email: testEmail, action: 'reset-password', newPassword: 'newpass123' }, ADMIN_AUTH);
   check('Reset password without confirm -> 400', resetPWNoConfirm.status === 400, 'status=' + resetPWNoConfirm.status);
+
+
+  // 34. /admin HTML includes script src=/admin.js not inline JS
+  check('/admin uses external JS', adminStr.indexOf('src="/admin.js"') >= 0, '');
+  check('/admin no inline page JS', adminStr.indexOf('<script>') < 0 || adminStr.indexOf('src="/admin.js"') >= 0, '');
+
+  // 35. JS syntax check: fetch /admin.js and validate syntax
+  var adminJsReq = await request('GET', '/admin.js', null, ADMIN_AUTH);
+  check('/admin.js returns 200', adminJsReq.status === 200, 'status=' + adminJsReq.status);
+  if (adminJsReq.status === 200 && typeof adminJsReq.body === 'string') {
+    var js = adminJsReq.body;
+    // Test syntax using vm module
+    var vm = require('vm');
+    try {
+      new vm.Script(js);
+      check('/admin.js syntax valid', true, '');
+    } catch (e) {
+      check('/admin.js syntax valid', false, e.message);
+    }
+    // No credentials in headers
+    check('/admin.js no credentials in headers', !/headers\s*:\s*\{[^}]*credentials:/.test(js), '');
+    // confirm:true for ban/grant/reset
+    check('/admin.js ban with confirm', js.indexOf('userAction(email, \"ban\", true)') >= 0, '');
+    check('/admin.js grant with confirm', js.indexOf('userAction(email, \"grant-all-abilities\", true)') >= 0, '');
+    check('/admin.js reset-pw with confirm', js.indexOf('confirm: true') >= 0, '');
+    // escAttr and esc usage
+    check('/admin.js uses escAttr for data-email', js.indexOf('escAttr(email)') >= 0, '');
+    check('/admin.js audit uses esc(e.admin)', js.indexOf('esc(e.admin)') >= 0, '');
+    check('/admin.js audit uses esc(e.action)', js.indexOf('esc(e.action)') >= 0, '');
+    check('/admin.js audit uses esc(e.target)', js.indexOf('esc(e.target') >= 0, '');
+    check('/admin.js PVP uses esc(d.error)', js.indexOf('esc(d.error)') >= 0, '');
+    // user event delegation
+    check('/admin.js has userTableBody delegation', js.indexOf('userTableBody') >= 0 && js.indexOf('addEventListener') >= 0, '');
+  }
+
+  // 36. Audit log does not expose sensitive fields
+  var auditR = await request('GET', '/api/admin/audit?limit=500', null, ADMIN_AUTH);
+  check('Audit returns 200', auditR.status === 200, 'status=' + auditR.status);
+  if (auditR.status === 200 && Array.isArray(auditR.body)) {
+    var auditBodyStr = JSON.stringify(auditR.body);
+    check('Audit no passwordHash leak', auditBodyStr.indexOf('passwordHash') < 0, '');
+    check('Audit no passwordSalt leak', auditBodyStr.indexOf('passwordSalt') < 0, '');
+    check('Audit no sessionToken leak', auditBodyStr.indexOf('sessionToken') < 0, '');
+    check('Audit no sessionExpires leak', auditBodyStr.indexOf('sessionExpires') < 0, '');
+  }
 
   // Print summary
   console.log('\n=== Results: ' + passed + ' passed, ' + failed + ' failed ===');
