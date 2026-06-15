@@ -134,11 +134,7 @@ function validateEmail(email) {
         return false;
     }
     var domain = email.split('@')[1];
-    // Reject phone numbers as email usernames (allow QQ)
-    if (/^\d{6,}@/.test(email) && domain !== 'qq.com') {
-        console.log('[VALIDATE EMAIL] Rejected (phone number username)');
-        return false;
-    }
+    // Phone-number email usernames are valid for many providers (163.com, qq.com, etc.)
     // Reject disposable domains
     if (/@(test|example|fake|temp|dispostable|mailinator|guerrillamail|yopmail|10minute|trashmail|sharklasers|spam|mail|tempmail)\./i.test(email)) {
         console.log('[VALIDATE EMAIL] Rejected (disposable domain)');
