@@ -202,6 +202,31 @@ async function main() {
     }
   }
 
+
+  // Fetch /admin HTML again for string checks
+  var adminHtml = await request('GET', '/admin', null, ADMIN_AUTH);
+  var adminStr = adminHtml.body;
+
+  // 22. /admin HTML does not contain Authorization:AUTH
+  check('/admin no Authorization:AUTH', adminStr.indexOf('Authorization:AUTH') < 0, '');
+
+  // 23. /admin HTML contains userTableBody click handler
+  check('/admin has userTableBody click delegation', adminStr.indexOf('userTableBody') >= 0 && adminStr.indexOf('addEventListener') >= 0, '');
+
+  // 24. /admin HTML audit table uses esc() for admin/action/target
+  check('/admin audit uses esc(e.admin)', adminStr.indexOf('esc(e.admin)') >= 0, '');
+  check('/admin audit uses esc(e.action)', adminStr.indexOf('esc(e.action)') >= 0, '');
+  check('/admin audit uses esc(e.target', adminStr.indexOf('esc(e.target') >= 0, '');
+
+  // 25. /admin HTML PVP error uses esc(d.error)
+  check('/admin PVP error uses esc(d.error)', adminStr.indexOf('esc(d.error)') >= 0, '');
+
+  // 26. pvp-server.js does not contain ::ffff:10.138.0.2
+  // (read pvp-server file and check)
+  var fs = require('fs');
+  var pvpSrc = fs.readFileSync(__dirname + '/pvp-server.js', 'utf8');
+  check('pvp-server.js no 10.138.0.2', pvpSrc.indexOf('10.138.0.2') < 0, '');
+
   // Print summary
   console.log('\n=== Results: ' + passed + ' passed, ' + failed + ' failed ===');
   process.exit(failed > 0 ? 1 : 0);

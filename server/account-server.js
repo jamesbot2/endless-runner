@@ -397,6 +397,16 @@ function adminHTML() {
   'document.getElementById("orderSelect").addEventListener("change",loadUsers);' +
   'document.querySelectorAll(".chip").forEach(function(c){c.addEventListener("click",function(){document.querySelectorAll(".chip").forEach(function(x){x.classList.remove("active")});this.classList.add("active");loadUsers()})});' +
   'loadUsers();' +
+  'document.getElementById("userTableBody").addEventListener("click",function(e){' +
+  'var btn=e.target.closest("button[data-action]");if(!btn)return;' +
+  'var action=btn.getAttribute("data-action");var email=btn.getAttribute("data-email");' +
+  'if(action==="edit"){editUser(email)}' +
+  'else if(action==="verify"){userAction(email,"verify")}' +
+  'else if(action==="ban"){if(!confirm("Ban "+email+"?"))return;userAction(email,"ban")}' +
+  'else if(action==="reset-pw"){if(!confirm("Reset password for "+email+"?"))return;resetPW(email)}' +
+  'else if(action==="grant-abil"){if(!confirm("Grant all abilities to "+email+"?"))return;userAction(email,"grant-all-abilities")}' +
+  'else if(action==="delete"){if(!confirm("Delete "+email+"?"))return;delUser(email)}' +
+  '})' +
   'function editUser(email){' +
   'currentEditEmail=email;document.getElementById("modalTitle").textContent="Edit: "+esc(email);' +
   'api("/api/admin/user?email="+encodeURIComponent(email)).then(function(u){' +
@@ -428,29 +438,29 @@ function adminHTML() {
   'ownedCharacters:document.getElementById("editOwnedCharacters").value.split(",").map(function(x){return x.trim()}).filter(Boolean),' +
   'selectedCharacter:document.getElementById("editSelectedCharacter").value.trim()||"runner"' +
   '}};' +
-  'api("/api/admin/user/update",{method:"POST",headers:{"Content-Type":"application/json",Authorization:AUTH},body:JSON.stringify(body)}).then(function(r){' +
+  'api("/api/admin/user/update",{method:"POST",headers:{"Content-Type":"application/json",credentials:"same-origin"},body:JSON.stringify(body)}).then(function(r){' +
   'if(r.error){msg(esc(r.error),"err")}else{msg("Saved "+currentEditEmail,"ok");document.getElementById("editModal").style.display="none";loadUsers()}})' +
   '});' +
   'function userAction(email,action){' +
-  'api("/api/admin/user/action",{method:"POST",headers:{"Content-Type":"application/json",Authorization:AUTH},body:JSON.stringify({email:email,action:action})}).then(function(r){' +
+  'api("/api/admin/user/action",{method:"POST",headers:{"Content-Type":"application/json",credentials:"same-origin"},body:JSON.stringify({email:email,action:action})}).then(function(r){' +
   'if(r.error){msg(esc(r.error),"err")}else{msg(action+" done for "+email,"ok");loadUsers()}})' +
   '};' +
   'function resetPW(email){' +
   'var p=prompt("New password for "+email);if(!p||p.length<4)return;' +
-  'api("/api/admin/user/action",{method:"POST",headers:{"Content-Type":"application/json",Authorization:AUTH},body:JSON.stringify({email:email,action:"reset-password",newPassword:p})}).then(function(r){' +
+  'api("/api/admin/user/action",{method:"POST",headers:{"Content-Type":"application/json",credentials:"same-origin"},body:JSON.stringify({email:email,action:"reset-password",newPassword:p})}).then(function(r){' +
   'if(r.error){msg(esc(r.error),"err")}else{msg("PW reset for "+email,"ok")}})' +
   '};' +
   'function delUser(email){' +
   'if(!confirm("Delete "+email+"?"))return;' +
-  'api("/api/admin/user/action",{method:"POST",headers:{"Content-Type":"application/json",Authorization:AUTH},body:JSON.stringify({email:email,action:"delete",confirm:true})}).then(function(r){' +
+  'api("/api/admin/user/action",{method:"POST",headers:{"Content-Type":"application/json",credentials:"same-origin"},body:JSON.stringify({email:email,action:"delete",confirm:true})}).then(function(r){' +
   'if(r.error){msg(esc(r.error),"err")}else{msg("Deleted "+email,"ok");loadUsers()}})' +
   '};' +
   'document.querySelectorAll(".tab").forEach(function(t){t.addEventListener("click",function(){' +
   'if(this.getAttribute("data-tab")==="pvp"){' +
   'document.getElementById("pvpContent").innerHTML="<p class=\"loader\">Loading</p>";' +
   'api("/api/admin/pvp/status").then(function(d){' +
-  'if(d.error){document.getElementById("pvpContent").innerHTML="<p style=\"color:#ef9a9a\">PVP Server: "+d.error+"</p>";return}' +
-  'var h="<p style=\"margin-bottom:10px;font-size:14px;color:#aaa\">Total Rooms: "+d.rooms+" | Players: "+d.players+"</p>";' +
+  'if(d.error){document.getElementById("pvpContent").innerHTML="<p style=\"color:#ef9a9a\">PVP Server: "+esc(d.error)+"</p>";return}' +
+  'var h="<p style=\"margin-bottom:10px;font-size:14px;color:#aaa\">Total Rooms: "+esc(d.totalRooms)+" | Players: "+esc(d.totalPlayers)+"</p>";' +
   'if(d.roomsList&&d.roomsList.length){h+="<div class=\"pvp-grid\">";' +
   'd.roomsList.forEach(function(r){' +
   'h+="<div class=\"pvp-card\"><h3>"+esc(r.name)+"</h3>"+' +
@@ -465,7 +475,7 @@ function adminHTML() {
   'var tb=document.getElementById("auditBody");' +
   'if(!log.length){tb.innerHTML="<tr><td colspan=\'4\' style=\'text-align:center;padding:30px;color:#555\'>No audit entries</td></tr>";return}' +
   'var h="";log.reverse().forEach(function(e){' +
-  'h+="<tr><td>"+new Date(e.time).toLocaleString()+"</td><td>"+e.admin+"</td><td>"+e.action+"</td><td>"+(e.target||"-")+"</td></tr>"' +
+  'h+="<tr><td>"+esc(new Date(e.time).toLocaleString())+"</td><td>"+esc(e.admin)+"</td><td>"+esc(e.action)+"</td><td>"+esc(e.target||"-")+"</td></tr>"' +
   '});tb.innerHTML=h})}' +
   '})});' +
   '</script></body></html>';

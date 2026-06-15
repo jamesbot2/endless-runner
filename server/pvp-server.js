@@ -172,7 +172,7 @@ const server = http.createServer((req, res) => {
     if (u.pathname === '/admin/pvp-status' && req.method === 'GET') {
       // Only allow localhost access
       const ip = req.socket.remoteAddress;
-      if (ip !== '127.0.0.1' && ip !== '::1' && ip !== '::ffff:127.0.0.1' && ip !== '::ffff:10.138.0.2') {
+      if (ip !== '127.0.0.1' && ip !== '::1' && ip !== '::ffff:127.0.0.1') {
         res.writeHead(403,{'Content-Type':'application/json'});
         res.end(JSON.stringify({error:'Forbidden: localhost only'}));
         return;
