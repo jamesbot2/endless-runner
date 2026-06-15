@@ -63,7 +63,6 @@ html, body {
     font-family: var(--font);
     user-select: none;
     -webkit-user-select: none;
-    touch-action: none;
     -webkit-font-smoothing: antialiased;
 }
 
@@ -384,50 +383,6 @@ canvas {
 #game-over-screen .restart-btn:hover { transform: scale(1.05); box-shadow: 0 14px 42px var(--glow-cyan); }
 #game-over-screen .menu-btn { /* inherits .menu-btn below */ }
 
-/* ----- Mobile controls ----- */
-#mobile-controls {
-    position: absolute;
-    bottom: 28px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-    z-index: 15;
-    pointer-events: none;
-}
-.m-row { display: flex; gap: 54px; justify-content: center; pointer-events: none; }
-.m-btn {
-    width: 62px;
-    height: 62px;
-    border-radius: 50%;
-    border: 1px solid var(--glass-border-hi);
-    background: var(--panel);
-    color: var(--cyan-soft);
-    font-size: 22px;
-    pointer-events: auto;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
-    user-select: none;
-    transition: transform 0.15s, background 0.15s, box-shadow 0.15s;
-    backdrop-filter: blur(var(--glass-blur));
-    -webkit-backdrop-filter: blur(var(--glass-blur));
-    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
-}
-.m-btn:active {
-    background: rgba(34, 211, 238, 0.26);
-    transform: scale(0.88);
-    box-shadow: 0 0 24px var(--glow-cyan);
-}
-@media (hover: hover) and (pointer: fine) {
-    #mobile-controls { display: none; }
-}
-
 /* ============================================================
    MENU SYSTEM  —  overlays, glass panels, sidebar, bento
    ============================================================ */
@@ -507,7 +462,6 @@ canvas {
 }
 .menu-keys { color: var(--text-lo); font-size: 11px; margin-bottom: 8px; line-height: 1.7; }
 .menu-controls { color: var(--text-mid); font-size: 14px; line-height: 1.9; margin-bottom: 12px; }
-.menu-mobile-hint { color: var(--text-lo); font-size: 12px; }
 .menu-controls .key, .menu-keys .key {
     display: inline-block;
     background: rgba(34, 211, 238, 0.12);
@@ -1026,8 +980,6 @@ input[type=range]::-moz-range-thumb {
     #skill-indicator { top: 80px !important; right: 12px !important; font-size: 10px !important; }
     #jetpack-timer { top: 106px !important; right: 12px !important; font-size: 9px !important; }
     #game-over-screen h1 { font-size: 38px; }
-    .m-btn { width: 52px; height: 52px; font-size: 19px; }
-    .m-row { gap: 42px; }
 }
 
 @media (max-width: 480px) {
@@ -1048,7 +1000,4 @@ input[type=range]::-moz-range-thumb {
     #speed-indicator { top: 46px; right: 8px; left: auto; font-size: 9px; padding: 3px 8px; }
     #skill-indicator { top: 70px !important; right: 8px !important; }
     #jetpack-timer { top: 94px !important; right: 8px !important; }
-    #mobile-controls { bottom: 14px; }
-    .m-btn { width: 46px; height: 46px; font-size: 17px; }
-    .m-row { gap: 32px; }
 }

@@ -258,7 +258,7 @@ export function initDesktopAuth(
 
   // ── Bind events ─────────────────────────────────────
   function bindEvents(overlay: HTMLElement): void {
-    ;['click', 'dblclick', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend'].forEach((type) => {
+    ;['click', 'dblclick', 'mousedown', 'mouseup', 'pointerdown', 'pointerup'].forEach((type) => {
       overlay.addEventListener(type, (e) => {
         e.stopPropagation()
       })
