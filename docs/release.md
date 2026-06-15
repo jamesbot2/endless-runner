@@ -75,7 +75,10 @@ Upload to [GitHub Releases](https://github.com/jamesbot2/subway-surfer/releases)
 
 ## 👷 CI/CD Pipeline
 
-The workflow at `.github/workflows/build.yml` runs automatically.
+Two workflows run automatically:
+
+- `.github/workflows/desktop-build.yml` — Build, smoke test, PVP test, package on push/PR
+- `.github/workflows/desktop-release.yml` — Create GitHub Release on tag push (`v*`)
 
 **On push/PR to `main`:**
 - Build game bundle → Compile Electron → Headless smoke test → PVP test → Package → Upload artifact

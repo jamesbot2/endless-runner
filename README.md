@@ -3,7 +3,8 @@
 > Three.js + Electron desktop endless runner with real-time PVP, character system, abilities, cloud saves, and admin backend.
 > Made by Neo 🤖 for James
 
-[![Build & Release](https://github.com/jamesbot2/subway-surfer/actions/workflows/build.yml/badge.svg)](https://github.com/jamesbot2/subway-surfer/actions/workflows/build.yml)
+[![Desktop Build](https://github.com/jamesbot2/subway-surfer/actions/workflows/desktop-build.yml/badge.svg)](https://github.com/jamesbot2/subway-surfer/actions/workflows/desktop-build.yml)
+[![Release Desktop](https://github.com/jamesbot2/subway-surfer/actions/workflows/desktop-release.yml/badge.svg)](https://github.com/jamesbot2/subway-surfer/actions/workflows/desktop-release.yml)
 [![Release](https://img.shields.io/github/v/release/jamesbot2/subway-surfer)](https://github.com/jamesbot2/subway-surfer/releases)
 
 ---
