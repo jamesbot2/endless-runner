@@ -139,21 +139,6 @@ function checkAdminAuth(headers) {
     return user === ADMIN_USER && pass === ADMIN_PASS;
 }
 
-function serveStatic(res, filePath, contentType) {
-    try {
-        const data = fs.readFileSync(filePath);
-        res.writeHead(200, {
-            'Content-Type': contentType,
-            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-            'Pragma': 'no-cache'
-        });
-        res.end(data);
-    } catch(e) {
-        res.writeHead(404);
-        res.end('Not found');
-    }
-}
-
 function getServerIP() {
     const interfaces = require('os').networkInterfaces();
     for (const name in interfaces) {
@@ -243,25 +228,13 @@ async function handleRequest(req, res) {
 
     if (method === 'OPTIONS') { sendJSON(res, 200, {}); return; }
 
-    // ---- STATIC FILES (serve signin.html, game.html, game/ etc.) ----
-    if ((method === 'GET' || method === 'HEAD') && (pathname === '/game.html' || pathname === '/game.js' || pathname.startsWith('/game/') || pathname.startsWith('/game.js?') || pathname === '/signin.html' || pathname === '/style.css' || pathname === '/index.html')) {
-        // Block path traversal in static file serving
-        if (pathname.indexOf('..') !== -1 || pathname.indexOf('~') !== -1) {
-            sendJSON(res, 403, { error: 'Forbidden' }); return;
-        }
-        const root = path.join(__dirname, '..');
-        let filePath = root + pathname;
-        if (pathname === '/') filePath = root + '/signin.html';
-        const ext = path.extname(filePath);
-        const mime = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif', '.svg': 'image/svg+xml' };
-        serveStatic(res, filePath, mime[ext] || 'application/octet-stream');
-        return;
-    }
-
-    // ---- ROOT: serve signin page ----
+    // ---- ROOT: API info ----
     if (pathname === '/' && method === 'GET') {
-        const signinPath = path.join(__dirname, '..', 'signin.html');
-        serveStatic(res, signinPath, 'text/html');
+        sendJSON(res, 200, {
+            name: 'Endless Runner Account API',
+            status: 'ok',
+            admin: '/admin'
+        });
         return;
     }
 
@@ -733,8 +706,7 @@ async function handleRequest(req, res) {
 const server = http.createServer(handleRequest);
 server.listen(PORT, '0.0.0.0', () => {
     console.log('✓ Account server v3 running on port ' + PORT);
-    console.log('  Game: http://' + getServerIP() + ':8080/');
-    console.log('  Sign in: http://' + getServerIP() + ':3000/');
+    console.log('  API:  http://' + getServerIP() + ':3000/');
     console.log('  Admin: http://' + getServerIP() + ':3000/admin');
     console.log('  Codes: http://' + getServerIP() + ':3000/verify-codes');
 });

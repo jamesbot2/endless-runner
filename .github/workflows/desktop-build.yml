@@ -1,11 +1,14 @@
-# ===== Subway Surfer Desktop — CI Build =====
+# ===== Endless Runner Desktop — CI Build =====
 # Builds, smoke-tests and packages the Electron desktop app.
 # Output: win-unpacked portable directory (unsigned).
+# Runs on Windows to avoid code-signing restrictions on Linux.
 
 name: Desktop Build
 
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -23,10 +26,6 @@ jobs:
   build:
     runs-on: windows-latest
 
-    defaults:
-      run:
-        working-directory: apps/desktop
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,20 +35,53 @@ jobs:
         with:
           node-version: 22
           cache: 'npm'
-          cache-dependency-path: apps/desktop/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            apps/desktop/package-lock.json
 
-      - name: Install dependencies
+      # ── Root-level dependencies & game build ──
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Build game bundle
+        run: npm run build:game
+
+      # ── Desktop Electron build ──
+      - name: Install desktop dependencies
+        working-directory: apps/desktop
         run: npm ci
 
-      - name: Build (Vite + tsc)
+      - name: Build Electron (Vite + tsc)
+        working-directory: apps/desktop
         run: npm run build
 
       - name: Smoke test
+        working-directory: apps/desktop
         id: smoke
         continue-on-error: false
         run: npm run test:smoke
+        env:
+          ELECTRON_HEADLESS_CI: '1'
 
+      # ── PVP integration test ──
+      - name: Start account server
+        shell: powershell
+        run: |
+          Start-Process -NoNewWindow -FilePath "node" -ArgumentList "server/account-server.js"
+          Start-Sleep -Seconds 2
+
+      - name: Start PVP server
+        shell: powershell
+        run: |
+          Start-Process -NoNewWindow -FilePath "node" -ArgumentList "server/pvp-server.js"
+          Start-Sleep -Seconds 2
+
+      - name: PVP smoke test
+        run: npm run pvp:smoke
+
+      # ── Package ──
       - name: Package (win-unpacked)
+        working-directory: apps/desktop
         run: npm run pack
         env:
           ELECTRON_HEADLESS_CI: '1'
@@ -57,7 +89,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Subway-Surfer-win-unpacked
+          name: Endless-Runner-win-unpacked
           path: apps/desktop/release/win-unpacked/**
           if-no-files-found: error
           retention-days: 14

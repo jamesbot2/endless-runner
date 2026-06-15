@@ -1,162 +1,233 @@
-# Endless Runner
+# 🏃 Endless Runner
 
-Endless Runner is a desktop-first 3D endless runner built with Electron, Three.js r128, and a lightweight Node.js backend.
+> Three.js + Electron desktop endless runner with real-time PVP, character system, abilities, cloud saves, and admin backend.
+> Made by Neo 🤖 for James
 
-The Electron app is the primary product. The older browser/static pages remain in the repository only as legacy development support and for compatibility with the existing account server.
+[![Desktop Build](https://github.com/jamesbot2/subway-surfer/actions/workflows/desktop-build.yml/badge.svg)](https://github.com/jamesbot2/subway-surfer/actions/workflows/desktop-build.yml)
+[![Release Desktop](https://github.com/jamesbot2/subway-surfer/actions/workflows/desktop-release.yml/badge.svg)](https://github.com/jamesbot2/subway-surfer/actions/workflows/desktop-release.yml)
+[![Release](https://img.shields.io/github/v/release/jamesbot2/subway-surfer)](https://github.com/jamesbot2/subway-surfer/releases)
 
-## Current Product
+---
 
-- Desktop client: Electron + Vite + TypeScript in `apps/desktop`
-- Game runtime: Three.js r128, bundled from `game/*.js` into `game.js`
-- Account service: Node.js HTTP server on port `3000`
-- PVP service: WebSocket server on port `3001`
-- Admin panel: served by the account service at `/admin`
-- Data storage: JSON files under `server/data/`
+## 🖥 Architecture
 
-## Repository Layout
-
-```text
-.
-├── apps/desktop/             # Electron desktop client
-│   ├── src/                  # Electron renderer/auth/runtime bridge
-│   ├── tests/                # Electron smoke tests
-│   └── release/              # Local packaged output, ignored by git
-├── game/                     # Modular IIFE game source
-│   ├── build.js              # Bundles game modules into root game.js
-│   ├── pvp-client.js         # Desktop PVP WebSocket bridge
-│   └── *.js                  # Scene, player, UI, account, audio, systems
-├── server/
-│   ├── account-server.js     # Login, register, saves, admin, leaderboard
-│   ├── pvp-server.js         # PVP rooms and realtime snapshots
-│   └── pvp-smoke.js          # PVP server protocol smoke test
-├── audio/                    # Shared audio assets
-├── game.js                   # Built game bundle
-└── README.md
+```
+┌─────────────────────────────┐
+│  Electron Desktop Client    │
+│  (Three.js r128)            │
+│  Dev server :5173            │
+└──────────┬──────────────────┘
+           │ HTTP + WS
+    ┌──────┴───────┬──────────┐
+    │              │          │
+    ▼              ▼          ▼
+┌────────┐  ┌──────────┐  ┌──────┐
+│Account │  │PVP Server│  │ SMTP │
+│Server  │  │WebSocket │  │ 163  │
+│:3000   │  │:3001/pvp │  │Email │
+└────────┘  └──────────┘  └──────┘
+  users.json   real-time    verify
+  save/load    snapshot     codes
+  leaderboard  match sync
+  admin panel  ranking
 ```
 
-## Install
+---
 
-Run these from the repository root:
+## 🎮 Features
+
+- **Normal mode**: Infinite runner with lanes, jumping, rolling, obstacles, police chase, speed scaling
+- **PVP multiplayer**: WebSocket rooms (max 3 players), real-time 20Hz snapshot sync, death spectating, distance-based ranking
+- **Character system**: Ownable characters, selection, visual models
+- **Abilities**: Double jump (10k cr), Jetpack (50k cr, 15s flight / 30s cooldown), Roof walk (100k cr)
+- **Guns**: Pickups in normal mode (disabled in PVP)
+- **Cloud saves**: Login, register, email verification, auto-save every 30s
+- **Leaderboard**: Per-difficulty rankings with credits, total coins, run count
+- **Admin panel**: Edit coins, credits, characters, abilities, verify users, reset passwords
+- **Offline mode**: Play without an account (local saves only)
+
+---
+
+## 🚀 Downloads
+
+Prebuilt binaries are available from **[GitHub Releases](https://github.com/jamesbot2/subway-surfer/releases)**.
+
+- **Windows**: `Endless-Runner-vX.X.X-win.zip` (portable, no install needed)
+- **Linux / macOS**: Build from source (see below)
+
+> No browser or web server required — just download, extract, and run `Endless Runner.exe`.
+
+---
+
+## 🛠 Local Development
 
 ```bash
+git clone https://github.com/jamesbot2/subway-surfer.git
+cd subway-surfer
 npm install
-npm --prefix apps/desktop install
-```
+cd apps/desktop && npm install && cd ../..
 
-## Desktop Development
-
-```bash
+# Build the game bundle
 npm run build:game
-npm run desktop:dev
-```
 
-The desktop client reads its account API from `ENDLESS_RUNNER_API_BASE_URL`.
-
-Example for the current GCP account server:
-
-```powershell
-$env:ENDLESS_RUNNER_API_BASE_URL="http://35.212.200.85:3000"
-npm run desktop:dev
-```
-
-PVP uses the same host as the account API and connects to port `3001`.
-
-## Build And Package
-
-```bash
-npm run build:game
-npm run desktop:build
-npm run desktop:test:smoke
-npm run desktop:pack
-```
-
-`desktop:pack` creates a portable Windows folder at:
-
-```text
-apps/desktop/release/win-unpacked/
-```
-
-Copy the whole `win-unpacked` folder to another Windows computer, then run:
-
-```text
-Endless Runner.exe
-```
-
-Do not copy only the `.exe`; Electron needs the adjacent runtime files.
-
-## Backend Services
-
-Start the account server:
-
-```bash
+# Start account server (required for login/save)
 npm run server:account
-```
 
-Start the PVP server:
-
-```bash
+# Start PVP server (required for multiplayer)
 npm run server:pvp
+
+# Start Electron in dev mode
+npm run desktop:dev
 ```
 
-Run the PVP protocol smoke test:
+---
+
+## 📦 Packaging
 
 ```bash
-npm run pvp:smoke
+npm run build:game              # Rebuild game.js
+npm run desktop:build           # Build TypeScript + Vite renderer
+npm run desktop:pack            # Package → win-unpacked (portable)
+npm run desktop:dist            # Full NSIS installer (requires wine on Linux)
 ```
 
-Production server notes:
+| Output | Location |
+|--------|----------|
+| Portable directory | `apps/desktop/release/win-unpacked/` |
+| NSIS installer | `apps/desktop/release/Endless Runner Setup.exe` |
 
-- Keep the account server on port `3000`.
-- Run the PVP WebSocket server on port `3001`.
-- Restarting PVP should not stop the account server.
-- Open firewall access for `3000` and `3001`.
-- Configure SMTP environment variables before testing email verification.
+> **Important**: Release binaries are **never committed to git**. Upload to [GitHub Releases](https://github.com/jamesbot2/subway-surfer/releases).
 
-## Account And Admin Data
-
-The account server owns:
-
-- Registration and login
-- Email verification codes
-- Cloud save data
-- Credits and coins
-- Character ownership and selected character
-- Equipped skills
-- Best distance and run history
-- Leaderboards
-
-The Electron client also keeps local fallback save/settings files under Electron `userData`, so offline play can continue when the account server is unreachable.
-
-## Game Features
-
-- Three-lane endless runner gameplay
-- Third-person and first-person camera options
-- Character shop and unlock progression
-- Jetpack, double jump, roof running, and gun pickups
-- Homelander console easter egg
-- PVP room flow with server-backed rooms
-- PVP cyberpunk arena, countdown, ranking, spectating, and realtime player snapshots
-- Admin-controlled account/game-data management
-
-## Test Checklist
-
-Before packaging a release:
+### Quick Release Zip
 
 ```bash
 npm run build:game
 npm run desktop:build
-npm run desktop:test:smoke
-npm run pvp:smoke
+npm run desktop:pack
+cd apps/desktop/release
+zip -r Endless-Runner-v1.0.0-win.zip win-unpacked/
 ```
 
-Manual checks:
+---
 
-- Login and sign out return to the correct screen.
-- A new account only has the default unlocked character.
-- Email verification sends successfully from the configured SMTP account.
-- PVP can connect to the server, create a room, start solo for testing, exit to the PVP lobby, and close back to the main menu.
-- The copied `win-unpacked` folder works on a second Windows machine.
+## 🧪 Testing
 
-## Legacy Browser Files
+```bash
+npm run desktop:test:smoke              # Electron smoke test (requires display)
+npm run desktop:test:smoke:headless     # Headless smoke test (xvfb)
+npm run pvp:smoke                       # PVP WebSocket integration test
+```
 
-Files such as `signin.html`, `game.html`, and the old static web flow are retained only for compatibility and debugging. New work should target the Electron desktop app first.
+---
+
+## ☁️ Server Deployment
+
+See [docs/release.md](docs/release.md) for full server configuration.
+
+Quick start:
+
+```bash
+# Start account server (port 3000)
+node server/account-server.js &
+
+# Start PVP server (port 3001)
+node server/pvp-server.js &
+```
+
+### systemd
+
+```bash
+# Account server
+sudo cp server/endless-runner-account.service /etc/systemd/system/
+sudo systemctl enable --now endless-runner-account
+
+# PVP server
+sudo cp server/endless-runner-pvp.service /etc/systemd/system/
+sudo systemctl enable --now endless-runner-pvp
+```
+
+SMTP configuration for email verification:
+
+```bash
+sudo systemctl edit endless-runner-account
+```
+
+```ini
+[Service]
+Environment="SMTP_USER=james_sever@163.com"
+Environment="SMTP_PASS=<auth_code>"
+```
+
+### Firewall
+
+| Port | Protocol | Tag |
+|------|----------|-----|
+| 3000 | TCP | `allow-game-server` |
+| 3001 | TCP | `allow-game-server` |
+
+---
+
+## 🔐 Account System
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/register` | POST | Register (email + username + password + captcha) |
+| `/api/verify-code` | POST | Verify email with 6-digit code |
+| `/api/login` | POST | Login, returns session token |
+| `/api/save` | POST | Save game data (auth required) |
+| `/api/load` | GET | Load game data (auth required) |
+| `/api/leaderboard` | GET | Top 100 players by max distance |
+
+### Admin Panel
+
+**http://&lt;host&gt;:3000/admin** — Basic auth: `admin / admin123`
+
+- View all users, set coins/credits/run count
+- Edit characters, reset passwords, verify users, delete users
+
+---
+
+## 🆚 PVP Protocol
+
+**WebSocket**: `ws://&lt;host&gt;:3001/pvp`
+
+See `server/pvp-server.js` for full handler reference.
+
+| Client → Server | Server → Client | Description |
+|---|---|---|
+| `hello {token}` | `hello:ok {userId,username}` | Authenticate |
+| `room:create {name}` | `room:update {room}` | Create room (max 3) |
+| `room:join {roomId}` | `room:update {room}` | Join room |
+| `room:ready {roomId,ready}` | `room:update {room}` | Toggle ready |
+| `room:start {roomId}` | `match:start {room,seed}` | Host starts match |
+| `match:snapshot {roomId,snapshot}` | `match:snapshot {players[]}` | 20Hz sync |
+| `match:dead {roomId,distance}` | `match:finish {ranking[]}` | Death + finish |
+
+---
+
+## 🗂 Project Structure
+
+```
+├── game/                     # Game modules (IIFE concatenation)
+├── server/                   # Account & PVP servers
+│   ├── account-server.js     # HTTP API (port 3000)
+│   ├── pvp-server.js         # WebSocket PVP (port 3001)
+│   └── auth.js               # Shared auth helpers
+├── apps/desktop/             # Electron shell
+│   ├── electron/             # Main + preload (TypeScript)
+│   ├── src/                  # Renderer (HTML + TS + legacy bundle)
+│   └── tests/                # Smoke tests
+├── models/                   # 3D character models
+├── audio/                    # Sound effects & music
+├── tools/                    # Development utilities
+├── docs/                     # Documentation
+├── game.js                   # Concatenated game bundle
+├── package.json              # Root scripts
+└── .github/workflows/        # CI/CD pipeline
+```
+
+---
+
+## 🛡 License
+
+Private project. All rights reserved.
