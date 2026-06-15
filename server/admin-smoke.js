@@ -321,7 +321,7 @@ async function main() {
   var testEmailDiag = await request('POST', '/api/admin-test-email', { email: 'test@qq.com' }, ADMIN_AUTH);
   check('Test email returns 200', testEmailDiag.status === 200, 'status=' + testEmailDiag.status);
   check('Test email has ok field', testEmailDiag.body && typeof testEmailDiag.body.ok === 'boolean', 'ok=' + testEmailDiag.body.ok);
-  check('Test email has message field', testEmailDiag.body && typeof testEmailDiag.body.message === 'string', 'msg=' + testEmailDiag.body.message);
+  check("Test email has messageId field", testEmailDiag.body && typeof testEmailDiag.body.messageId === "string", "msgId=" + testEmailDiag.body.messageId);
   check('Test email has provider field', testEmailDiag.body && typeof testEmailDiag.body.provider === 'string', 'provider=' + testEmailDiag.body.provider);
 
   // 39. Register without MOCK_EMAIL_SEND and without SMTP should fail

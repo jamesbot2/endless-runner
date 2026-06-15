@@ -12,7 +12,8 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  SUBWAY_API_BASE_URL: http://35.212.200.85:3000
+  ENDLESS_RUNNER_API_BASE_URL: http://35.212.200.85:3000
+  # Legacy alias: SUBWAY_API_BASE_URL also works
 
 permissions:
   contents: write
@@ -78,7 +79,7 @@ jobs:
             2. Run `Endless Runner.exe`.
             3. The app connects to the default account server at
                `http://35.212.200.85:3000`. No configuration needed for most users.
-            4. To use a custom server, set `SUBWAY_API_BASE_URL` before launching.
+            4. To use a custom server, set `ENDLESS_RUNNER_API_BASE_URL` before launching.
 
             > ⚠️  This build is **unsigned**. Windows SmartScreen may show a warning.
             > Click "More info" → "Run anyway" to proceed.

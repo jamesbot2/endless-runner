@@ -129,16 +129,28 @@ function findUserKeyByEmail(users, email) {
 
 function validateEmail(email) {
     email = normalizeEmailInput(email);
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        console.log('[VALIDATE EMAIL] Rejected (basic format): ' + email);
+        return false;
+    }
     var domain = email.split('@')[1];
-    // Reject phone numbers as email usernames
-    if (/^\d{6,}@/.test(email) && domain !== 'qq.com') return false;
-    // Reject obviously fake domains
-    if (/@(test|example|fake|temp|dispostable|mailinator|guerrillamail|yopmail|10minute|trashmail|sharklasers|spam)\./i.test(email)) return false;
+    // Phone-number email usernames are valid for many providers (163.com, qq.com, etc.)
+    // Reject disposable domains
+    if (/@(test|example|fake|temp|dispostable|mailinator|guerrillamail|yopmail|10minute|trashmail|sharklasers|spam|mail|tempmail)\./i.test(email)) {
+        console.log('[VALIDATE EMAIL] Rejected (disposable domain)');
+        return false;
+    }
     // Require valid TLD (2+ chars)
-    if (!domain || domain.split('.').length < 2) return false;
+    if (!domain || domain.split('.').length < 2) {
+        console.log('[VALIDATE EMAIL] Rejected (no valid TLD): ' + email);
+        return false;
+    }
     var tld = domain.split('.').pop();
-    if (!tld || tld.length < 2) return false;
+    if (!tld || tld.length < 2) {
+        console.log('[VALIDATE EMAIL] Rejected (short TLD): ' + email);
+        return false;
+    }
+    console.log('[VALIDATE EMAIL] Accepted: ' + email);
     return true;
 }
 
@@ -231,7 +243,18 @@ function normalizeGameData(g) {
     };
 }
 
-function getMailTransport() {
+function getMailTransport(toEmail) {
+    var domain = String(toEmail || '').toLowerCase().split('@')[1] || '';
+
+    // QQ email recipient → use QQ SMTP if configured
+    if (domain === 'qq.com' && process.env.QQ_SMTP_USER && process.env.QQ_SMTP_PASS) {
+        var qqUser = process.env.QQ_SMTP_USER || '';
+        var qqPass = process.env.QQ_SMTP_PASS || '';
+        var qqFrom = process.env.QQ_MAIL_FROM || '"Endless Runner" <' + qqUser + '>';
+        return { provider: 'qq', host: 'smtp.qq.com', port: 465, secure: true, user: qqUser, pass: qqPass, fromMasked: qqFrom.replace(/:([^@]+)@/, ':***@'), from: qqFrom };
+    }
+
+    // Default: 163 SMTP or configured MAIL_PROVIDER
     var provider = (process.env.MAIL_PROVIDER || '163').trim().toLowerCase();
     var host = process.env.SMTP_HOST || '';
     var port = parseInt(process.env.SMTP_PORT, 10) || 465;
@@ -248,7 +271,7 @@ function getMailTransport() {
 
 function sendEmail(to, subject, body, htmlBody) {
     return new Promise(function(resolve) {
-        var cfg = getMailTransport();
+        var cfg = getMailTransport(to);
         var result = { ok: false, messageId: null, accepted: [], rejected: [], response: null, error: null };
 
         if (!cfg.user || !cfg.pass) {
@@ -701,7 +724,7 @@ async function handleRequest(req, res) {
             sendJSON(res, 200, { ok: true, messageId: 'mock-' + Date.now(), accepted: [to], rejected: [], response: 'mock', error: null, provider: 'mock', mailFrom: 'mock' });
             return;
         }
-        var cfg = getMailTransport();
+        var cfg = getMailTransport(to);
         if (!cfg.user) {
             sendJSON(res, 200, { ok: false, messageId: null, accepted: [], rejected: [], response: null, error: 'SMTP_CREDENTIALS_MISSING', provider: cfg.provider, mailFrom: cfg.fromMasked });
             return;

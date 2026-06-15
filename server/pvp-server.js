@@ -32,10 +32,18 @@ function broadcastRoomUpdate(room) { broadcast(room.players, {type:'room:update'
 function aliveCount(room) { let c=0; for (const [,p] of room.players) if (p.alive && !p.forfeit) c++; return c; }
 function allDone(room) { for (const [,p] of room.players) if (p.alive && !p.forfeit) return false; return true; }
 
+function resetRoomForLobby(room) {
+  stopSnapshotBroadcast(room.id);
+  room.status = 'waiting'; room.seed = null; room.startedPlayers = new Set();
+  for (const [,p] of room.players) { p.ready=false; p.alive=true; p.distance=0; p.forfeit=false; p.snapshot=null; p.snapshotTime=0; p.lane=-1; }
+}
+
 function endMatch(room) {
   if (room.status === 'finished') return; room.status = 'finished'; stopSnapshotBroadcast(room.id);
   const ranking = []; for (const uid of room.startedPlayers||new Set()) { const p=room.players.get(uid); ranking.push({name:p?p.name:'disconnected',distance:p?Math.floor(p.distance):0}); }
-  ranking.sort((a,b)=>b.distance-a.distance); broadcast(room.players, {type:'match:finish',roomId:room.id,ranking}); broadcastRoomList();
+  ranking.sort((a,b)=>b.distance-a.distance); broadcast(room.players, {type:'match:finish',roomId:room.id,ranking});
+  resetRoomForLobby(room);
+  broadcastRoomUpdate(room);
 }
 
 function startSnapshotBroadcast(room) {
@@ -54,10 +62,23 @@ function stopSnapshotBroadcast(rid) { const t=snapshotTimers.get(rid); if(t){cle
 
 function removeUserFromRoom(roomId, userId) {
   const room = rooms.get(roomId); if (!room) return;
-  if (room.status === 'running') { const p=room.players.get(userId); if(p){p.forfeit=true;p.alive=false;if(aliveCount(room)<=1)endMatch(room);broadcastRoomUpdate(room);} return; }
+  if (room.hostId===userId) {
+    stopSnapshotBroadcast(roomId);
+    broadcast(room.players, {type:'room:left',roomId});
+    rooms.delete(roomId);
+    broadcastRoomList();
+    return;
+  }
+  if (room.status === 'running') {
+    const p=room.players.get(userId);
+    if(p){p.forfeit=true;p.alive=false;p.distance=Math.floor(p.distance||0);if(p.snapshot)p.snapshot.alive=false;broadcast(room.players,{type:'match:dead',roomId:room.id,playerId:p.id,name:p.name,distance:p.distance},p.ws);}
+    room.players.delete(userId);
+    if (room.players.size===0) { stopSnapshotBroadcast(roomId); rooms.delete(roomId); broadcastRoomList(); return; }
+    if(aliveCount(room)<=1)endMatch(room); else broadcastRoomUpdate(room);
+    return;
+  }
   room.players.delete(userId);
   if (room.players.size===0) { stopSnapshotBroadcast(roomId); rooms.delete(roomId); broadcastRoomList(); return; }
-  if (room.hostId===userId) { const f=room.players.values().next().value; if(f){room.hostId=f.id;room.host=f.name;} }
   broadcastRoomUpdate(room);
 }
 function cleanupUser(uid) { for (const [rid,r] of rooms) if (r.players.has(uid)) { removeUserFromRoom(rid,uid); return; } }
@@ -107,6 +128,14 @@ handlers['room:join'] = (ws, msg) => {
 
 handlers['room:leave'] = (ws) => { const uid=requireAuth(ws); if(!uid)return; const r=findRoomByUser(uid); if(!r){send(ws,{type:'room:left'});return;} removeUserFromRoom(r.id,uid); send(ws,{type:'room:left'}); };
 
+handlers['room:reset'] = (ws, msg) => {
+  const userId = requireAuth(ws); if (!userId) return;
+  const roomId = msg.roomId||msg.id; if (!roomId) { send(ws,{type:'error',error:'roomId required'}); return; }
+  const room = rooms.get(roomId); if (!room) { send(ws,{type:'error',error:'room not found'}); return; }
+  if (room.hostId!==userId) { send(ws,{type:'error',error:'only host can reset'}); return; }
+  resetRoomForLobby(room); broadcastRoomUpdate(room);
+};
+
 handlers['room:ready'] = (ws, msg) => {
   const userId = requireAuth(ws); if (!userId) return;
   const roomId = msg.roomId||msg.id, ready = msg.ready;
@@ -121,9 +150,9 @@ handlers['room:start'] = (ws, msg) => {
   const roomId = msg.roomId||msg.id; if (!roomId) { send(ws,{type:'error',error:'roomId required'}); return; }
   const room = rooms.get(roomId); if (!room) { send(ws,{type:'error',error:'room not found'}); return; }
   if (room.hostId!==userId) { send(ws,{type:'error',error:'only host can start'}); return; }
-  if (room.status!=='waiting') { send(ws,{type:'error',error:'already started'}); return; }
+  if (room.status!=='waiting') resetRoomForLobby(room);
   if (room.players.size<1) { send(ws,{type:'error',error:'need 1+ players'}); return; }
-  if (room.players.size > 1) for (const [,p] of room.players) if (!p.ready) { send(ws,{type:'error',error:'not all ready'}); return; }
+  if (room.players.size > 1) for (const [,p] of room.players) if (p.id !== userId && !p.ready) { send(ws,{type:'error',error:'not all ready'}); return; }
   const seed = crypto.randomBytes(16).toString('hex'); room.seed = seed; room.status = 'running'; room.startedPlayers = new Set([...room.players.keys()]);
   const lanePool = shuffle([...LANES]), offsetPool = shuffle([...START_OFFSETS]), playerList = [...room.players.values()], matchPlayers = [];
   for (let i=0;i<playerList.length;i++) { const p=playerList[i]; p.lane=lanePool[i]; p.alive=true;p.distance=0;p.forfeit=false;p.snapshot=null;p.snapshotTime=0; matchPlayers.push({id:p.id,name:p.name,lane:p.lane,startOffset:offsetPool[i],characterId:p.characterId||'runner'}); }
