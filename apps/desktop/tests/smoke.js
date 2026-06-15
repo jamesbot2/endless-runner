@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// ===== Subway Surfer - Electron Smoke Test =====
+// ===== Endless Runner - Electron Smoke Test =====
 //
 // Usage:
 //   ELECTRON_HEADLESS_CI=1 xvfb-run -a node tests/smoke.js
 //
 // Or:
-//   SUBWAY_API_BASE_URL=http://test.example.com:3000 npm run test:smoke
+//   ENDLESS_RUNNER_API_BASE_URL=http://test.example.com:3000 npm run test:smoke
 //
 // Exits 0 on pass, 1 on fail.
 
@@ -16,9 +16,10 @@ const fs = require('fs')
 const DESKTOP = path.resolve(__dirname, '..')
 
 // ── Temp data dir for IPC handler tests ──────────────────
-const TMPDIR = path.join(app.getPath('temp'), 'subway-surfer-smoke-' + Date.now())
+const TMPDIR = path.join(app.getPath('temp'), 'endless-runner-smoke-' + Date.now())
 const SETTINGS_FILE = path.join(TMPDIR, 'settings.json')
 const SAVE_FILE = path.join(TMPDIR, 'save.json')
+app.setPath('userData', TMPDIR)
 
 function readJSON(fp) {
   try {
@@ -52,14 +53,16 @@ function check(name, pass, detail) {
 app.whenReady().then(async () => {
   console.log('')
   console.log('═══════════════════════════════════════════')
-  console.log('  Subway Surfer — Smoke Test')
+  console.log('  Endless Runner — Smoke Test')
   console.log('═══════════════════════════════════════════')
   console.log('')
 
-  // Pass SUBWAY_API_BASE_URL to preload via additionalArguments
+  // Pass ENDLESS_RUNNER_API_BASE_URL to preload via additionalArguments.
+  // SUBWAY_API_BASE_URL remains supported as a legacy alias.
   const addArgs = []
-  if (process.env.SUBWAY_API_BASE_URL) {
-    addArgs.push('--api-base-url=' + process.env.SUBWAY_API_BASE_URL)
+  const requestedApiUrl = process.env.ENDLESS_RUNNER_API_BASE_URL || process.env.SUBWAY_API_BASE_URL
+  if (requestedApiUrl) {
+    addArgs.push('--api-base-url=' + requestedApiUrl)
   }
 
   const win = new BrowserWindow({
@@ -107,7 +110,7 @@ app.whenReady().then(async () => {
   // ── Inject checks ───────────────────────────────────
   let state
   try {
-    state = await win.webContents.executeJavaScript(`(function() {
+    state = await win.webContents.executeJavaScript(`(async function() {
       const r = {}
       // 1. Page loaded
       r.bodyExists = !!document.body
@@ -123,15 +126,22 @@ app.whenReady().then(async () => {
 
       // 4. Preload bridge
       r.desktopAPI = typeof window.desktopAPI !== 'undefined' && window.desktopAPI !== null
+      r.endlessRunnerConfig = typeof window.__ENDLESS_RUNNER_CONFIG__ !== 'undefined'
       r.subwayConfig = typeof window.__SUBWAY_CONFIG__ !== 'undefined'
 
       // 4b. API_BASE_URL from config
-      r.apiBaseUrl = window.__SUBWAY_CONFIG__ ? window.__SUBWAY_CONFIG__.API_BASE_URL : null
+      r.apiBaseUrl = window.__ENDLESS_RUNNER_CONFIG__ ? window.__ENDLESS_RUNNER_CONFIG__.API_BASE_URL : null
+      r.legacyApiBaseUrl = window.__SUBWAY_CONFIG__ ? window.__SUBWAY_CONFIG__.API_BASE_URL : null
 
       // 5. SG.runtime set by renderer
       r.sgRuntime = window.__SG ? window.__SG.runtime : null
       r.sgApiBaseUrl = window.__SG ? window.__SG.apiBaseUrl : null
       r.sgOfflineMode = window.__SG ? window.__SG.offlineMode : undefined
+      var electronStatusBar = document.getElementById('electron-status-bar')
+      r.statusBarText = electronStatusBar ? electronStatusBar.textContent : ''
+      r.documentTitle = document.title
+      r.statusBarHidesApiUrl = !!(electronStatusBar && r.apiBaseUrl && electronStatusBar.textContent.indexOf(r.apiBaseUrl) === -1)
+      r.titleHidesApiUrl = !!(r.apiBaseUrl && document.title.indexOf(r.apiBaseUrl) === -1)
 
       // 6. F11 handler
       r.f11HandlerWired = window.desktopAPI !== null
@@ -150,6 +160,867 @@ app.whenReady().then(async () => {
       r.playerModelLoaded = window.__SG ? window.__SG.playerModelLoaded === true : false
       r.playerModelName = window.__SG && window.__SG.playerModel ? window.__SG.playerModel.name : null
       r.playerAnimations = window.__SG && window.__SG.playerActions ? Object.keys(window.__SG.playerActions) : []
+      r.jetpackFuelMax = window.__SG ? window.__SG.JETPACK_FUEL_MAX : null
+      r.jetpackCooldownMax = window.__SG ? window.__SG.JETPACK_COOLDOWN_MAX : null
+      r.jetpackMaxHeight = window.__SG ? window.__SG.JETPACK_MAX_HEIGHT : null
+      r.jetpackModelPath = window.__SG ? window.__SG.jetpackModelPath : null
+      r.jetpackModelLoaded = window.__SG ? window.__SG.jetpackModelLoaded === true : false
+      r.jetpackModelName = window.__SG && window.__SG.jetpackModel ? window.__SG.jetpackModel.name : null
+      r.jetpackFlameGroups = window.__SG && window.__SG.jetpackFlameGroups ? window.__SG.jetpackFlameGroups.length : 0
+      r.jetpackTuning = window.__SG && window.__SG.jetpackModelTuning ? {
+        targetHeight: window.__SG.jetpackModelTuning.targetHeight,
+        rotationY: window.__SG.jetpackModelTuning.rotationY
+      } : null
+      r.jetpackMount = window.__SG && window.__SG.jetpackPack ? {
+        y: window.__SG.jetpackPack.position.y,
+        z: window.__SG.jetpackPack.position.z
+      } : null
+      r.abilityHud = window.__SG ? typeof window.__SG.updateAbilityHUD === 'function' : false
+      r.abilityVisuals = window.__SG ? typeof window.__SG.updateAbilityVisuals === 'function' : false
+      r.defaultKeyBindings = window.__SG && window.__SG.getKeyBindings ? Object.assign({}, window.__SG.getKeyBindings()) : null
+      r.keyBindingActionBefore = window.__SG && window.__SG.getInputActionForKey ? window.__SG.getInputActionForKey('ArrowUp') : null
+      r.keyBindingActionAfter = null
+      r.keyBindingSaved = false
+      r.rollReleaseDelaySetting = null
+      r.settingsBindingButtons = 0
+      r.settingsVolumeGridLeftAligned = false
+      r.rollDelayHasDescription = false
+      r.thirdPersonViewButtons = 0
+      r.thirdPersonViewSaved = false
+      r.thirdPersonDefault = window.__SG ? window.__SG.state.thirdPersonView : null
+      r.thirdPersonButtonFeedback = false
+      r.firstPersonPitchDefault = window.__SG ? window.__SG.state.firstPersonPitchDeg : null
+      r.firstPersonPitchSetting = null
+      r.firstPersonPitchSaved = false
+      r.firstPersonPitchButtons = 0
+      r.settingsModalWide = false
+      r.thirdPersonCameraViews = window.__SG && window.__SG.thirdPersonCameraViews ? window.__SG.thirdPersonCameraViews : null
+      r.speedHud = false
+      r.speedHudText = ''
+      r.speedHudBackground = ''
+      r.speedHudVector = false
+      if (window.__SG && window.__SG.setKeyBinding && window.__SG.resetKeyBindings && window.__SG.showSettings) {
+        window.__SG.setKeyBinding('up', 'k')
+        r.keyBindingActionAfter = window.__SG.getInputActionForKey ? window.__SG.getInputActionForKey('k') : null
+        r.keyBindingSaved = localStorage.getItem('subwayKeyBindings') && localStorage.getItem('subwayKeyBindings').indexOf('"up":"k"') >= 0
+        localStorage.setItem('subwayRollReleaseDelay', '350')
+        window.__SG.state.rollReleaseDelay = 350
+        window.__SG.showSettings()
+        var delaySlider = document.getElementById('__roll-delay')
+        r.rollReleaseDelaySetting = delaySlider ? parseInt(delaySlider.value, 10) : null
+        r.settingsBindingButtons = document.querySelectorAll('#settings-overlay .__bind-btn').length
+        r.rollDelayHasDescription = document.getElementById('settings-overlay').textContent.indexOf('stays crouched') >= 0
+        r.thirdPersonViewButtons = document.querySelectorAll('#settings-overlay .__view-btn').length
+        var mediumBtn = document.querySelector('#settings-overlay .__view-btn[data-view="medium"]')
+        if (mediumBtn) mediumBtn.click()
+        var mediumStyle = mediumBtn ? getComputedStyle(mediumBtn) : null
+        r.thirdPersonViewSaved = window.__SG.state.thirdPersonView === 'medium' && localStorage.getItem('subwayThirdPersonView') === 'medium'
+        r.thirdPersonButtonFeedback = !!mediumBtn && mediumBtn.classList.contains('selected') && mediumBtn.getAttribute('aria-pressed') === 'true' && mediumStyle && mediumStyle.boxShadow !== 'none' && mediumStyle.borderColor.indexOf('34') >= 0
+        var fpPitchSlider = document.getElementById('__fp-pitch')
+        r.firstPersonPitchSetting = fpPitchSlider ? parseFloat(fpPitchSlider.value) : null
+        r.firstPersonPitchButtons = document.querySelectorAll('#__fp-pitch-down,#__fp-pitch-up').length
+        if (fpPitchSlider) {
+          fpPitchSlider.value = '-2'
+          fpPitchSlider.dispatchEvent(new Event('input', { bubbles: true }))
+          r.firstPersonPitchSaved = window.__SG.state.firstPersonPitchDeg === -2 && localStorage.getItem('subwayFirstPersonPitchDeg') === '-2'
+        }
+        var modal = document.querySelector('#settings-overlay .menu-content')
+        r.settingsModalWide = modal ? modal.getBoundingClientRect().width >= 560 : false
+        var volumeRows = document.querySelectorAll('#settings-overlay .__vol-slider')
+        if (volumeRows.length >= 2) {
+          var row0 = volumeRows[0].parentElement
+          var row1 = volumeRows[1].parentElement
+          r.settingsVolumeGridLeftAligned = row0 && row1 &&
+            getComputedStyle(row0).display === 'grid' &&
+            getComputedStyle(row1).display === 'grid' &&
+            getComputedStyle(row0).gridTemplateColumns.split(' ').length >= 4
+        }
+        var settingsOverlay = document.getElementById('settings-overlay')
+        if (settingsOverlay) settingsOverlay.style.display = 'none'
+        window.__SG.resetKeyBindings()
+        window.__SG.state.thirdPersonView = 'near'
+        localStorage.setItem('subwayThirdPersonView', 'near')
+        window.__SG.state.firstPersonPitchDeg = 1
+        localStorage.setItem('subwayFirstPersonPitchDeg', '1')
+      }
+      r.consoleCommands = window.__SG && window.__SG.consoleCommands ? Object.keys(window.__SG.consoleCommands).sort() : []
+      r.executeConsoleCommand = window.__SG ? typeof window.__SG.executeConsoleCommand === 'function' : false
+      r.consoleBacktickToggle = false
+      r.consoleEscapeClose = false
+      r.consoleHelpHidesHomelander = false
+      r.homelanderAudio = null
+      r.homelanderVoiceAfterConsoleClose = false
+      if (window.__SG && window.__SG.toggleConsole && r.executeConsoleCommand) {
+        var devConsole = document.getElementById('dev-console')
+        var consoleInput = document.getElementById('console-input')
+        var consoleOutput = document.getElementById('console-output')
+        var tickKey = String.fromCharCode(96)
+        if (devConsole && consoleInput) {
+          devConsole.style.display = 'none'
+          window.__SG.state.paused = false
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: tickKey, bubbles: true }))
+          var openedByTick = devConsole.style.display === 'flex'
+          consoleInput.dispatchEvent(new KeyboardEvent('keydown', { key: tickKey, bubbles: true }))
+          var closedByTick = devConsole.style.display === 'none'
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: tickKey, bubbles: true }))
+          var openedAgain = devConsole.style.display === 'flex'
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+          var closedByEscape = devConsole.style.display === 'none'
+          r.consoleBacktickToggle = openedByTick && closedByTick
+          r.consoleEscapeClose = openedAgain && closedByEscape
+        }
+        if (consoleOutput && window.__SG.clearConsole) {
+          window.__SG.clearConsole()
+          window.__SG.executeConsoleCommand('help')
+          r.consoleHelpHidesHomelander = consoleOutput.textContent.toLowerCase().indexOf('homelander') < 0
+        }
+        if (devConsole && window.__SG.ensureHomelanderAudio && window.__SG.closeConsole && window.__SG.deactivateHomelander) {
+          window.__SG.ensureHomelanderAudio()
+          window.__SG.state.musicVolume = 0.5
+          window.__SG.state.sfxVolume = 0.8
+          if (window.__SG.updateHomelanderAudioVolume) window.__SG.updateHomelanderAudioVolume()
+          var voicePlayCount = 0
+          if (window.__SG.homelanderVoiceAudio) {
+            window.__SG.homelanderVoiceAudio.play = function() { voicePlayCount++; return Promise.resolve() }
+          }
+          if (window.__SG.homelanderThemeAudio) {
+            window.__SG.homelanderThemeAudio.play = function() { return Promise.resolve() }
+          }
+          devConsole.style.display = 'flex'
+          window.__SG.executeConsoleCommand('homelander')
+          var pendingAfterCommand = window.__SG.pendingHomelanderVoice === true
+          window.__SG.closeConsole()
+          r.homelanderAudio = {
+            theme: window.__SG.homelanderAudioPaths ? window.__SG.homelanderAudioPaths.theme : null,
+            voice: window.__SG.homelanderAudioPaths ? window.__SG.homelanderAudioPaths.voice : null,
+            themeLoop: window.__SG.homelanderThemeAudio ? window.__SG.homelanderThemeAudio.loop === true : false,
+            voiceLoop: window.__SG.homelanderVoiceAudio ? window.__SG.homelanderVoiceAudio.loop === false : false,
+            themeVolume: window.__SG.homelanderThemeAudio ? window.__SG.homelanderThemeAudio.volume : null,
+            voiceVolume: window.__SG.homelanderVoiceAudio ? window.__SG.homelanderVoiceAudio.volume : null,
+            voiceGain: window.__SG.homelanderVoiceGain ? window.__SG.homelanderVoiceGain.gain.value : null
+          }
+          r.homelanderVoiceAfterConsoleClose = pendingAfterCommand &&
+            window.__SG.pendingHomelanderVoice === false &&
+            voicePlayCount === 1
+          window.__SG.deactivateHomelander()
+        }
+      }
+      if (window.__SG && window.__SG.updateSpeedHUD && window.__SG.player && window.__SG.camera) {
+        var prevStarted = window.__SG.state.started
+        var prevGameOver = window.__SG.state.gameOver
+        var prevFirstPerson = window.__SG.state.firstPerson
+        var prevHomelander = window.__SG.state.homelander
+        var prevSpeed = window.__SG.state.speed
+        window.__SG.state.started = true
+        window.__SG.state.gameOver = false
+        window.__SG.state.firstPerson = false
+        window.__SG.state.homelander = false
+        window.__SG.state.speed = window.__SG.speedForLevel ? window.__SG.speedForLevel(20) : 1
+        window.__SG.state.instantSpeedMps = Math.sqrt(12 * 12 + 5 * 5)
+        if (window.__SG.updateCamera) window.__SG.updateCamera()
+        window.__SG.updateSpeedHUD()
+        var speedHud = document.getElementById('third-person-speed-hud')
+        if (speedHud) {
+          r.speedHudText = speedHud.textContent
+          r.speedHudBackground = getComputedStyle(speedHud).backgroundColor
+          r.speedHud = speedHud.style.display !== 'none' && /km\\/h/.test(speedHud.textContent)
+          r.speedHudVector = /47 km\\/h/.test(speedHud.textContent)
+        }
+        window.__SG.state.started = prevStarted
+        window.__SG.state.gameOver = prevGameOver
+        window.__SG.state.firstPerson = prevFirstPerson
+        window.__SG.state.homelander = prevHomelander
+        window.__SG.state.speed = prevSpeed
+        delete window.__SG.state.instantSpeedMps
+        window.__SG.updateSpeedHUD()
+      }
+      r.homelanderModelPath = window.__SG ? window.__SG.homelanderModelPath : null
+      r.homelanderLoader = window.__SG ? typeof window.__SG.loadHomelanderModel === 'function' : false
+      r.homelanderTuning = window.__SG && window.__SG.homelanderModelTuning ? {
+        modelRotationY: window.__SG.homelanderModelTuning.modelRotationY,
+        modelYOffset: window.__SG.homelanderModelTuning.modelYOffset,
+        eyeOffsetY: window.__SG.homelanderModelTuning.eyeOffsetY,
+        eyeOffsetZ: window.__SG.homelanderModelTuning.eyeOffsetZ
+      } : null
+      r.homelanderModelLoaded = false
+      r.homelanderModelHeight = 0
+      if (window.__SG && window.__SG.activateHomelander && window.__SG.deactivateHomelander && window.__SG.player && window.THREE) {
+        window.__SG.activateHomelander()
+        await new Promise(function(resolve) { setTimeout(resolve, 1800) })
+        r.homelanderModelLoaded = !!window.__SG.homelanderModel && window.__SG.homelanderModel.name === 'HomelanderGLB'
+        if (window.__SG.homelanderModel) {
+          window.__SG.homelanderModel.updateMatrixWorld(true)
+          var homelanderBox = new window.THREE.Box3().setFromObject(window.__SG.homelanderModel)
+          var homelanderSize = new window.THREE.Vector3()
+          homelanderBox.getSize(homelanderSize)
+          r.homelanderModelHeight = homelanderSize.y
+        }
+        window.__SG.deactivateHomelander()
+      }
+      r.vehicleLoader = window.__SG ? typeof window.__SG.loadVehicleModels === 'function' : false
+      r.vehicleTrainPath = window.__SG && window.__SG.vehicleModelPaths ? window.__SG.vehicleModelPaths.train : null
+      r.gunSystem = null
+      if (window.__SG && window.__SG.createGunPickup && window.__SG.collectGunPickup && window.__SG.shootGun && window.__SG.clearGunSystem && window.THREE) {
+        var savedGunPickups = window.__SG.state.gunPickups.slice()
+        var savedActiveGun = window.__SG.state.activeGun
+        var savedGunTimer = window.__SG.state.gunTimer
+        var savedShotCooldown = window.__SG.state.gunShotCooldown
+        var savedObstaclesForGun = window.__SG.state.obstacles
+        var savedStartedForGun = window.__SG.state.started
+        var savedPausedForGun = window.__SG.state.paused
+        var savedGameOverForGun = window.__SG.state.gameOver
+        var savedHomelanderForGun = window.__SG.state.homelander
+        var savedCurrentLaneForGun = window.__SG.state.currentLane
+        var savedFirstPersonForGun = window.__SG.state.firstPerson
+        var savedPlayerPosForGun = window.__SG.player ? window.__SG.player.position.clone() : null
+        try {
+          window.__SG.state.gunPickups = []
+          window.__SG.state.obstacles = []
+          window.__SG.state.started = true
+          window.__SG.state.paused = false
+          window.__SG.state.gameOver = false
+          window.__SG.state.homelander = false
+          window.__SG.state.currentLane = 1
+          if (window.__SG.player) window.__SG.player.position.set(window.__SG.LANE_POSITIONS[1], window.__SG.PLAYER_Y, 0)
+          var sniper = window.__SG.getGunDef('sniper')
+          var pickup = window.__SG.createGunPickup(1, -2, sniper)
+          var picked = window.__SG.collectGunPickup(pickup)
+          var timerStartsAt30 = window.__SG.state.gunTimer === 30
+          window.__SG.state.gunTimer = 7
+          var riflePickup = window.__SG.createGunPickup(1, -2, window.__SG.getGunDef('rifle'))
+          var replaced = window.__SG.collectGunPickup(riflePickup) &&
+            window.__SG.state.activeGun &&
+            window.__SG.state.activeGun.id === 'rifle' &&
+            window.__SG.state.gunTimer === 30
+          window.__SG.state.gunTimer = 30
+          window.__SG.updateGunSystem(1)
+          var timerTicks = window.__SG.state.gunTimer > 28.9 && window.__SG.state.gunTimer < 29.1
+          var breakable = window.__SG.createLowFlyingObstacle ? window.__SG.createLowFlyingObstacle(1, -12) : null
+          if (breakable) {
+            window.__SG.scene.add(breakable)
+            window.__SG.state.obstacles.push(breakable)
+          }
+          window.__SG.state.activeGun = { id: 'sniper', name: 'Sniper Rifle', power: 3.4, fireInterval: 0.16, range: 58, color: 0xff5fd7 }
+          window.__SG.state.gunTimer = 30
+          window.__SG.state.gunShotCooldown = 0
+          var shotBreakable = window.__SG.shootGun()
+          var breakableDestroyed = breakable ? window.__SG.state.obstacles.indexOf(breakable) < 0 : false
+          var brightBeamParticles = window.__SG.state.particles.filter(function(particle) {
+            return particle && particle.material && particle.material.blending === window.THREE.AdditiveBlending && particle.material.opacity >= 0.4
+          }).length >= 2
+          var train = new window.THREE.Group()
+          train.position.set(window.__SG.LANE_POSITIONS[1], 0, -12)
+          train.userData = { type: 'train', lane: 1, width: 2.2, height: 1.7, depth: 5.5, visualDepth: 5.5 }
+          window.__SG.scene.add(train)
+          window.__SG.state.obstacles = [train]
+          window.__SG.state.gunShotCooldown = 0
+          var shotTrain = window.__SG.shootGun()
+          var trainSurvived = window.__SG.state.obstacles.indexOf(train) >= 0
+          window.__SG.scene.remove(train)
+          window.__SG.disposeObject(train)
+          var blockedPickup = window.__SG.createGunPickup(1, -2, sniper)
+          window.__SG.state.homelander = true
+          var homelanderBlocked = window.__SG.collectGunPickup(blockedPickup) === false
+          window.__SG.disposeObject(blockedPickup)
+          window.__SG.state.homelander = false
+          window.__SG.state.activeGun = { id: 'rifle', name: 'Rifle', power: 2.35, fireInterval: 0.2, range: 50, color: 0xffd34e }
+          window.__SG.state.gunTimer = 20
+          window.__SG.state.paused = false
+          window.__SG.state.firstPerson = true
+          window.__SG.refreshGunViewModel()
+          window.__SG.updateCamera()
+          window.__SG.updateGunViewModel()
+          var firstPersonGunVisible = !!(window.__SG.gunViewModel && window.__SG.gunViewModel.visible)
+          var viewModelUpright = false
+          var viewModelAimsUp = false
+          var coloredGunMaterials = false
+          var gunMaterialHexes = {}
+          if (window.__SG.gunViewModel && window.__SG.gunViewModel.children[0]) {
+            var gunChild = window.__SG.gunViewModel.children[0]
+            viewModelUpright = Math.abs(gunChild.rotation.y) < 0.01 && Math.abs(gunChild.rotation.z) < 0.01
+            viewModelAimsUp = gunChild.rotation.x > 0
+          }
+          if (window.__SG.gunModels) {
+            Object.keys(window.__SG.gunModels).forEach(function(key) {
+              var model = window.__SG.gunModels[key]
+              if (!model || !model.traverse) return
+              model.traverse(function(node) {
+                if (!node || !node.isMesh || !node.material) return
+                var mats = Array.isArray(node.material) ? node.material : [node.material]
+                mats.forEach(function(mat) {
+                  if (!mat || !mat.color) return
+                  var hex = mat.color.getHex()
+                  var c = mat.color
+                  var brightness = (c.r + c.g + c.b) / 3
+                  if (brightness > 0.09) gunMaterialHexes[hex] = true
+                })
+              })
+            })
+            coloredGunMaterials = Object.keys(gunMaterialHexes).length >= 6
+          }
+          var crosshair = document.getElementById('gun-crosshair')
+          var firstPersonCrosshair = crosshair && crosshair.style.display !== 'none'
+          window.__SG.state.paused = true
+          if (window.__SG.updateGunViewModel) window.__SG.updateGunViewModel()
+          if (window.__SG.updateGunCrosshair) window.__SG.updateGunCrosshair()
+          var pausedCrosshairHidden = crosshair && crosshair.style.display === 'none'
+          window.__SG.state.paused = false
+          if (window.__SG.updateGunViewModel) window.__SG.updateGunViewModel()
+          if (window.__SG.updateGunCrosshair) window.__SG.updateGunCrosshair()
+          var resumedCrosshairVisible = crosshair && crosshair.style.display !== 'none'
+          window.__SG.state.firstPerson = false
+          if (window.__SG.updateGunViewModel) window.__SG.updateGunViewModel()
+          if (window.__SG.updateGunHUD) window.__SG.updateGunHUD()
+          var thirdPersonCrosshairHidden = crosshair && crosshair.style.display === 'none'
+          var thirdPersonHeldGunVisible = !!(window.__SG.playerGunModel && window.__SG.playerGunModel.visible)
+          var thirdPersonHeldGunLower = !!(window.__SG.playerGunModel && window.__SG.playerGunModel.position.y <= 0.68)
+          var heldGunFacesForward = false
+          if (window.__SG.playerGunModel && window.__SG.playerGunModel.children[0]) {
+            var heldGun = window.__SG.playerGunModel.children[0]
+            heldGunFacesForward = Math.abs(heldGun.rotation.y - Math.PI) < 0.01 && Math.abs(heldGun.rotation.z) < 0.01
+          }
+          r.gunSystem = {
+            catalog: window.__SG.gunCatalog.length,
+            paths: window.__SG.gunModelPaths,
+            picked,
+            replaced,
+            timerStartsAt30,
+            timerTicks,
+            shotBreakable,
+            breakableDestroyed,
+            brightBeamParticles,
+            shotTrain,
+            trainSurvived,
+            homelanderBlocked,
+            firstPersonGunVisible,
+            viewModelUpright,
+            viewModelAimsUp,
+            coloredGunMaterials,
+            gunMaterialColorCount: Object.keys(gunMaterialHexes).length,
+            firstPersonCrosshair,
+            thirdPersonCrosshairHidden,
+            pausedCrosshairHidden,
+            resumedCrosshairVisible,
+            thirdPersonHeldGunVisible,
+            thirdPersonHeldGunLower,
+            heldGunFacesForward,
+            hud: document.getElementById('gun-hud') !== null
+          }
+        } finally {
+          if (window.__SG.clearGunSystem) window.__SG.clearGunSystem()
+          window.__SG.state.gunPickups = savedGunPickups
+          window.__SG.state.activeGun = savedActiveGun
+          window.__SG.state.gunTimer = savedGunTimer
+          window.__SG.state.gunShotCooldown = savedShotCooldown
+          window.__SG.state.obstacles = savedObstaclesForGun
+          window.__SG.state.started = savedStartedForGun
+          window.__SG.state.paused = savedPausedForGun
+          window.__SG.state.gameOver = savedGameOverForGun
+          window.__SG.state.homelander = savedHomelanderForGun
+          window.__SG.state.currentLane = savedCurrentLaneForGun
+          window.__SG.state.firstPerson = savedFirstPersonForGun
+          if (window.__SG.player && savedPlayerPosForGun) window.__SG.player.position.copy(savedPlayerPosForGun)
+        }
+      }
+      r.obstacleSpacing = window.__SG ? typeof window.__SG.canPlaceObstacle === 'function' && typeof window.__SG.trackObstacle === 'function' : false
+      r.coinSpacing = window.__SG ? typeof window.__SG.canPlaceCoinAt === 'function' && typeof window.__SG.addSafeCoin === 'function' : false
+      r.sceneryLoader = window.__SG ? typeof window.__SG.loadSceneryModels === 'function' && typeof window.__SG.cloneSceneryModel === 'function' : false
+      r.sceneryPathCounts = window.__SG && window.__SG.sceneryModelPaths ? {
+        buildings: window.__SG.sceneryModelPaths.buildings.length,
+        trees: window.__SG.sceneryModelPaths.trees.length
+      } : null
+      r.cityScenerySkipsLegacyFallback = false
+      r.forestScenerySkipsLegacyFallback = false
+      r.treeMaterialsTinted = false
+      if (window.__SG && window.__SG.createScenery && window.__SG.sceneryModels && window.__SG.disposeObject) {
+        var savedThemeForFallback = window.__SG.state.theme
+        var savedBuildingModels = window.__SG.sceneryModels.buildings
+        var savedTreeModels = window.__SG.sceneryModels.trees
+        window.__SG.sceneryModels.buildings = []
+        window.__SG.state.theme = 0
+        var legacyCity = window.__SG.createScenery(123, -123)
+        r.cityScenerySkipsLegacyFallback = legacyCity === null
+        if (legacyCity) {
+          window.__SG.scene.remove(legacyCity)
+          window.__SG.disposeObject(legacyCity)
+        }
+        window.__SG.sceneryModels.trees = []
+        window.__SG.state.theme = 1
+        var legacyForest = window.__SG.createScenery(123, -133)
+        r.forestScenerySkipsLegacyFallback = legacyForest === null
+        if (legacyForest) {
+          window.__SG.scene.remove(legacyForest)
+          window.__SG.disposeObject(legacyForest)
+        }
+        window.__SG.sceneryModels.buildings = savedBuildingModels
+        window.__SG.sceneryModels.trees = savedTreeModels
+        window.__SG.state.theme = savedThemeForFallback
+      }
+      if (window.__SG && window.__SG.sceneryModels && window.__SG.sceneryModels.trees && window.__SG.sceneryModels.trees[0]) {
+        window.__SG.sceneryModels.trees[0].traverse(function(node) {
+          if (r.treeMaterialsTinted || !node || !node.isMesh || !node.material) return
+          var mats = Array.isArray(node.material) ? node.material : [node.material]
+          for (var tmi = 0; tmi < mats.length; tmi++) {
+            var mat = mats[tmi]
+            if (!mat || !mat.color) continue
+            if (mat.color.g > mat.color.r && mat.color.g > mat.color.b) r.treeMaterialsTinted = true
+          }
+        })
+      }
+      r.cityScenerySpacing = window.__SG && window.__SG.getScenerySpacing ? window.__SG.getScenerySpacing(0) : null
+      r.citySceneryRows = window.__SG && window.__SG.getSceneryRowCount ? window.__SG.getSceneryRowCount(0) : null
+      r.citySceneryAligned = false
+      r.citySceneryNoDuplicateSpawn = false
+      if (window.__SG && window.__SG.spawnSceneryRow && window.__SG.disposeObject && window.__SG.scene) {
+        var previousTheme = window.__SG.state.theme
+        window.__SG.state.theme = 0
+        var nearCity = window.__SG.spawnSceneryRow(-24, 1, 0)
+        var farCity = window.__SG.spawnSceneryRow(-24, 1, 1)
+        var expectedNearX = window.__SG.GROUND_WIDTH / 2 + 2.25
+        var expectedFarX = expectedNearX + 3.9
+        r.citySceneryAligned =
+          Math.abs(nearCity.position.x - expectedNearX) < 0.001 &&
+          Math.abs(farCity.position.x - expectedFarX) < 0.001 &&
+          Math.abs(nearCity.position.z + 24) < 0.001 &&
+          Math.abs(farCity.position.z + 24) < 0.001
+        window.__SG.scene.remove(nearCity)
+        window.__SG.scene.remove(farCity)
+        window.__SG.disposeObject(nearCity)
+        window.__SG.disposeObject(farCity)
+        window.__SG.state.theme = previousTheme
+      }
+      if (window.__SG && window.__SG.spawnBuildings && window.__SG.disposeObject && window.__SG.scene) {
+        var savedTheme = window.__SG.state.theme
+        var savedBuildings = window.__SG.state.buildings.slice()
+        window.__SG.state.theme = 0
+        window.__SG.state.buildings = []
+        window.__SG.spawnBuildings()
+        var firstCount = window.__SG.state.buildings.length
+        window.__SG.spawnBuildings()
+        var secondCount = window.__SG.state.buildings.length
+        var seenScenery = {}
+        var uniqueCount = 0
+        for (var sci = 0; sci < window.__SG.state.buildings.length; sci++) {
+          var sb = window.__SG.state.buildings[sci]
+          var key = Math.round(sb.position.x * 10) + ':' + Math.round(sb.position.z * 10)
+          if (!seenScenery[key]) {
+            seenScenery[key] = true
+            uniqueCount++
+          }
+        }
+        r.citySceneryNoDuplicateSpawn = firstCount > 0 && firstCount === secondCount && uniqueCount === secondCount
+        for (var sdi = window.__SG.state.buildings.length - 1; sdi >= 0; sdi--) {
+          window.__SG.scene.remove(window.__SG.state.buildings[sdi])
+          window.__SG.disposeObject(window.__SG.state.buildings[sdi])
+        }
+        window.__SG.state.buildings = savedBuildings
+        window.__SG.state.theme = savedTheme
+      }
+      r.rollUnderSize = null
+      r.coinDetail = null
+      r.realisticMaterials = null
+      if (window.__SG && window.__SG.createTrackSegment && window.__SG.disposeObject) {
+        var textureSegment = window.__SG.createTrackSegment(-72)
+        var groundMesh = textureSegment.children[0]
+        var laneMesh = textureSegment.children[1]
+        var curbMesh = textureSegment.children[3]
+        r.realisticMaterials = {
+          skyDome: !!(window.__SG.skyDome && window.__SG.skyDome.material && window.__SG.skyDome.material.map),
+          skyDomeName: window.__SG.skyDome ? window.__SG.skyDome.name : null,
+          skyClouds: !!(window.__SG.skyDome && window.__SG.skyDome.userData && window.__SG.skyDome.userData.clouds),
+          skyCloudProfile: window.__SG.skyDome && window.__SG.skyDome.userData ? window.__SG.skyDome.userData.cloudProfile : null,
+          asphalt: !!(groundMesh && groundMesh.material && groundMesh.material.map),
+          lanePaint: !!(laneMesh && laneMesh.material && laneMesh.material.map),
+          concrete: !!(curbMesh && curbMesh.material && curbMesh.material.map),
+          groundReceivesShadow: !!(groundMesh && groundMesh.receiveShadow),
+          warningTexture: typeof window.__SG.createWarningPanelMaterial === 'function'
+        }
+        window.__SG.disposeObject(textureSegment)
+      }
+      r.realisticLighting = window.__SG && window.__SG.renderer && window.__SG.realisticLightingProfile ? {
+        shadows: !!window.__SG.renderer.shadowMap.enabled,
+        shadowType: window.__SG.renderer.shadowMap.type,
+        outputEncoding: window.__SG.renderer.outputEncoding,
+        toneMapping: window.__SG.renderer.toneMapping,
+        exposure: window.__SG.renderer.toneMappingExposure,
+        dirCastsShadow: !!(window.__SG.dirLight && window.__SG.dirLight.castShadow),
+        shadowMapWidth: window.__SG.dirLight && window.__SG.dirLight.shadow ? window.__SG.dirLight.shadow.mapSize.width : 0,
+        profile: window.__SG.realisticLightingProfile
+      } : null
+      r.rhythmMusicProfile = window.__SG ? window.__SG.rhythmMusicProfile : null
+      r.themeThresholds = window.__SG ? window.__SG.THEME_DISTANCE_THRESHOLDS : null
+      r.themeThresholdSwitch = false
+      if (window.__SG && window.__SG.checkThemeChange && window.__SG.switchTheme) {
+        var savedThemeForThreshold = window.__SG.state.theme
+        var savedScoreForThreshold = window.__SG.state.score
+        window.__SG.state.theme = 0
+        window.__SG.state.score = window.__SG.THEME_DISTANCE_THRESHOLDS.forest + 1
+        window.__SG.checkThemeChange()
+        r.themeThresholdSwitch = window.__SG.state.theme === 1
+        window.__SG.state.score = savedScoreForThreshold
+        if (window.__SG.state.theme !== savedThemeForThreshold) window.__SG.switchTheme(savedThemeForThreshold || 0)
+        else window.__SG.state.theme = savedThemeForThreshold
+        if (window.__SG.updateLightRigForTheme) window.__SG.updateLightRigForTheme(savedThemeForThreshold || 0)
+      }
+      r.skyDomeThemeSwap = false
+      if (window.__SG && window.__SG.updateSkyDome && window.__SG.skyDome) {
+        window.__SG.updateSkyDome(0, 'normal')
+        var skyBefore = window.__SG.skyDome.userData ? window.__SG.skyDome.userData.skyKey : ''
+        window.__SG.updateSkyDome(1, 'normal')
+        var skyAfter = window.__SG.skyDome.userData ? window.__SG.skyDome.userData.skyKey : ''
+        r.skyDomeThemeSwap = skyBefore === 'normal-0' && skyAfter === 'normal-1'
+        window.__SG.updateSkyDome(window.__SG.state.theme || 0, window.__SG.state.cyberMode ? 'cyber' : 'normal')
+      }
+      r.startCountdown = null
+      if (window.__SG && window.__SG.runStartCountdown && window.__SG.cancelStartCountdown) {
+        var savedCountdownStarted = window.__SG.state.started
+        var savedCountdownPaused = window.__SG.state.paused
+        var savedCountdownActive = window.__SG.state.countdownActive
+        var savedCountdownStep = window.__SG.COUNTDOWN_STEP_MS
+        var savedCountdownRun = window.__SG.COUNTDOWN_RUN_MS
+        var countdownDone = false
+        window.__SG.cancelStartCountdown()
+        window.__SG.COUNTDOWN_STEP_MS = 15
+        window.__SG.COUNTDOWN_RUN_MS = 15
+        window.__SG.runStartCountdown(function() { countdownDone = true })
+        await new Promise(function(resolve) { setTimeout(resolve, 520) })
+        r.startCountdown = {
+          overlay: !!window.__SG.countdownOverlay,
+          sequence: window.__SG.countdownSequence ? window.__SG.countdownSequence.join(',') : '',
+          done: countdownDone,
+          active: !!window.__SG.state.countdownActive,
+          display: window.__SG.countdownOverlay ? window.__SG.countdownOverlay.style.display : '',
+          text: window.__SG.countdownOverlay ? window.__SG.countdownOverlay.textContent : ''
+        }
+        window.__SG.COUNTDOWN_STEP_MS = savedCountdownStep
+        window.__SG.COUNTDOWN_RUN_MS = savedCountdownRun
+        window.__SG.state.started = savedCountdownStarted
+        window.__SG.state.paused = savedCountdownPaused
+        window.__SG.state.countdownActive = savedCountdownActive
+        window.__SG.cancelStartCountdown()
+      }
+      if (window.__SG && window.__SG.createCoin && window.__SG.disposeObject) {
+        var detailedCoin = window.__SG.createCoin(1, -12, 0.3)
+        var coinShape = detailedCoin.children.find(function(child) { return child.geometry && child.geometry.type === 'ShapeGeometry' })
+        r.coinDetail = {
+          children: detailedCoin.children.length,
+          marker: detailedCoin.userData.coinDetail,
+          hasTorus: detailedCoin.children.some(function(child) { return child.geometry && child.geometry.type === 'TorusGeometry' }),
+          hasShape: !!coinShape,
+          centeredShape: !!coinShape && Math.abs(coinShape.position.x) < 0.001 && Math.abs(coinShape.position.y - detailedCoin.userData.baseCoinY) < 0.001,
+          hasBaseY: detailedCoin.children.every(function(child) { return child.userData && typeof child.userData.baseY === 'number' }),
+          shapeColor: coinShape && coinShape.material && coinShape.material.color ? coinShape.material.color.getHex() : null
+        }
+        window.__SG.disposeObject(detailedCoin)
+      }
+      r.fullBarrierGap = null
+      r.fullBarrierCollisionGap = false
+      if (window.__SG && window.__SG.createRollUnderTrain && window.__SG.disposeObject) {
+        var rollUnder = window.__SG.createRollUnderTrain(1, -32)
+        r.rollUnderSize = {
+          width: rollUnder.userData.width,
+          height: rollUnder.userData.height,
+          depth: rollUnder.userData.depth,
+          yOffset: rollUnder.userData.yOffset
+        }
+        window.__SG.disposeObject(rollUnder)
+      }
+      if (window.__SG && window.__SG.createFullLaneBarrier && window.__SG.getObstacleLanes && window.__SG.checkCollisions && window.__SG.player) {
+        var gapBarrier = window.__SG.createFullLaneBarrier(0, 1)
+        var savedObstacles = window.__SG.state.obstacles
+        var savedPlayerPos = window.__SG.player.position.clone()
+        var savedCurrentLane = window.__SG.state.currentLane
+        var savedTargetLane = window.__SG.state.targetLane
+        var savedOnRoof = window.__SG.state.onRoof
+        var savedJumping = window.__SG.state.isJumping
+        var savedRolling = window.__SG.state.isRolling
+        var savedHomelander = window.__SG.state.homelander
+        window.__SG.state.obstacles = [gapBarrier]
+        window.__SG.state.onRoof = false
+        window.__SG.state.isJumping = false
+        window.__SG.state.isRolling = false
+        window.__SG.state.homelander = false
+        window.__SG.player.position.set(window.__SG.LANE_POSITIONS[1], 0.15, 0)
+        window.__SG.state.currentLane = 1
+        var gapLaneHit = window.__SG.checkCollisions()
+        window.__SG.player.position.set(window.__SG.LANE_POSITIONS[0], 0.15, 0)
+        window.__SG.state.currentLane = 0
+        var blockedLaneHit = window.__SG.checkCollisions()
+        r.fullBarrierGap = {
+          openLane: gapBarrier.userData.openLane,
+          blockedLanes: window.__SG.getObstacleLanes(gapBarrier)
+        }
+        r.fullBarrierCollisionGap = gapBarrier.userData.openLane === 1 &&
+          r.fullBarrierGap.blockedLanes.length === 2 &&
+          r.fullBarrierGap.blockedLanes.indexOf(1) < 0 &&
+          gapLaneHit === false &&
+          blockedLaneHit === true
+        window.__SG.state.obstacles = savedObstacles
+        window.__SG.player.position.copy(savedPlayerPos)
+        window.__SG.state.currentLane = savedCurrentLane
+        window.__SG.state.targetLane = savedTargetLane
+        window.__SG.state.onRoof = savedOnRoof
+        window.__SG.state.isJumping = savedJumping
+        window.__SG.state.isRolling = savedRolling
+        window.__SG.state.homelander = savedHomelander
+        window.__SG.disposeObject(gapBarrier)
+      }
+      r.trainRampWidth = null
+      r.trainRampTextured = false
+      r.vehicleSkipsLegacyFallback = false
+      r.vehicleColorVariety = null
+      if (window.__SG && window.__SG.createTrain && window.__SG.disposeObject) {
+        var originalRandom = Math.random
+        var savedVehicleColorIndex = window.__SG.vehicleColorIndex || 0
+        try {
+          Math.random = function() { return 0.1 }
+          var rampTrain = window.__SG.createTrain(1, -42, false)
+          r.trainRampWidth = rampTrain ? rampTrain.userData.rampWidth || null : null
+          if (rampTrain) {
+            rampTrain.traverse(function(node) {
+              if (!r.trainRampTextured && node && node.isMesh && node.userData && node.userData.rampSurface) {
+                r.trainRampTextured = !!(node.material && node.material.map)
+              }
+            })
+          }
+          if (rampTrain) window.__SG.disposeObject(rampTrain)
+        } finally {
+          Math.random = originalRandom
+        }
+        window.__SG.vehicleColorIndex = 0
+        var trainColors = []
+        for (var vc = 0; vc < 4; vc++) {
+          var colorTrain = window.__SG.createTrain(1, -60 - vc * 8, false)
+          if (colorTrain) {
+            trainColors.push(colorTrain.userData.vehicleColor)
+            window.__SG.disposeObject(colorTrain)
+          }
+        }
+        r.vehicleColorVariety = {
+          colors: trainColors,
+          unique: Array.from(new Set(trainColors)).length,
+          paletteSize: window.__SG.vehicleColorPalette ? window.__SG.vehicleColorPalette.length : 0
+        }
+        window.__SG.vehicleColorIndex = savedVehicleColorIndex
+        var savedTrainModel = window.__SG.vehicleModels ? window.__SG.vehicleModels.train : null
+        if (window.__SG.vehicleModels) delete window.__SG.vehicleModels.train
+        var legacyTrain = window.__SG.createTrain(1, -52, false)
+        r.vehicleSkipsLegacyFallback = legacyTrain === null
+        if (legacyTrain) window.__SG.disposeObject(legacyTrain)
+        if (window.__SG.vehicleModels && savedTrainModel) window.__SG.vehicleModels.train = savedTrainModel
+      }
+      r.characterCatalogCount = window.__SG && window.__SG.characterCatalog ? window.__SG.characterCatalog.length : 0
+      r.characterSelector = window.__SG ? typeof window.__SG.showCharacters === 'function' : false
+      r.characterBuy = window.__SG ? typeof window.__SG.buyCharacter === 'function' : false
+      r.characterPrice = window.__SG && window.__SG.getNextCharacterPrice ? window.__SG.getNextCharacterPrice() : null
+      r.ownedCharacterCount = window.__SG && window.__SG.getOwnedCharacters ? window.__SG.getOwnedCharacters().length : 0
+      r.expectedCharacterPrice = Math.max(0, (r.ownedCharacterCount || 1) - 1) * 10000
+      r.charactersButton = document.getElementById('characters-btn') !== null
+      r.speedIncrements = window.__SG && window.__SG.SPEED_INCREMENT_BY_DIFFICULTY ? window.__SG.SPEED_INCREMENT_BY_DIFFICULTY.slice() : []
+      r.speedLevels = window.__SG && window.__SG.speedForLevel && window.__SG.getSpeedLevel ? [1, 25, 50].map(function(level) {
+        var speed = window.__SG.speedForLevel(level)
+        return {
+          level: level,
+          speed: speed,
+          roundtrip: window.__SG.getSpeedLevel(speed),
+          distanceRate: window.__SG.getDistanceRate(speed)
+        }
+      }) : []
+      r.cyberReset = false
+      if (window.__SG && window.__SG.resetCyberMode) {
+        window.__SG.state.cyberMode = true
+        window.__SG.resetCyberMode()
+        r.cyberReset = window.__SG.state.cyberMode === false
+      }
+      if (window.__SG && typeof window.__SG.showCharacters === 'function') {
+        window.__SG.showCharacters()
+        r.characterOverlay = document.getElementById('characters-overlay') !== null
+        r.characterPreviewCanvas = document.getElementById('character-preview-canvas') !== null
+        r.characterCards = document.querySelectorAll('.character-card').length
+        const modal = document.querySelector('#characters-overlay .character-modal')
+        r.characterModalWidth = modal ? modal.getBoundingClientRect().width : 0
+        r.characterModalMaxWidth = modal ? getComputedStyle(modal).maxWidth : ''
+        const overlay = document.getElementById('characters-overlay')
+        if (overlay) overlay.style.display = 'none'
+      }
+      r.pvpPhase1 = null
+      if (window.__SG && window.__SG.showPvpLobby && window.__SG.createLocalPvpRoom && window.__SG.startPvpRace && window.__SG.exitPvpToLobby) {
+        window.__SG.showPvpLobby()
+        var pvpOverlay = document.getElementById('pvp-overlay')
+        var pvpButton = document.getElementById('pvp-btn-menu')
+        var localPvpName = window.__SG.getLocalPvpName ? window.__SG.getLocalPvpName() : 'You'
+        var defaultAiRoomsCleared = Array.isArray(window.__SG.pvpRooms) && window.__SG.pvpRooms.length === 0
+        if (window.__SG.setPvpRoomFromServer) {
+          window.__SG.setPvpRoomFromServer({
+            id: 'SMOKE-ROOM',
+            name: 'Smoke Server Room',
+            host: localPvpName,
+            localHost: true,
+            players: [
+              { id: 'local', name: localPvpName, ready: true, local: true, lane: 1, characterId: 'runner' },
+              { id: 'remote-a', name: 'Remote A', ready: true, lane: 0, startOffset: -4, characterId: 'punk' },
+              { id: 'remote-b', name: 'Remote B', ready: true, lane: 2, startOffset: -8, characterId: 'swat' }
+            ],
+            maxPlayers: 3
+          })
+        } else {
+          window.__SG.createLocalPvpRoom()
+        }
+        var roomReady = window.__SG.isPvpRoomReady(window.__SG.state.pvpRoom)
+        window.__SG.skipCountdownForTests = true
+        window.__SG.startPvpRace()
+        var firstPvpTrack = window.__SG.state.trackSegments[0]
+        var neonEdges = 0
+        if (firstPvpTrack) {
+          firstPvpTrack.traverse(function(node) {
+            if (node && node.userData && (node.userData.pvpNeonEdge || node.userData.pvpNeonGlow)) neonEdges++
+          })
+        }
+        if (window.__SG.updatePvpVisualStyle) window.__SG.updatePvpVisualStyle()
+        var pvpObstacleNeon = false
+        var pvpBuildingNeon = false
+        var opponentModelsLoaded = 0
+        var opponentGroups = 0
+        var opponentOffsets = []
+        await new Promise(function(resolve) { setTimeout(resolve, 900) })
+        ;(window.__SG.state.obstacles || []).forEach(function(obs) {
+          if (pvpObstacleNeon) return
+          obs.traverse(function(node) {
+            if (!node.isMesh || !node.material) return
+            var mats = Array.isArray(node.material) ? node.material : [node.material]
+            mats.forEach(function(mat) {
+              if (!mat || !mat.color) return
+              var c = mat.color
+              if (Math.abs(c.r - c.g) > 0.04 || Math.abs(c.g - c.b) > 0.04) pvpObstacleNeon = true
+            })
+          })
+        })
+        ;(window.__SG.state.buildings || []).forEach(function(building) {
+          if (pvpBuildingNeon) return
+          building.traverse(function(node) {
+            if (!node.isMesh || !node.material) return
+            var mats = Array.isArray(node.material) ? node.material : [node.material]
+            mats.forEach(function(mat) {
+              if (!mat) return
+              if (mat.emissive && mat.emissiveIntensity >= 0.45) pvpBuildingNeon = true
+            })
+          })
+        })
+        ;(window.__SG.state.pvpGhosts || []).forEach(function(ghost) {
+          if (ghost.group && ghost.group.userData && ghost.group.userData.pvpOpponent) opponentGroups++
+          if (ghost.model) opponentModelsLoaded++
+          opponentOffsets.push(ghost.group ? Math.round(ghost.group.position.z) : 0)
+        })
+        var snapshotSync = false
+        var remoteStateVisible = false
+        if (window.__SG.state.pvpOpponents && window.__SG.state.pvpOpponents.length >= 2 && window.__SG.applyPvpOpponentSnapshot && window.__SG.updatePvpGhosts) {
+          var firstOp = window.__SG.state.pvpOpponents[0]
+          var secondOp = window.__SG.state.pvpOpponents[1]
+          window.__SG.applyPvpOpponentSnapshot(firstOp, { lane: 2, distance: 120, isJumping: true, isRolling: false, alive: true })
+          window.__SG.applyPvpOpponentSnapshot(secondOp, { lane: 0, distance: 95, isJumping: false, isRolling: true, alive: true })
+          window.__SG.updatePvpGhosts(0.016)
+          snapshotSync = firstOp.targetLane === 2 && firstOp.status === 'JUMP' && secondOp.status === 'ROLL'
+          remoteStateVisible = !!(window.__SG.pvpHudEl && /JUMP/.test(window.__SG.pvpHudEl.innerHTML) && /ROLL/.test(window.__SG.pvpHudEl.innerHTML))
+        }
+        var localSnapshot = window.__SG.getLocalPvpSnapshot ? window.__SG.getLocalPvpSnapshot() : null
+        var savedPvpObstacles = window.__SG.state.obstacles
+        window.__SG.state.obstacles = []
+        if (window.__SG.player && window.__SG.camera && window.__SG.update) {
+          window.__SG.player.position.x = window.__SG.LANE_POSITIONS[2]
+          window.__SG.state.currentLane = 2
+          window.__SG.state.targetLane = 2
+          window.__SG.camera.position.x = 0
+          window.__SG.update()
+        }
+        var pvpCameraFollows = !!(window.__SG.camera && window.__SG.camera.position.x > 0.05)
+        window.__SG.state.obstacles = savedPvpObstacles
+        var countdownSeq = window.__SG.getCountdownSequence ? window.__SG.getCountdownSequence().join(',') : ''
+        var pausedBefore = window.__SG.state.paused
+        window.__SG.togglePause()
+        var pauseDisabled = window.__SG.state.paused === pausedBefore
+        window.__SG.toggleConsole()
+        var devConsole = document.getElementById('dev-console')
+        var consoleDisabled = !devConsole || devConsole.style.display !== 'flex'
+        var raceStartedBeforeSpectate = !!window.__SG.state.started
+        var playerAuraBeforeSpectate = !!(window.__SG.pvpPlayerAura && window.__SG.pvpPlayerAura.visible)
+        window.__SG.gameOver()
+        var spectating = !!window.__SG.state.pvpSpectating
+        var localDead = !!window.__SG.state.pvpLocalDead
+        var scoreAtDeath = window.__SG.state.score || 0
+        await new Promise(function(resolve) { setTimeout(resolve, 60) })
+        if (window.__SG.update) window.__SG.update()
+        var scoreAfterDeath = window.__SG.state.score || 0
+        var pvpDeadDistanceFrozen = Math.abs(scoreAfterDeath - scoreAtDeath) < 0.001
+        var spectateTargetName = window.__SG.getPvpSpectateTargetName ? window.__SG.getPvpSpectateTargetName() : ''
+        var beforeCycle = spectateTargetName
+        if (window.__SG.cyclePvpSpectateTarget) window.__SG.cyclePvpSpectateTarget(1)
+        var afterCycle = window.__SG.getPvpSpectateTargetName ? window.__SG.getPvpSpectateTargetName() : ''
+        var playerHiddenWhenSpectating = !!(window.__SG.player && window.__SG.player.visible === false)
+        ;(window.__SG.state.pvpOpponents || []).forEach(function(op) { op.alive = false; op.status = 'OUT' })
+        if (window.__SG.finishPvpMatch) window.__SG.finishPvpMatch()
+        var result = window.__SG.state.pvpResult || []
+        r.pvpPhase1 = {
+          menuButton: !!pvpButton,
+          overlay: !!pvpOverlay,
+          localHost: !!(window.__SG.state.pvpRoom && window.__SG.state.pvpRoom.localHost),
+          roomReady: roomReady,
+          defaultAiRoomsCleared: defaultAiRoomsCleared,
+          serverRoomBridge: typeof window.__SG.setPvpRoomFromServer === 'function' && typeof window.__SG.upsertPvpOpponentFromServer === 'function',
+          countdownSeq: countdownSeq,
+          mode: !!window.__SG.state.pvpMode,
+          difficulty: window.__SG.state.difficulty,
+          started: raceStartedBeforeSpectate,
+          ghosts: window.__SG.state.pvpGhosts ? window.__SG.state.pvpGhosts.length : 0,
+          opponents: window.__SG.state.pvpOpponents ? window.__SG.state.pvpOpponents.length : 0,
+          opponentGroups: opponentGroups,
+          opponentModelsLoaded: opponentModelsLoaded,
+          track: !!(firstPvpTrack && firstPvpTrack.userData && firstPvpTrack.userData.pvpTrack),
+          neonEdges: neonEdges,
+          obstacleNeon: pvpObstacleNeon,
+          buildingNeon: pvpBuildingNeon,
+          playerAura: playerAuraBeforeSpectate,
+          opponentOffsetsUnique: Array.from(new Set(opponentOffsets)).length === opponentOffsets.length,
+          snapshotProtocol: !!(window.__SG.pvpPhase2Protocol && window.__SG.pvpPhase2Protocol.clientSendHz === 20 && window.__SG.pvpPhase2Protocol.noPlayerCollision),
+          localSnapshot: !!(localSnapshot && typeof localSnapshot.lane === 'number' && typeof localSnapshot.alive === 'boolean'),
+          snapshotSync: snapshotSync,
+          remoteStateVisible: remoteStateVisible,
+          spectating: spectating,
+          localDead: localDead,
+          spectateTarget: !!spectateTargetName,
+          spectateCycle: beforeCycle !== afterCycle,
+          playerHiddenWhenSpectating: playerHiddenWhenSpectating,
+          cameraFollows: pvpCameraFollows,
+          pvpHud: !!(window.__SG.pvpHudEl && window.__SG.pvpHudEl.style.display === 'block'),
+          pauseDisabled: pauseDisabled,
+          consoleDisabled: consoleDisabled,
+          deadDistanceFrozen: pvpDeadDistanceFrozen,
+          exitButtonVisible: !!(window.__SG.pvpExitBtnEl && window.__SG.pvpExitBtnEl.style.display === 'block'),
+          exitButtonFixed: !!(window.__SG.pvpExitBtnEl && getComputedStyle(window.__SG.pvpExitBtnEl).position === 'fixed'),
+          resultCount: result.length
+        }
+        if (window.__SG.pvpExitBtnEl) window.__SG.pvpExitBtnEl.click()
+        r.pvpPhase1.exitButtonClickable = !window.__SG.state.pvpMode && !!(pvpOverlay && pvpOverlay.style.display === 'flex')
+        var pvpCloseButton = document.getElementById('pvp-close')
+        if (pvpCloseButton) pvpCloseButton.click()
+        r.pvpPhase1.closeReturnsToMenu = !!(window.__SG.menuOverlay && window.__SG.menuOverlay.style.display === 'flex' && pvpOverlay && pvpOverlay.style.display === 'none')
+        window.__SG.skipCountdownForTests = false
+        if (window.__SG.state.pvpMode) window.__SG.exitPvpToLobby()
+        if (pvpOverlay) pvpOverlay.style.display = 'none'
+      }
+      if (window.__SG && window.__SG.restartGame && window.__SG.player) {
+        window.__SG.skipCountdownForTests = true
+        window.__SG.restartGame()
+        r.restartRotationY = window.__SG.player.rotation.y
+        window.__SG.skipCountdownForTests = false
+      }
+      if (window.__SG && window.__SG.applyGameData && window.__SG.selectCharacter) {
+        window.__SG.applyGameData({ credits: 10000, ownedCharacters: ['runner', 'adventurer'], selectedCharacter: 'adventurer' })
+        window.__SG.selectCharacter('adventurer')
+        window.__SG.state.canDoubleJump = true
+        window.__SG.state.equippedAbility = 1
+        if (window.__SG.updateAbilityVisuals) window.__SG.updateAbilityVisuals()
+        r.nonRunnerShoeOverlayHidden = (!window.__SG.shoesDJLeft || window.__SG.shoesDJLeft.visible === false) && (!window.__SG.shoesDJRight || window.__SG.shoesDJRight.visible === false)
+      }
       return r
     })()`)
   } catch (err) {
@@ -166,12 +1037,35 @@ app.whenReady().then(async () => {
   check('3b. THREE.REVISION === "128"', state.threeRevision === '128', state.threeRevision ? `got ${state.threeRevision}` : 'undefined')
   check('3c. THREE.GLTFLoader exists', !!state.gltfLoader)
   const playerModelPath = path.join(DESKTOP, 'dist/renderer/models/player.glb')
+  const jetpackModelPath = path.join(DESKTOP, 'dist/renderer/models/jetpack.glb')
+  const homelanderModelPath = path.join(DESKTOP, 'dist/renderer/models/homelander.glb')
+  const homelanderThemePath = path.join(DESKTOP, 'dist/renderer/audio/homelander-theme.mp3')
+  const homelanderVoicePath = path.join(DESKTOP, 'dist/renderer/audio/im-better-homelander.mp3')
+  const trainModelPath = path.join(DESKTOP, 'dist/renderer/models/vehicles/train.glb')
+  const busModelPath = path.join(DESKTOP, 'dist/renderer/models/vehicles/bus.glb')
+  const gunModelPath = path.join(DESKTOP, 'dist/renderer/models/guns/sniper-rifle.glb')
+  const adventurerPath = path.join(DESKTOP, 'dist/renderer/models/characters/Adventurer.gltf')
+  const sceneryBuildingPath = path.join(DESKTOP, 'dist/renderer/models/scenery/buildings/building1_small.glb')
+  const sceneryTreePath = path.join(DESKTOP, 'dist/renderer/models/scenery/trees/tree_1.glb')
   check('3d. player.glb copied to renderer dist', fs.existsSync(playerModelPath), fs.existsSync(playerModelPath) ? `${fs.statSync(playerModelPath).size} bytes` : 'missing')
+  check('3e. refined player.glb size', fs.existsSync(playerModelPath) && fs.statSync(playerModelPath).size > 100000, fs.existsSync(playerModelPath) ? `${fs.statSync(playerModelPath).size} bytes` : 'missing')
+  check('3f. Jetpack tuning constants', state.jetpackFuelMax === 15 && state.jetpackCooldownMax === 30 && state.jetpackMaxHeight > 0, `fuel=${state.jetpackFuelMax}, cooldown=${state.jetpackCooldownMax}, maxHeight=${state.jetpackMaxHeight}`)
+  check('3f-1. jetpack.glb copied to renderer dist', fs.existsSync(jetpackModelPath) && fs.statSync(jetpackModelPath).size > 1000000, fs.existsSync(jetpackModelPath) ? `${fs.statSync(jetpackModelPath).size} bytes` : 'missing')
+  check('3f-2. Homelander audio copied to renderer dist', fs.existsSync(homelanderThemePath) && fs.existsSync(homelanderVoicePath), `${fs.existsSync(homelanderThemePath) ? fs.statSync(homelanderThemePath).size : 0}/${fs.existsSync(homelanderVoicePath) ? fs.statSync(homelanderVoicePath).size : 0} bytes`)
+  check('3g. homelander.glb copied to renderer dist', fs.existsSync(homelanderModelPath), fs.existsSync(homelanderModelPath) ? `${fs.statSync(homelanderModelPath).size} bytes` : 'missing')
+  check('3h. train.glb copied to renderer dist', fs.existsSync(trainModelPath), fs.existsSync(trainModelPath) ? `${fs.statSync(trainModelPath).size} bytes` : 'missing')
+  check('3i. bus.glb copied to renderer dist', fs.existsSync(busModelPath), fs.existsSync(busModelPath) ? `${fs.statSync(busModelPath).size} bytes` : 'missing')
+  check('3i-1. gun GLB copied to renderer dist', fs.existsSync(gunModelPath), fs.existsSync(gunModelPath) ? `${fs.statSync(gunModelPath).size} bytes` : 'missing')
+  check('3j. Adventurer.gltf copied to renderer dist', fs.existsSync(adventurerPath), fs.existsSync(adventurerPath) ? `${fs.statSync(adventurerPath).size} bytes` : 'missing')
+  check('3k. scenery building GLB copied to renderer dist', fs.existsSync(sceneryBuildingPath), fs.existsSync(sceneryBuildingPath) ? `${fs.statSync(sceneryBuildingPath).size} bytes` : 'missing')
+  check('3l. scenery tree GLB copied to renderer dist', fs.existsSync(sceneryTreePath), fs.existsSync(sceneryTreePath) ? `${fs.statSync(sceneryTreePath).size} bytes` : 'missing')
   check('4a. desktopAPI (preload bridge)', !!state.desktopAPI)
-  check('4b. __SUBWAY_CONFIG__ exists', !!state.subwayConfig)
+  check('4b. __ENDLESS_RUNNER_CONFIG__ exists', !!state.endlessRunnerConfig)
+  check('4b-legacy. __SUBWAY_CONFIG__ legacy alias exists', !!state.subwayConfig)
   check('4c. API_BASE_URL is non-empty', !!state.apiBaseUrl, state.apiBaseUrl || 'empty')
   check('5a. SG.runtime === "electron"', state.sgRuntime === 'electron', state.sgRuntime || 'undefined')
   check('5b. SG.apiBaseUrl set', !!state.sgApiBaseUrl, state.sgApiBaseUrl || 'undefined')
+  check('5b-1. desktop status UI hides API URL', !!state.statusBarHidesApiUrl && !!state.titleHidesApiUrl, state.statusBarText || state.documentTitle || 'missing status')
   check('6. F11 handler wired', !!state.f11HandlerWired)
   check('7. No require() leak', !state.requireLeak)
   check('8. No fs leak', !state.fsLeak)
@@ -187,6 +1081,75 @@ app.whenReady().then(async () => {
   check("14. SG.applyGameData is function", !!state.applyGameData)
   check("14b. player GLB loaded", !!state.playerModelLoaded, state.playerModelName || 'not loaded')
   check("14c. player animations indexed", state.playerAnimations && state.playerAnimations.length >= 1, state.playerAnimations ? state.playerAnimations.join(', ') : 'none')
+  check("14d. ability HUD updater exists", !!state.abilityHud)
+  check("14e. ability visual updater exists", !!state.abilityVisuals)
+  check("14e-0a. Jetpack GLB loads with dual flames", state.jetpackModelPath === 'models/jetpack.glb' && !!state.jetpackModelLoaded && state.jetpackModelName === 'JetpackGLB' && state.jetpackFlameGroups === 2, `path=${state.jetpackModelPath}, model=${state.jetpackModelName}, flames=${state.jetpackFlameGroups}`)
+  check("14e-0b. Jetpack is lower, closer, and faces backward", !!state.jetpackTuning && Math.abs(state.jetpackTuning.rotationY - Math.PI) < 0.001 && state.jetpackTuning.targetHeight <= 0.6 && !!state.jetpackMount && state.jetpackMount.y <= 0.75 && state.jetpackMount.z >= -0.26, state.jetpackTuning && state.jetpackMount ? JSON.stringify({ tuning: state.jetpackTuning, mount: state.jetpackMount }) : 'missing')
+  check("14e-1. default key bindings use arrow keys", !!state.defaultKeyBindings && state.defaultKeyBindings.up === 'ArrowUp' && state.defaultKeyBindings.down === 'ArrowDown' && state.defaultKeyBindings.left === 'ArrowLeft' && state.defaultKeyBindings.right === 'ArrowRight', state.defaultKeyBindings ? JSON.stringify(state.defaultKeyBindings) : 'missing')
+  check("14e-2. key binding remap updates action lookup", state.keyBindingActionBefore === 'up' && state.keyBindingActionAfter === 'up' && !!state.keyBindingSaved, `before=${state.keyBindingActionBefore}, after=${state.keyBindingActionAfter}`)
+  check("14e-3. settings exposes roll delay and key binding controls", state.rollReleaseDelaySetting === 350 && state.settingsBindingButtons === 4, `delay=${state.rollReleaseDelaySetting}, buttons=${state.settingsBindingButtons}`)
+  check("14e-4. settings volume rows keep icons on the left", !!state.settingsVolumeGridLeftAligned)
+  check("14e-5. settings labels roll delay", !!state.rollDelayHasDescription)
+  check("14e-6. settings exposes third-person camera choices", state.thirdPersonViewButtons === 3 && !!state.thirdPersonViewSaved && !!state.settingsModalWide, `buttons=${state.thirdPersonViewButtons}, wide=${state.settingsModalWide}`)
+  check("14e-7. third-person camera presets move closer", !!state.thirdPersonCameraViews && state.thirdPersonCameraViews.far.z === 7 && state.thirdPersonCameraViews.medium.z < state.thirdPersonCameraViews.far.z && state.thirdPersonCameraViews.near.z < state.thirdPersonCameraViews.medium.z, state.thirdPersonCameraViews ? JSON.stringify(state.thirdPersonCameraViews) : 'missing')
+  check("14e-8. third-person camera defaults to closest", state.thirdPersonDefault === 'near', String(state.thirdPersonDefault))
+  check("14e-9. third-person camera buttons give selected feedback", !!state.thirdPersonButtonFeedback)
+  check("14e-10. third-person speed HUD shows instant vector speed", !!state.speedHud && !!state.speedHudVector, state.speedHudText || state.speedHudBackground || 'missing')
+  check("14e-11. first-person pitch setting defaults lower and saves", state.firstPersonPitchDefault === 1 && state.firstPersonPitchSetting === 1 && state.firstPersonPitchButtons === 2 && !!state.firstPersonPitchSaved, `default=${state.firstPersonPitchDefault}, slider=${state.firstPersonPitchSetting}, buttons=${state.firstPersonPitchButtons}`)
+  check("14e-12. start countdown overlays 3-2-1-RUN before movement", !!state.startCountdown && !!state.startCountdown.overlay && state.startCountdown.sequence === '3,2,1,RUN!' && !!state.startCountdown.done && !state.startCountdown.active && state.startCountdown.display === 'none' && state.startCountdown.text === 'RUN!', state.startCountdown ? JSON.stringify(state.startCountdown) : 'missing')
+  check("14e-13. PVP Phase 2 opponent models sync state and spectating", !!state.pvpPhase1 && !!state.pvpPhase1.menuButton && !!state.pvpPhase1.overlay && !!state.pvpPhase1.defaultAiRoomsCleared && !!state.pvpPhase1.serverRoomBridge && !!state.pvpPhase1.localHost && !!state.pvpPhase1.roomReady && state.pvpPhase1.countdownSeq === '10,9,8,7,6,5,4,3,2,1,RUN!' && !!state.pvpPhase1.mode && state.pvpPhase1.difficulty === 1 && !!state.pvpPhase1.started && state.pvpPhase1.ghosts === 2 && state.pvpPhase1.opponents === 2 && state.pvpPhase1.opponentGroups === 2 && state.pvpPhase1.opponentModelsLoaded >= 1 && !!state.pvpPhase1.track && state.pvpPhase1.neonEdges >= 4 && !!state.pvpPhase1.obstacleNeon && !!state.pvpPhase1.buildingNeon && !!state.pvpPhase1.playerAura && !!state.pvpPhase1.opponentOffsetsUnique && !!state.pvpPhase1.snapshotProtocol && !!state.pvpPhase1.localSnapshot && !!state.pvpPhase1.snapshotSync && !!state.pvpPhase1.remoteStateVisible && !!state.pvpPhase1.spectating && !!state.pvpPhase1.localDead && !!state.pvpPhase1.spectateTarget && !!state.pvpPhase1.spectateCycle && !!state.pvpPhase1.playerHiddenWhenSpectating && !!state.pvpPhase1.cameraFollows && !!state.pvpPhase1.pvpHud && !!state.pvpPhase1.pauseDisabled && !!state.pvpPhase1.consoleDisabled && !!state.pvpPhase1.deadDistanceFrozen && !!state.pvpPhase1.exitButtonVisible && !!state.pvpPhase1.exitButtonFixed && !!state.pvpPhase1.exitButtonClickable && !!state.pvpPhase1.closeReturnsToMenu && state.pvpPhase1.resultCount === 3, state.pvpPhase1 ? JSON.stringify(state.pvpPhase1) : 'missing')
+  check("14f. restart keeps player facing forward", Math.abs(state.restartRotationY - Math.PI) < 0.001, String(state.restartRotationY))
+  check("14g. console command runner exists", !!state.executeConsoleCommand)
+  check("14h. console includes Homelander easter egg", state.consoleCommands && state.consoleCommands.includes('homelander'), state.consoleCommands ? state.consoleCommands.join(', ') : 'none')
+  check("14h-1. console opens/closes with tilde", !!state.consoleBacktickToggle)
+  check("14h-2. console closes with Escape", !!state.consoleEscapeClose)
+  check("14h-3. console help does not reveal Homelander", !!state.consoleHelpHidesHomelander)
+  check("14h-4. Homelander voice plays once after console closes", !!state.homelanderVoiceAfterConsoleClose, state.homelanderAudio ? JSON.stringify(state.homelanderAudio) : 'missing audio')
+  check("14h-5. Homelander theme loops below louder amplified voice", !!state.homelanderAudio && state.homelanderAudio.theme === 'audio/homelander-theme.mp3' && state.homelanderAudio.voice === 'audio/im-better-homelander.mp3' && !!state.homelanderAudio.themeLoop && !!state.homelanderAudio.voiceLoop && state.homelanderAudio.voiceVolume >= 1 && state.homelanderAudio.voiceGain > 3.2, state.homelanderAudio ? JSON.stringify(state.homelanderAudio) : 'missing audio')
+  check("14i. Homelander GLB loader exists", !!state.homelanderLoader && state.homelanderModelPath === 'models/homelander.glb', state.homelanderModelPath || 'missing path')
+  check("14i-1. Homelander GLB tuning faces forward with eye lasers", !!state.homelanderTuning && Math.abs(state.homelanderTuning.modelRotationY) < 0.001 && state.homelanderTuning.modelYOffset <= -0.15 && state.homelanderTuning.eyeOffsetY > 1.6 && state.homelanderTuning.eyeOffsetY < 1.78 && state.homelanderTuning.eyeOffsetZ <= -0.45, state.homelanderTuning ? JSON.stringify(state.homelanderTuning) : 'missing tuning')
+  check("14i-2. Homelander GLB loads into scene", !!state.homelanderModelLoaded && state.homelanderModelHeight > 1.7, `height=${state.homelanderModelHeight}`)
+  check("14j. vehicle model loader exists", !!state.vehicleLoader, state.vehicleTrainPath || 'missing train path')
+  check("14j-1. gun pickup system supports timed weapon replacement", !!state.gunSystem && state.gunSystem.catalog >= 4 && state.gunSystem.paths.sniper === 'models/guns/sniper-rifle.glb' && !!state.gunSystem.picked && !!state.gunSystem.replaced && !!state.gunSystem.timerStartsAt30 && !!state.gunSystem.timerTicks && !!state.gunSystem.hud, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
+  check("14j-2. guns break non-train obstacles only", !!state.gunSystem && !!state.gunSystem.shotBreakable && !!state.gunSystem.breakableDestroyed && !!state.gunSystem.shotTrain && !!state.gunSystem.trainSurvived && !!state.gunSystem.homelanderBlocked, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
+  check("14j-3. first-person gun view model is upright and aimed up", !!state.gunSystem && !!state.gunSystem.firstPersonGunVisible && !!state.gunSystem.viewModelUpright && !!state.gunSystem.viewModelAimsUp, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
+  check("14j-4. gun crosshair is first-person only and pause-aware", !!state.gunSystem && !!state.gunSystem.firstPersonCrosshair && !!state.gunSystem.thirdPersonCrosshairHidden && !!state.gunSystem.pausedCrosshairHidden && !!state.gunSystem.resumedCrosshairVisible, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
+  check("14j-5. gun models use multiple non-black colors", !!state.gunSystem && !!state.gunSystem.coloredGunMaterials, state.gunSystem ? `colors=${state.gunSystem.gunMaterialColorCount}` : 'missing')
+  check("14j-6. third-person runner holds the active gun lower and forward", !!state.gunSystem && !!state.gunSystem.thirdPersonHeldGunVisible && !!state.gunSystem.thirdPersonHeldGunLower && !!state.gunSystem.heldGunFacesForward && !!state.gunSystem.brightBeamParticles, state.gunSystem ? JSON.stringify(state.gunSystem) : 'missing')
+  check("14k. obstacle spacing guard exists", !!state.obstacleSpacing)
+  check("14l. coin spacing guard exists", !!state.coinSpacing)
+  check("14l-1. coin model has centered high-contrast surface detail", !!state.coinDetail && state.coinDetail.children >= 6 && !!state.coinDetail.hasTorus && !!state.coinDetail.hasShape && !!state.coinDetail.centeredShape && !!state.coinDetail.hasBaseY && state.coinDetail.shapeColor === 0x7A3B00 && state.coinDetail.marker === 'high-contrast-centered-detail', state.coinDetail ? JSON.stringify(state.coinDetail) : 'missing')
+  check("14m. scenery model loader exists", !!state.sceneryLoader, state.sceneryPathCounts ? `buildings=${state.sceneryPathCounts.buildings}, trees=${state.sceneryPathCounts.trees}` : 'missing paths')
+  check("14m-0a. city scenery waits for GLB assets", !!state.cityScenerySkipsLegacyFallback)
+  check("14m-0b. forest scenery waits for GLB assets", !!state.forestScenerySkipsLegacyFallback)
+  check("14m-0c. tree scenery materials are tinted green", !!state.treeMaterialsTinted)
+  check("14m-1. city scenery spacing is performance tuned", state.cityScenerySpacing >= 10, `spacing=${state.cityScenerySpacing}`)
+  check("14m-2. city scenery rows are grid aligned", !!state.citySceneryAligned)
+  check("14m-3. city scenery uses a single building row", state.citySceneryRows === 1, `rows=${state.citySceneryRows}`)
+  check("14m-4. city scenery spawn avoids duplicate overlap", !!state.citySceneryNoDuplicateSpawn)
+  check("14m-5. roll-under obstacle is narrower and lower", !!state.rollUnderSize && state.rollUnderSize.width <= 1.35 && state.rollUnderSize.height <= 0.28 && state.rollUnderSize.yOffset <= 1.2, state.rollUnderSize ? JSON.stringify(state.rollUnderSize) : 'missing')
+  check("14m-5a. full-width barrier leaves one lane gap", !!state.fullBarrierCollisionGap, state.fullBarrierGap ? JSON.stringify(state.fullBarrierGap) : 'missing')
+  check("14m-6. train roof ramp matches train width and has warning texture", state.trainRampWidth !== null && state.trainRampWidth <= 1.6 && !!state.trainRampTextured, `rampWidth=${state.trainRampWidth}, textured=${state.trainRampTextured}`)
+  check("14m-7. train obstacles wait for GLB assets", !!state.vehicleSkipsLegacyFallback)
+  check("14m-7a. train obstacles cycle through multiple carriage colors", !!state.vehicleColorVariety && state.vehicleColorVariety.paletteSize >= 6 && state.vehicleColorVariety.unique >= 3, state.vehicleColorVariety ? JSON.stringify(state.vehicleColorVariety) : 'missing')
+  check("14m-8. realistic skybox, high-contrast lightweight clouds, and track textures are active", !!state.realisticMaterials && !!state.realisticMaterials.skyDome && !!state.realisticMaterials.skyClouds && !!state.realisticMaterials.skyCloudProfile && state.realisticMaterials.skyCloudProfile.contrast === 'high' && state.realisticMaterials.skyCloudProfile.cloudCount >= 30 && state.realisticMaterials.skyCloudProfile.runtimeMeshes === 0 && !!state.realisticMaterials.asphalt && !!state.realisticMaterials.lanePaint && !!state.realisticMaterials.concrete && !!state.realisticMaterials.groundReceivesShadow && !!state.realisticMaterials.warningTexture && !!state.skyDomeThemeSwap, state.realisticMaterials ? JSON.stringify({ materials: state.realisticMaterials, themeSwap: state.skyDomeThemeSwap }) : 'missing')
+  check("14m-9. lightweight darker realistic lighting is active", !!state.realisticLighting && !!state.realisticLighting.shadows && !!state.realisticLighting.dirCastsShadow && state.realisticLighting.shadowMapWidth <= 1024 && !!state.realisticLighting.outputEncoding && !!state.realisticLighting.toneMapping && state.realisticLighting.exposure <= 1, state.realisticLighting ? JSON.stringify(state.realisticLighting) : 'missing')
+  check("14m-10. scene theme distances are shorter", !!state.themeThresholds && state.themeThresholds.forest <= 300 && state.themeThresholds.desert <= 800 && state.themeThresholds.arctic <= 1400 && !!state.themeThresholdSwitch, state.themeThresholds ? JSON.stringify({ thresholds: state.themeThresholds, switch: state.themeThresholdSwitch }) : 'missing')
+  check("14m-11. rhythm music profile has layered beat parts", !!state.rhythmMusicProfile && state.rhythmMusicProfile.baseBpm >= 100 && state.rhythmMusicProfile.maxBpm >= 200 && !!state.rhythmMusicProfile.hasBackbeatSnare && !!state.rhythmMusicProfile.hasSyncopatedHats && !!state.rhythmMusicProfile.hasBassline && !!state.rhythmMusicProfile.hasLeadArp, state.rhythmMusicProfile ? JSON.stringify(state.rhythmMusicProfile) : 'missing')
+  check("14n. character catalog loaded", state.characterCatalogCount >= 12, String(state.characterCatalogCount))
+  check("14o. character selector menu exists", !!state.characterSelector && !!state.charactersButton)
+  check("14p. character price follows unlock count", state.characterBuy && state.characterPrice === state.expectedCharacterPrice, `price=${state.characterPrice}, owned=${state.ownedCharacterCount}`)
+  check("14q. character modal renders large card grid", !!state.characterOverlay && !!state.characterPreviewCanvas && state.characterCards >= 12 && state.characterModalWidth > 800 && state.characterModalMaxWidth === 'none', `cards=${state.characterCards || 0}, width=${Math.round(state.characterModalWidth || 0)}, max=${state.characterModalMaxWidth || 'unset'}`)
+  check("14r. speed growth slowed per difficulty", Array.isArray(state.speedIncrements) && state.speedIncrements[0] < 0.0005 && state.speedIncrements[1] < 0.0005 && state.speedIncrements[2] < 0.0005, state.speedIncrements ? state.speedIncrements.join(', ') : 'missing')
+  const speedLevelsOk = state.speedLevels && state.speedLevels.length === 3 &&
+    state.speedLevels[0].roundtrip === 1 &&
+    state.speedLevels[1].roundtrip >= 25 &&
+    state.speedLevels[2].roundtrip === 50 &&
+    state.speedLevels[0].distanceRate < state.speedLevels[1].distanceRate &&
+    state.speedLevels[1].distanceRate < state.speedLevels[2].distanceRate
+  check("14s. distance rate scales with speed level", speedLevelsOk, state.speedLevels ? JSON.stringify(state.speedLevels) : 'missing')
+  check("14t. cyber mode reset restores normal mode", !!state.cyberReset)
+  check("14u. non-runner hides Neo shoe overlays", !!state.nonRunnerShoeOverlayHidden)
 
   // -- applyGameData runtime test --
   try {
@@ -201,6 +1164,8 @@ app.whenReady().then(async () => {
           maxDistance: 100,
           ownedAbilities: [0, 1],
           equippedAbility: 1,
+          ownedCharacters: ['runner', 'adventurer'],
+          selectedCharacter: 'adventurer',
           runCount: 3
         })
         var s = window.__SG.state
@@ -209,7 +1174,9 @@ app.whenReady().then(async () => {
           credits: s.credits,
           totalCoins: s.totalCoins,
           maxEasy: s.maxEasy,
-          canDoubleJump: s.canDoubleJump
+          canDoubleJump: s.canDoubleJump,
+          selectedCharacter: s.selectedCharacter,
+          ownedCharacters: s.ownedCharacters
         })
       } catch(e) {
         return JSON.stringify({ ok: false, error: e.message })
@@ -221,6 +1188,8 @@ app.whenReady().then(async () => {
     check("17. state.totalCoins === 11", agd.totalCoins === 11, String(agd.totalCoins))
     check("18. state.maxEasy === 100", agd.maxEasy === 100, String(agd.maxEasy))
     check("19. state.canDoubleJump === true", agd.canDoubleJump === true, String(agd.canDoubleJump))
+    check("19b. selectedCharacter restored", agd.selectedCharacter === 'adventurer', String(agd.selectedCharacter))
+    check("19c. ownedCharacters restored", Array.isArray(agd.ownedCharacters) && agd.ownedCharacters.includes('adventurer'), Array.isArray(agd.ownedCharacters) ? agd.ownedCharacters.join(', ') : 'missing')
   } catch (err) {
     check("applyGameData runtime", false, err.message)
   }
@@ -262,15 +1231,17 @@ app.whenReady().then(async () => {
   // ── Environment variable check ─────────────────────
   console.log('')
   console.log('  ── Environment config check ──')
-  const envUrl = process.env.SUBWAY_API_BASE_URL || ''
-  check('SUBWAY_API_BASE_URL env (info)', true, envUrl || '(not set)')
+  const envUrl = process.env.ENDLESS_RUNNER_API_BASE_URL || process.env.SUBWAY_API_BASE_URL || ''
+  check('ENDLESS_RUNNER_API_BASE_URL env (info)', true, envUrl || '(not set)')
   if (envUrl) {
-    check('4d. __SUBWAY_CONFIG__.API_BASE_URL matches env', state.apiBaseUrl === envUrl, state.apiBaseUrl)
+    check('4d. __ENDLESS_RUNNER_CONFIG__.API_BASE_URL matches env', state.apiBaseUrl === envUrl, state.apiBaseUrl)
+    check('4d-legacy. __SUBWAY_CONFIG__.API_BASE_URL matches env', state.legacyApiBaseUrl === envUrl, state.legacyApiBaseUrl)
     check('5c. SG.apiBaseUrl matches env', state.sgApiBaseUrl === envUrl, state.sgApiBaseUrl)
   } else {
     // No env var → should use production default
     const prodUrl = 'http://35.212.200.85:3000'
     check('4d. API_BASE_URL defaults to production', state.apiBaseUrl === prodUrl, state.apiBaseUrl || 'undefined')
+    check('4d-legacy. legacy API_BASE_URL defaults to production', state.legacyApiBaseUrl === prodUrl, state.legacyApiBaseUrl || 'undefined')
     check('5c. SG.apiBaseUrl defaults to production', state.sgApiBaseUrl === prodUrl, state.sgApiBaseUrl || 'undefined')
   }
 

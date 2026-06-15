@@ -1,5 +1,5 @@
 /* ============================================================
-   SUBWAY SURFER — Neo Edition  ·  Phase 10A UI Redesign
+   ENDLESS RUNNER — Neo Edition  ·  Phase 10A UI Redesign
    Modern dark · glassmorphism · cyan/blue accent · bento · sidebar
    ============================================================ */
 
@@ -128,11 +128,11 @@ canvas {
     background: none !important;
 }
 
-/* ----- Speed (top left, next to pause) ----- */
+/* ----- Speed / skill / jetpack stack (top right) ----- */
 #speed-indicator {
     position: absolute;
-    top: 18px;
-    left: 70px;
+    top: 60px;
+    right: 16px;
     color: var(--text);
     font-size: 12px;
     font-weight: 700;
@@ -149,7 +149,7 @@ canvas {
 /* ----- Skill + jetpack timer (top right stack) ----- */
 #skill-indicator {
     position: absolute !important;
-    top: 64px !important;
+    top: 90px !important;
     right: 16px !important;
     color: var(--gold) !important;
     font-size: 12px !important;
@@ -165,7 +165,7 @@ canvas {
 }
 #jetpack-timer {
     position: absolute !important;
-    top: 92px !important;
+    top: 120px !important;
     right: 16px !important;
     color: var(--cyan-soft) !important;
     font-size: 11px !important;
@@ -286,18 +286,48 @@ canvas {
     border: 1px solid var(--glass-border-hi);
     border-radius: var(--r-md);
     padding: 12px;
-    width: 320px;
+    width: min(560px, calc(100vw - 32px));
     pointer-events: auto;
     box-shadow: var(--shadow);
     backdrop-filter: blur(var(--glass-blur));
     -webkit-backdrop-filter: blur(var(--glass-blur));
+    flex-direction: column;
+    gap: 8px;
+}
+#console-output {
+    max-height: 180px;
+    overflow-y: auto;
+    color: var(--text-mid);
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    padding-right: 4px;
+}
+#console-output::-webkit-scrollbar { width: 6px; }
+#console-output::-webkit-scrollbar-thumb { background: var(--glass-border-hi); border-radius: 8px; }
+.console-line { white-space: pre-wrap; overflow-wrap: anywhere; }
+.console-line.cmd { color: var(--cyan-soft); }
+.console-line.ok { color: #86efac; }
+.console-line.err { color: #fb7185; }
+.console-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-top: 1px solid var(--glass-border);
+    padding-top: 8px;
+}
+.console-prompt {
+    color: var(--cyan);
+    font-family: Consolas, 'Courier New', monospace;
+    font-weight: 800;
 }
 #dev-console input {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     background: transparent;
     border: none;
     color: var(--cyan);
-    font-family: monospace;
+    font-family: Consolas, 'Courier New', monospace;
     font-size: 16px;
     outline: none;
     padding: 4px;
@@ -715,6 +745,102 @@ canvas {
 .shop-card .shop-desc { font-size: 12px; color: var(--text-mid); margin-top: 2px; line-height: 1.4; }
 
 /* ============================================================
+   CHARACTER SELECTOR
+   ============================================================ */
+.character-modal {
+    width: min(1180px, 97vw);
+    max-width: none;
+    box-sizing: border-box;
+    padding: 22px 26px;
+    max-height: 94vh;
+    overflow: hidden;
+}
+.character-credit-line {
+    color: var(--gold);
+    font-size: 18px;
+    font-weight: 800;
+    margin-bottom: 14px;
+}
+.character-layout {
+    display: grid;
+    grid-template-columns: minmax(360px, 0.9fr) minmax(600px, 1.25fr);
+    gap: 16px;
+    align-items: stretch;
+}
+.character-preview-wrap {
+    min-height: min(680px, calc(94vh - 180px));
+    background: rgba(7, 13, 24, 0.52);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--r-md);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+#character-preview-canvas {
+    width: 100%;
+    height: min(610px, calc(94vh - 245px));
+    min-height: 460px;
+    display: block;
+}
+#character-preview-name {
+    padding: 12px 14px;
+    color: var(--text-hi);
+    font-weight: 800;
+    border-top: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.03);
+}
+.character-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 8px;
+    max-height: none;
+    overflow: visible;
+    padding-right: 4px;
+}
+.character-list::-webkit-scrollbar { width: 6px; }
+.character-list::-webkit-scrollbar-thumb { background: var(--glass-border-hi); border-radius: 8px; }
+.character-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 58px;
+    padding: 9px 11px;
+    background: var(--card);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--r-md);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.18s, transform 0.18s, box-shadow 0.18s;
+}
+.character-card:hover {
+    border-color: var(--glass-border-hi);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px var(--glow-cyan-soft);
+}
+.character-card.owned { border-color: rgba(52, 211, 153, 0.28); }
+.character-card.selected { border-color: rgba(250, 204, 21, 0.55); }
+.character-info { flex: 1; min-width: 0; }
+.character-name { font-size: 15px; color: var(--text-hi); font-weight: 800; }
+.character-desc { font-size: 12px; color: var(--text-mid); line-height: 1.35; margin-top: 2px; }
+.character-card .diff-btn {
+    flex: 0 0 auto;
+    min-width: 92px;
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
+@media (max-height: 720px) and (min-width: 769px) {
+    .character-modal { padding: 14px 18px; }
+    .character-credit-line { margin-bottom: 8px; font-size: 15px; }
+    .character-layout { grid-template-columns: minmax(300px, 0.75fr) minmax(520px, 1.25fr); gap: 12px; }
+    .character-preview-wrap { min-height: 300px; }
+    #character-preview-canvas { height: 260px; min-height: 260px; }
+    .character-card { min-height: 44px; padding: 7px 9px; }
+    .character-desc { display: none; }
+    .character-card .diff-btn { min-width: 78px; padding: 5px 8px; font-size: 10px; }
+}
+
+/* ============================================================
    LEADERBOARD TABLE
    ============================================================ */
 .lb-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
@@ -885,15 +1011,20 @@ input[type=range]::-moz-range-thumb {
     .menu-content { padding: 26px 22px; }
     .bento-grid { grid-template-columns: 1fr; }
     .bento-card.span-2 { grid-column: span 1; }
+    .character-layout { grid-template-columns: 1fr; }
+    .character-modal { overflow-y: auto; max-height: 94vh; max-width: none; }
+    .character-preview-wrap { min-height: 300px; }
+    #character-preview-canvas { height: 260px; min-height: 260px; }
+    .character-list { grid-template-columns: 1fr; max-height: none; overflow: visible; }
     #score-display { font-size: 17px; padding: 6px 16px; top: 12px; gap: 10px; }
     #pause-btn, #fpv-btn, #con-btn, #mute-btn { width: 36px; height: 36px; font-size: 16px; line-height: 36px; top: 12px; }
     #pause-btn { left: 12px; }
     #mute-btn { left: 58px !important; width: 36px !important; height: 36px !important; line-height: 36px !important; }
     #fpv-btn { right: 12px; }
     #con-btn { right: 54px; }
-    #speed-indicator { top: 14px; left: 56px; font-size: 10px; padding: 4px 10px; }
-    #skill-indicator { top: 56px !important; right: 12px !important; font-size: 10px !important; }
-    #jetpack-timer { top: 80px !important; right: 12px !important; font-size: 9px !important; }
+    #speed-indicator { top: 54px; right: 12px; left: auto; font-size: 10px; padding: 4px 10px; }
+    #skill-indicator { top: 80px !important; right: 12px !important; font-size: 10px !important; }
+    #jetpack-timer { top: 106px !important; right: 12px !important; font-size: 9px !important; }
     #game-over-screen h1 { font-size: 38px; }
     .m-btn { width: 52px; height: 52px; font-size: 19px; }
     .m-row { gap: 42px; }
@@ -914,7 +1045,9 @@ input[type=range]::-moz-range-thumb {
     #mute-btn { left: 46px !important; width: 32px !important; height: 32px !important; line-height: 32px !important; }
     #fpv-btn { right: 8px; }
     #con-btn { right: 44px; }
-    #speed-indicator { top: 9px; left: 46px; font-size: 9px; padding: 3px 8px; }
+    #speed-indicator { top: 46px; right: 8px; left: auto; font-size: 9px; padding: 3px 8px; }
+    #skill-indicator { top: 70px !important; right: 8px !important; }
+    #jetpack-timer { top: 94px !important; right: 8px !important; }
     #mobile-controls { bottom: 14px; }
     .m-btn { width: 46px; height: 46px; font-size: 17px; }
     .m-row { gap: 32px; }

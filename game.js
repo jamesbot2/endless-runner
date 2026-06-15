@@ -1,4 +1,5 @@
-// ===== SUBWAY SURFER - Constants =====
+// ===== ENDLESS RUNNER - Constants =====
+// ===== ENDLESS RUNNER - Constants =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -9,6 +10,7 @@
     SG.START_SPEED = 0.35;
     SG.MAX_SPEED = 2.25;
     SG.SPEED_INCREMENT = 0.0005;
+    SG.SPEED_INCREMENT_BY_DIFFICULTY = [0.00012, 0.00016, 0.00022];
     SG.TRACK_SEGMENT_LENGTH = 24;
     SG.SPAWN_AHEAD = 200;
     SG.DESPAWN_BEHIND = 30;
@@ -19,12 +21,35 @@
     SG.ROLL_HEIGHT = 0;
     SG.COIN_RADIUS = 0.35;
     SG.GROUND_WIDTH = SG.LANE_WIDTH * SG.LANE_COUNT + 1;
-    SG.JETPACK_FUEL_MAX = 30;
-    SG.JETPACK_COOLDOWN_MAX = 15;
+    SG.JETPACK_FUEL_MAX = 15;
+    SG.JETPACK_COOLDOWN_MAX = 30;
     SG.JETPACK_LIFT = 0.04;
+    SG.JETPACK_MAX_HEIGHT = 4.2;
     SG.ROOF_TOP_Y = 1.8;
+
+    SG.getDifficultySpeedIncrement = function() {
+        var d = SG.state ? SG.state.difficulty : 2;
+        return SG.SPEED_INCREMENT_BY_DIFFICULTY[d] || SG.SPEED_INCREMENT_BY_DIFFICULTY[2] || SG.SPEED_INCREMENT;
+    };
+
+    SG.speedForLevel = function(level) {
+        var clamped = Math.max(1, Math.min(50, parseInt(level, 10) || 1));
+        return SG.START_SPEED + (SG.MAX_SPEED - SG.START_SPEED) * ((clamped - 1) / 49);
+    };
+
+    SG.getSpeedLevel = function(speed) {
+        var s = typeof speed === 'number' ? speed : (SG.state ? SG.state.speed : SG.START_SPEED);
+        return Math.max(1, Math.min(50, Math.floor((s - SG.START_SPEED) / (SG.MAX_SPEED - SG.START_SPEED) * 49) + 1));
+    };
+
+    SG.getDistanceRate = function(speed) {
+        var s = typeof speed === 'number' ? speed : (SG.state ? SG.state.speed : SG.START_SPEED);
+        return s * 10;
+    };
 })();
-// ===== SUBWAY SURFER - Game State =====
+
+// ===== ENDLESS RUNNER - State =====
+// ===== ENDLESS RUNNER - Game State =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -43,12 +68,15 @@
         running: true,
         playerHeight: SG.PLAYER_Y || 0.15,
         targetPlayerHeight: SG.PLAYER_Y || 0.15,
+        instantSpeedMps: 0,
+        _speedSample: null,
         lastObstacleZ: 0,
         minObstacleGap: 30,
         obstacleTimer: 0,
         trackSegments: [],
         obstacles: [],
         coinObjects: [],
+        gunPickups: [],
         coinObstacleMap: new Map(),
         buildings: [],
         particles: [],
@@ -58,6 +86,7 @@
         instructionTimer: 8,
         hasStartedTouch: false,
         started: false,
+        countdownActive: false,
         paused: false,
         startLaneX: 0,
         bestScore: parseInt(localStorage.getItem('subwayBest') || '0'),
@@ -71,6 +100,18 @@
         muted: false,
         musicVolume: parseFloat(localStorage.getItem('subwayMusicVol') || '0.5'),
         sfxVolume: parseFloat(localStorage.getItem('subwaySfxVol') || '0.8'),
+        rollReleaseDelay: parseInt(localStorage.getItem('subwayRollReleaseDelay') || '200'),
+        thirdPersonView: localStorage.getItem('subwayThirdPersonView') || 'near',
+        firstPersonPitchDeg: Math.max(-5, Math.min(5, parseFloat(localStorage.getItem('subwayFirstPersonPitchDeg') || '1'))),
+        pvpMode: false,
+        pvpRoom: null,
+        pvpCountdownSeconds: 10,
+        pvpGhosts: [],
+        pvpOpponents: [],
+        pvpSpectating: false,
+        pvpSpectateIndex: 0,
+        pvpLocalDead: false,
+        pvpResult: null,
         lastPlayedCoin: 0,
         credits: parseInt(localStorage.getItem('subwayCredits') || '0'),
         totalCoins: parseInt(localStorage.getItem('subwayTotalCoins') || '0'),
@@ -80,6 +121,10 @@
         canJetpack: false,
         jetpackFuel: 0,
         jetpackCooldown: 0,
+        activeGun: null,
+        gunTimer: 0,
+        gunShotCooldown: 0,
+        gunSpawnTimer: 6,
         canRoofWalk: false,
         theme: 0,
         jumpingFromRoof: false,
@@ -98,16 +143,33 @@
         maxMediumAbility: 0,
         maxHardAbility: 0,
         legitRun: true,
-        runCount: 0
+        runCount: 0,
+        selectedCharacter: localStorage.getItem('subwaySelectedCharacter') || 'runner',
+        ownedCharacters: ['runner']
     };
 })();
-// ===== SUBWAY SURFER - Audio System =====
+
+// ===== ENDLESS RUNNER - Audio =====
+// ===== ENDLESS RUNNER - Audio System =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
     const THREE = window.THREE;
 
     SG.audioCtx = null;
+    SG.homelanderAudioPaths = SG.homelanderAudioPaths || {
+        theme: 'audio/homelander-theme.mp3',
+        voice: 'audio/im-better-homelander.mp3'
+    };
+    SG.homelanderThemeAudio = null;
+    SG.homelanderVoiceAudio = null;
+    SG.homelanderVoiceSource = null;
+    SG.homelanderVoiceGain = null;
+    SG.HOMELANDER_VOICE_GAIN = 4.4;
+    SG.pendingHomelanderVoice = false;
+    SG.pvpCountdownAudioPath = SG.pvpCountdownAudioPath || 'audio/countdown-from-10.mp3';
+    SG.pvpCountdownAudio = null;
+    SG.PVP_COUNTDOWN_AUDIO_OFFSET = SG.PVP_COUNTDOWN_AUDIO_OFFSET || 0;
 
     SG.initAudio = function() {
         try {
@@ -262,6 +324,15 @@
         currentOscs: []
     };
 
+    SG.rhythmMusicProfile = {
+        baseBpm: 108,
+        maxBpm: 218,
+        hasBackbeatSnare: true,
+        hasSyncopatedHats: true,
+        hasBassline: true,
+        hasLeadArp: true
+    };
+
     SG.startBgMusic = function() {
         if (SG.state.muted || !SG.audioCtx || SG.bgMusicState.running) return;
         SG.bgMusicState.running = true;
@@ -277,13 +348,196 @@
         SG.bgMusicState.currentOscs = [];
     };
 
+    function rememberMusicNode(node, ttlMs) {
+        SG.bgMusicState.currentOscs.push(node);
+        setTimeout(function() {
+            var idx = SG.bgMusicState.currentOscs.indexOf(node);
+            if (idx >= 0) SG.bgMusicState.currentOscs.splice(idx, 1);
+        }, ttlMs || 500);
+    }
+
+    function musicVolume(scale) {
+        var v = typeof SG.state.musicVolume === 'number' ? SG.state.musicVolume : 0.5;
+        return Math.max(0, Math.min(1, v)) * scale;
+    }
+
+    function playOscHit(type, freqA, freqB, gainValue, start, duration) {
+        var ctx = SG.audioCtx;
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = type;
+        osc.frequency.setValueAtTime(freqA, start);
+        if (freqB) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqB), start + duration * 0.72);
+        gain.gain.setValueAtTime(musicVolume(gainValue), start);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+        osc.start(start);
+        osc.stop(start + duration + 0.02);
+        rememberMusicNode(osc, (duration + 0.1) * 1000);
+    }
+
+    function playNoiseHit(start, duration, gainValue, filterFreq, filterType) {
+        var ctx = SG.audioCtx;
+        var bufferSize = Math.max(1, Math.floor(ctx.sampleRate * duration));
+        var buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        var data = buffer.getChannelData(0);
+        for (var i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2.1);
+        }
+        var src = ctx.createBufferSource();
+        var filter = ctx.createBiquadFilter();
+        var gain = ctx.createGain();
+        filter.type = filterType || 'highpass';
+        filter.frequency.setValueAtTime(filterFreq || 2800, start);
+        src.buffer = buffer;
+        src.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+        gain.gain.setValueAtTime(musicVolume(gainValue), start);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+        src.start(start);
+        src.stop(start + duration + 0.01);
+        rememberMusicNode(src, (duration + 0.1) * 1000);
+    }
+
+    SG.ensureHomelanderAudio = function() {
+        if (!SG.homelanderThemeAudio && typeof Audio !== 'undefined') {
+            SG.homelanderThemeAudio = new Audio(SG.homelanderAudioPaths.theme);
+            SG.homelanderThemeAudio.loop = true;
+            SG.homelanderThemeAudio.preload = 'auto';
+        }
+        if (!SG.homelanderVoiceAudio && typeof Audio !== 'undefined') {
+            SG.homelanderVoiceAudio = new Audio(SG.homelanderAudioPaths.voice);
+            SG.homelanderVoiceAudio.loop = false;
+            SG.homelanderVoiceAudio.preload = 'auto';
+        }
+        if (SG.audioCtx && SG.homelanderVoiceAudio && !SG.homelanderVoiceSource) {
+            try {
+                SG.homelanderVoiceSource = SG.audioCtx.createMediaElementSource(SG.homelanderVoiceAudio);
+                SG.homelanderVoiceGain = SG.audioCtx.createGain();
+                SG.homelanderVoiceSource.connect(SG.homelanderVoiceGain);
+                SG.homelanderVoiceGain.connect(SG.audioCtx.destination);
+            } catch(e) {
+                SG.homelanderVoiceSource = null;
+                SG.homelanderVoiceGain = null;
+            }
+        }
+    };
+
+    SG.updateHomelanderAudioVolume = function() {
+        var music = typeof SG.state.musicVolume === 'number' ? SG.state.musicVolume : 0.5;
+        var sfx = typeof SG.state.sfxVolume === 'number' ? SG.state.sfxVolume : 0.8;
+        if (SG.homelanderThemeAudio) {
+            SG.homelanderThemeAudio.volume = SG.state.muted ? 0 : Math.min(1, Math.max(0, music * 0.65));
+        }
+        if (SG.homelanderVoiceAudio) {
+            SG.homelanderVoiceAudio.volume = SG.state.muted ? 0 : 1;
+        }
+        if (SG.homelanderVoiceGain) {
+            SG.homelanderVoiceGain.gain.value = SG.state.muted ? 0 : Math.min(5.0, Math.max(2.8, sfx * SG.HOMELANDER_VOICE_GAIN));
+        }
+    };
+
+    SG.startHomelanderTheme = function() {
+        SG.ensureHomelanderAudio();
+        SG.updateHomelanderAudioVolume();
+        if (SG.stopBgMusic) SG.stopBgMusic();
+        if (!SG.homelanderThemeAudio || SG.state.muted) return;
+        try {
+            SG.homelanderThemeAudio.currentTime = 0;
+            var p = SG.homelanderThemeAudio.play();
+            if (p && p.catch) p.catch(function() {});
+        } catch(e) {}
+    };
+
+    SG.stopHomelanderTheme = function() {
+        if (!SG.homelanderThemeAudio) return;
+        try {
+            SG.homelanderThemeAudio.pause();
+            SG.homelanderThemeAudio.currentTime = 0;
+        } catch(e) {}
+    };
+
+    SG.playPendingHomelanderVoice = function() {
+        if (!SG.pendingHomelanderVoice) return;
+        SG.pendingHomelanderVoice = false;
+        if (!SG.audioCtx && SG.initAudio) SG.initAudio();
+        if (SG.audioCtx && SG.audioCtx.state === 'suspended') SG.audioCtx.resume().catch(function() {});
+        SG.ensureHomelanderAudio();
+        SG.updateHomelanderAudioVolume();
+        if (!SG.homelanderVoiceAudio || SG.state.muted) return;
+        try {
+            SG.homelanderVoiceAudio.pause();
+            SG.homelanderVoiceAudio.currentTime = 0;
+            var p = SG.homelanderVoiceAudio.play();
+            if (p && p.catch) p.catch(function() {});
+        } catch(e) {}
+    };
+
+    SG.stopHomelanderAudio = function() {
+        SG.pendingHomelanderVoice = false;
+        SG.stopHomelanderTheme();
+        if (SG.homelanderVoiceAudio) {
+            try {
+                SG.homelanderVoiceAudio.pause();
+                SG.homelanderVoiceAudio.currentTime = 0;
+            } catch(e) {}
+        }
+    };
+
+    SG.ensurePvpCountdownAudio = function() {
+        if (SG.pvpCountdownAudio || typeof Audio === 'undefined') return;
+        SG.pvpCountdownAudio = new Audio(SG.pvpCountdownAudioPath);
+        SG.pvpCountdownAudio.loop = false;
+        SG.pvpCountdownAudio.preload = 'auto';
+    };
+
+    SG.updatePvpCountdownAudioVolume = function() {
+        if (!SG.pvpCountdownAudio) return;
+        var sfx = typeof SG.state.sfxVolume === 'number' ? SG.state.sfxVolume : 0.8;
+        SG.pvpCountdownAudio.volume = SG.state.muted ? 0 : Math.min(1, Math.max(0.22, sfx * 1.25));
+    };
+
+    SG.getPvpCountdownStepMs = function() {
+        SG.ensurePvpCountdownAudio();
+        var seconds = SG.state && SG.state.pvpCountdownSeconds ? SG.state.pvpCountdownSeconds : 10;
+        var duration = SG.pvpCountdownAudio && Number.isFinite(SG.pvpCountdownAudio.duration) ? SG.pvpCountdownAudio.duration : 0;
+        if (duration > 0) {
+            return Math.max(900, Math.min(1300, Math.round(duration * 1000 / seconds)));
+        }
+        return SG.PVP_COUNTDOWN_STEP_MS || 1100;
+    };
+
+    SG.playPvpCountdownVoice = function() {
+        SG.ensurePvpCountdownAudio();
+        SG.updatePvpCountdownAudioVolume();
+        if (!SG.pvpCountdownAudio || SG.state.muted) return;
+        try {
+            SG.pvpCountdownAudio.pause();
+            SG.pvpCountdownAudio.currentTime = SG.PVP_COUNTDOWN_AUDIO_OFFSET || 0;
+            var p = SG.pvpCountdownAudio.play();
+            if (p && p.catch) p.catch(function() {});
+        } catch(e) {}
+    };
+
+    SG.stopPvpCountdownVoice = function() {
+        if (!SG.pvpCountdownAudio) return;
+        try {
+            SG.pvpCountdownAudio.pause();
+            SG.pvpCountdownAudio.currentTime = 0;
+        } catch(e) {}
+    };
+
     SG.updateBgMusic = function(delta) {
         if (!SG.bgMusicState.running || !SG.audioCtx || SG.state.muted) return;
         if (SG.state.paused || !SG.state.started) return;
 
         var speedLevel = Math.floor((SG.state.speed - SG.START_SPEED) / (SG.MAX_SPEED - SG.START_SPEED) * 49) + 1;
-        var targetBpm = 100 + Math.min(speedLevel, 50) * 2;
-        SG.bgMusicState.tempo += (targetBpm - SG.bgMusicState.tempo) * 0.01;
+        speedLevel = Math.max(1, Math.min(speedLevel, 50));
+        var speedT = (speedLevel - 1) / 49;
+        var targetBpm = SG.rhythmMusicProfile.baseBpm + speedT * (SG.rhythmMusicProfile.maxBpm - SG.rhythmMusicProfile.baseBpm);
+        SG.bgMusicState.tempo += (targetBpm - SG.bgMusicState.tempo) * 0.05;
 
         var beatInterval = 60 / SG.bgMusicState.tempo;
         var now = SG.audioCtx.currentTime;
@@ -294,71 +548,355 @@
             var beat = SG.bgMusicState.beatCount;
 
             try {
-                if (beat % 2 === 0 || beat % 4 === 1) {
-                    var kick = SG.audioCtx.createOscillator();
-                    var kickGain = SG.audioCtx.createGain();
-                    kick.connect(kickGain);
-                    kickGain.connect(SG.audioCtx.destination);
-                    kick.type = 'sine';
-                    kick.frequency.setValueAtTime(150, now);
-                    kick.frequency.linearRampToValueAtTime(40, now + 0.1);
-                    kickGain.gain.setValueAtTime(0.35, now);
-                    kickGain.gain.linearRampToValueAtTime(0, now + 0.2);
-                    kick.start(now);
-                    kick.stop(now + 0.2);
-                    SG.bgMusicState.currentOscs.push(kick);
-                    setTimeout(function() {
-                        var idx = SG.bgMusicState.currentOscs.indexOf(kick);
-                        if (idx >= 0) SG.bgMusicState.currentOscs.splice(idx, 1);
-                    }, 300);
+                var step = beat % 8;
+                var sixteenth = beatInterval * 0.5;
+                var notes = [98, 123.47, 110, 146.83, 98, 130.81, 110, 164.81];
+                var bassNote = notes[beat % notes.length];
+
+                if (step === 1 || step === 5 || step === 0 || (speedLevel > 28 && step === 3)) {
+                    playOscHit('sine', 165, 42, 0.54, now, 0.18);
                 }
 
-                if (SG.state.speed > SG.START_SPEED * 2 || beat % 2 === 0) {
-                    var hatGain = SG.audioCtx.createGain();
-                    hatGain.connect(SG.audioCtx.destination);
-                    var hat = SG.audioCtx.createOscillator();
-                    hat.connect(hatGain);
-                    hat.type = 'square';
-                    hat.frequency.setValueAtTime(5000, now);
-                    hatGain.gain.setValueAtTime(0.12, now);
-                    hatGain.gain.linearRampToValueAtTime(0, now + 0.04);
-                    hat.start(now);
-                    hat.stop(now + 0.04);
-                    SG.bgMusicState.currentOscs.push(hat);
-                    setTimeout(function() {
-                        var idx = SG.bgMusicState.currentOscs.indexOf(hat);
-                        if (idx >= 0) SG.bgMusicState.currentOscs.splice(idx, 1);
-                    }, 100);
+                if (step === 3 || step === 7) {
+                    playNoiseHit(now, 0.12, 0.25, 1600, 'bandpass');
+                    playOscHit('triangle', 220, 165, 0.08, now, 0.1);
                 }
 
-                if (beat % 4 === 0) {
-                    var bass = SG.audioCtx.createOscillator();
-                    var bassGain = SG.audioCtx.createGain();
-                    bass.connect(bassGain);
-                    bassGain.connect(SG.audioCtx.destination);
-                    bass.type = 'sawtooth';
-                    var notes = [110, 130.8, 110, 146.8];
-                    var note = notes[Math.floor(beat / 4) % 4];
-                    bass.frequency.setValueAtTime(note, now);
-                    bassGain.gain.setValueAtTime(0.15, now);
-                    bassGain.gain.linearRampToValueAtTime(0, now + 0.3);
-                    bass.start(now);
-                    bass.stop(now + 0.3);
-                    SG.bgMusicState.currentOscs.push(bass);
-                    setTimeout(function() {
-                        var idx = SG.bgMusicState.currentOscs.indexOf(bass);
-                        if (idx >= 0) SG.bgMusicState.currentOscs.splice(idx, 1);
-                    }, 400);
+                playNoiseHit(now, 0.035, speedLevel > 20 ? 0.11 : 0.075, 5200, 'highpass');
+                if (SG.rhythmMusicProfile.hasSyncopatedHats && (speedLevel > 10 || beat % 2 === 0)) {
+                    playNoiseHit(now + sixteenth, 0.026, speedLevel > 32 ? 0.085 : 0.05, 7200, 'highpass');
+                }
+
+                if (SG.rhythmMusicProfile.hasBassline) {
+                    playOscHit('sawtooth', bassNote, bassNote * 0.995, 0.16, now, beatInterval * 0.82);
+                }
+
+                if (SG.rhythmMusicProfile.hasLeadArp && speedLevel > 14 && beat % 2 === 0) {
+                    var leadNotes = [392, 493.88, 587.33, 659.25, 783.99, 659.25, 587.33, 493.88];
+                    var lead = leadNotes[Math.floor(beat / 2) % leadNotes.length];
+                    playOscHit('square', lead, lead * 1.01, speedLevel > 34 ? 0.045 : 0.025, now + beatInterval * 0.25, 0.08);
                 }
             } catch(e) {}
         }
     };
 })();
-// ===== SUBWAY SURFER - Textures =====
+
+// ===== ENDLESS RUNNER - Textures =====
+// ===== ENDLESS RUNNER - Textures =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
     const THREE = window.THREE;
+
+    SG.textureCanvases = SG.textureCanvases || {};
+
+    function hashNoise(x, y, seed) {
+        var n = Math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453;
+        return n - Math.floor(n);
+    }
+
+    function makeCanvas(key, width, height, painter) {
+        if (!SG.textureCanvases[key]) {
+            var canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            painter(canvas.getContext('2d'), width, height);
+            SG.textureCanvases[key] = canvas;
+        }
+        return SG.textureCanvases[key];
+    }
+
+    function createTextureFromCanvas(canvas, repeatX, repeatY) {
+        var texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(repeatX || 1, repeatY || 1);
+        texture.minFilter = THREE.LinearMipMapLinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.needsUpdate = true;
+        return texture;
+    }
+
+    SG.createAsphaltTexture = function(repeatX, repeatY) {
+        var canvas = makeCanvas('asphalt-v1', 512, 512, function(ctx, w, h) {
+            var base = ctx.createLinearGradient(0, 0, w, h);
+            base.addColorStop(0, '#34363a');
+            base.addColorStop(0.5, '#24262a');
+            base.addColorStop(1, '#3c3d40');
+            ctx.fillStyle = base;
+            ctx.fillRect(0, 0, w, h);
+
+            var img = ctx.getImageData(0, 0, w, h);
+            for (var i = 0; i < img.data.length; i += 4) {
+                var px = (i / 4) % w;
+                var py = Math.floor((i / 4) / w);
+                var n = hashNoise(px, py, 3) * 34 - 17;
+                img.data[i] = Math.max(12, Math.min(82, img.data[i] + n));
+                img.data[i + 1] = Math.max(12, Math.min(82, img.data[i + 1] + n));
+                img.data[i + 2] = Math.max(14, Math.min(88, img.data[i + 2] + n));
+            }
+            ctx.putImageData(img, 0, 0);
+
+            ctx.globalAlpha = 0.34;
+            ctx.strokeStyle = '#0f1012';
+            ctx.lineWidth = 2;
+            for (var c = 0; c < 18; c++) {
+                var x = hashNoise(c, 2, 9) * w;
+                var y = hashNoise(c, 5, 9) * h;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                for (var step = 0; step < 7; step++) {
+                    x += (hashNoise(c, step, 14) - 0.5) * 58;
+                    y += 28 + hashNoise(step, c, 15) * 34;
+                    ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+
+            ctx.globalAlpha = 0.16;
+            ctx.fillStyle = '#060708';
+            for (var t = 0; t < 7; t++) {
+                var sx = 88 + t * 46 + hashNoise(t, 1, 22) * 18;
+                ctx.fillRect(sx, 0, 5 + hashNoise(t, 2, 22) * 7, h);
+            }
+            ctx.globalAlpha = 1;
+        });
+        return createTextureFromCanvas(canvas, repeatX || 1.2, repeatY || 5);
+    };
+
+    SG.createConcreteTexture = function(repeatX, repeatY) {
+        var canvas = makeCanvas('concrete-v1', 384, 384, function(ctx, w, h) {
+            ctx.fillStyle = '#707276';
+            ctx.fillRect(0, 0, w, h);
+            var img = ctx.getImageData(0, 0, w, h);
+            for (var i = 0; i < img.data.length; i += 4) {
+                var px = (i / 4) % w;
+                var py = Math.floor((i / 4) / w);
+                var n = hashNoise(px, py, 42) * 48 - 24;
+                img.data[i] = Math.max(65, Math.min(150, img.data[i] + n));
+                img.data[i + 1] = Math.max(65, Math.min(150, img.data[i + 1] + n));
+                img.data[i + 2] = Math.max(68, Math.min(155, img.data[i + 2] + n));
+            }
+            ctx.putImageData(img, 0, 0);
+            ctx.globalAlpha = 0.24;
+            ctx.strokeStyle = '#33363a';
+            for (var y = 64; y < h; y += 96) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y + hashNoise(y, 0, 5) * 8 - 4);
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+        });
+        return createTextureFromCanvas(canvas, repeatX || 1, repeatY || 3);
+    };
+
+    SG.createLanePaintTexture = function(repeatX, repeatY) {
+        var canvas = makeCanvas('lane-paint-v1', 128, 512, function(ctx, w, h) {
+            ctx.clearRect(0, 0, w, h);
+            ctx.fillStyle = '#b7bbc0';
+            ctx.fillRect(22, 0, w - 44, h);
+            ctx.globalCompositeOperation = 'destination-out';
+            for (var i = 0; i < 85; i++) {
+                ctx.globalAlpha = 0.08 + hashNoise(i, 1, 7) * 0.18;
+                ctx.beginPath();
+                ctx.arc(22 + hashNoise(i, 2, 7) * (w - 44), hashNoise(i, 3, 7) * h, 1 + hashNoise(i, 4, 7) * 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.globalAlpha = 1;
+        });
+        return createTextureFromCanvas(canvas, repeatX || 1, repeatY || 4);
+    };
+
+    SG.createWarningStripeTexture = function(repeatX, repeatY) {
+        var canvas = makeCanvas('warning-stripe-v1', 256, 256, function(ctx, w, h) {
+            ctx.fillStyle = '#ff7a18';
+            ctx.fillRect(0, 0, w, h);
+            ctx.fillStyle = '#17191d';
+            for (var x = -w; x < w * 2; x += 58) {
+                ctx.save();
+                ctx.translate(x, 0);
+                ctx.rotate(-Math.PI / 4);
+                ctx.fillRect(-18, -w, 28, h * 3);
+                ctx.restore();
+            }
+            ctx.globalAlpha = 0.18;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, 24);
+            ctx.globalAlpha = 0.14;
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, h - 38, w, 38);
+            ctx.globalAlpha = 1;
+        });
+        return createTextureFromCanvas(canvas, repeatX || 2, repeatY || 1);
+    };
+
+    SG.createMetalTexture = function(repeatX, repeatY) {
+        var canvas = makeCanvas('brushed-metal-v1', 384, 384, function(ctx, w, h) {
+            var grad = ctx.createLinearGradient(0, 0, w, 0);
+            grad.addColorStop(0, '#394049');
+            grad.addColorStop(0.5, '#777f88');
+            grad.addColorStop(1, '#30363f');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+            ctx.globalAlpha = 0.22;
+            for (var y = 0; y < h; y += 3) {
+                ctx.strokeStyle = hashNoise(y, 0, 11) > 0.5 ? '#c7ccd2' : '#15191e';
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y + hashNoise(y, 3, 11) * 2);
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+        });
+        return createTextureFromCanvas(canvas, repeatX || 1, repeatY || 2);
+    };
+
+    SG.createTrackGroundMaterial = function() {
+        return new THREE.MeshLambertMaterial({ color: 0xffffff, map: SG.createAsphaltTexture(1.6, 8) });
+    };
+
+    SG.createLanePaintMaterial = function() {
+        return new THREE.MeshBasicMaterial({ color: 0xd6d7d8, map: SG.createLanePaintTexture(1, 6), transparent: true });
+    };
+
+    SG.createCurbMaterial = function() {
+        return new THREE.MeshLambertMaterial({ color: 0xffffff, map: SG.createConcreteTexture(1, 5) });
+    };
+
+    SG.createWarningPanelMaterial = function() {
+        return new THREE.MeshLambertMaterial({ color: 0xffffff, map: SG.createWarningStripeTexture(2, 1) });
+    };
+
+    SG.createDarkMetalMaterial = function() {
+        return new THREE.MeshLambertMaterial({ color: 0xb8c0c8, map: SG.createMetalTexture(1, 2) });
+    };
+
+    SG.skyCloudProfile = {
+        inSkyDome: true,
+        cloudCount: 34,
+        contrast: 'high',
+        runtimeMeshes: 0
+    };
+
+    SG.createSkyDomeTexture = function(themeIndex, mode) {
+        var key = 'sky-' + (mode || 'normal') + '-' + (themeIndex || 0);
+        var canvas = makeCanvas(key, 1024, 512, function(ctx, w, h) {
+            var top = '#3f9be0';
+            var mid = '#89cdf5';
+            var low = '#f2c992';
+            if (mode === 'cyber') {
+                top = '#03040a'; mid = '#111829'; low = '#371530';
+            } else if (themeIndex === 1) {
+                top = '#438fca'; mid = '#8bc7ed'; low = '#bad7aa';
+            } else if (themeIndex === 2) {
+                top = '#5c3d22'; mid = '#c77938'; low = '#f1b85f';
+            } else if (themeIndex === 3) {
+                top = '#080e1d'; mid = '#1a314d'; low = '#4a6173';
+            }
+            var grad = ctx.createLinearGradient(0, 0, 0, h);
+            grad.addColorStop(0, top);
+            grad.addColorStop(0.48, mid);
+            grad.addColorStop(1, low);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+
+            var sunX = mode === 'cyber' ? w * 0.72 : w * 0.18;
+            var sunY = mode === 'cyber' ? h * 0.34 : h * 0.28;
+            var sun = ctx.createRadialGradient(sunX, sunY, 4, sunX, sunY, w * 0.22);
+            sun.addColorStop(0, mode === 'cyber' ? 'rgba(255,50,130,0.95)' : 'rgba(255,245,205,0.95)');
+            sun.addColorStop(0.25, mode === 'cyber' ? 'rgba(255,30,90,0.28)' : 'rgba(255,226,166,0.28)');
+            sun.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = sun;
+            ctx.fillRect(0, 0, w, h);
+
+            var cloudTint = mode === 'cyber' ? '#c9f7ff' : (themeIndex === 2 ? '#fff0cf' : '#ffffff');
+            var cloudShadow = mode === 'cyber' ? '#472a72' : (themeIndex === 2 ? '#9a5d32' : '#5a91b7');
+            var cloudHighlight = mode === 'cyber' ? '#ff7df7' : '#ffffff';
+            var cloudCount = SG.skyCloudProfile.cloudCount;
+            for (var c = 0; c < cloudCount; c++) {
+                var cx = hashNoise(c, 1, themeIndex) * w;
+                var cy = h * (0.12 + hashNoise(c, 2, themeIndex) * 0.34);
+                var cw = 76 + hashNoise(c, 3, themeIndex) * 170;
+                var ch = 16 + hashNoise(c, 4, themeIndex) * 30;
+                ctx.globalAlpha = mode === 'cyber' ? 0.34 : 0.5;
+                ctx.fillStyle = cloudShadow;
+                ctx.beginPath();
+                ctx.ellipse(cx + cw * 0.08, cy + ch * 0.42, cw * 0.82, ch * 0.5, 0, 0, Math.PI * 2);
+                ctx.ellipse(cx - cw * 0.34, cy + ch * 0.48, cw * 0.44, ch * 0.42, 0, 0, Math.PI * 2);
+                ctx.ellipse(cx + cw * 0.42, cy + ch * 0.4, cw * 0.42, ch * 0.38, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.globalAlpha = mode === 'cyber' ? 0.56 : 0.74;
+                ctx.fillStyle = cloudTint;
+                ctx.beginPath();
+                ctx.ellipse(cx, cy, cw, ch, 0, 0, Math.PI * 2);
+                ctx.ellipse(cx - cw * 0.35, cy + ch * 0.02, cw * 0.58, ch * 0.9, 0, 0, Math.PI * 2);
+                ctx.ellipse(cx + cw * 0.32, cy - ch * 0.08, cw * 0.54, ch * 0.86, 0, 0, Math.PI * 2);
+                ctx.ellipse(cx - cw * 0.05, cy - ch * 0.28, cw * 0.36, ch * 0.7, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.globalAlpha = mode === 'cyber' ? 0.22 : 0.34;
+                ctx.fillStyle = cloudHighlight;
+                ctx.beginPath();
+                ctx.ellipse(cx - cw * 0.18, cy - ch * 0.32, cw * 0.36, ch * 0.38, 0, 0, Math.PI * 2);
+                ctx.ellipse(cx + cw * 0.2, cy - ch * 0.26, cw * 0.3, ch * 0.34, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = mode === 'cyber' ? 0.18 : 0.22;
+            ctx.fillStyle = mode === 'cyber' ? '#ff69f5' : (themeIndex === 2 ? '#ffd99a' : '#dcefff');
+            for (var band = 0; band < 9; band++) {
+                var bx = hashNoise(band, 20, themeIndex) * w;
+                var by = h * (0.5 + hashNoise(band, 21, themeIndex) * 0.16);
+                var bw = 190 + hashNoise(band, 22, themeIndex) * 250;
+                ctx.beginPath();
+                ctx.ellipse(bx, by, bw, 9 + hashNoise(band, 23, themeIndex) * 10, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = mode === 'cyber' ? 0.65 : 0.2;
+            ctx.fillStyle = mode === 'cyber' ? '#9de9ff' : '#ffffff';
+            for (var s = 0; s < (mode === 'cyber' ? 160 : 30); s++) {
+                var sx = hashNoise(s, 9, 4) * w;
+                var sy = hashNoise(s, 10, 4) * h * 0.58;
+                ctx.fillRect(sx, sy, 1.2, 1.2);
+            }
+            ctx.globalAlpha = 1;
+        });
+        var texture = new THREE.CanvasTexture(canvas);
+        texture.mapping = THREE.UVMapping;
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.needsUpdate = true;
+        return texture;
+    };
+
+    SG.createSkyDome = function() {
+        if (!THREE || !SG.scene || SG.skyDome) return;
+        var geo = new THREE.SphereGeometry(150, 48, 24);
+        var mat = new THREE.MeshBasicMaterial({
+            map: SG.createSkyDomeTexture(SG.state ? SG.state.theme : 0, 'normal'),
+            side: THREE.BackSide,
+            depthWrite: false,
+            fog: false
+        });
+        SG.skyDome = new THREE.Mesh(geo, mat);
+        SG.skyDome.name = 'realistic-sky-dome';
+        SG.skyDome.userData.skyKey = 'normal-' + (SG.state ? SG.state.theme : 0);
+        SG.skyDome.userData.clouds = true;
+        SG.skyDome.userData.cloudProfile = SG.skyCloudProfile;
+        SG.skyDome.renderOrder = -1000;
+        SG.scene.add(SG.skyDome);
+    };
+
+    SG.updateSkyDome = function(themeIndex, mode) {
+        if (!SG.skyDome || !SG.skyDome.material) return;
+        var oldMap = SG.skyDome.material.map;
+        SG.skyDome.material.map = SG.createSkyDomeTexture(themeIndex || 0, mode || 'normal');
+        SG.skyDome.material.needsUpdate = true;
+        SG.skyDome.userData.skyKey = (mode || 'normal') + '-' + (themeIndex || 0);
+        if (oldMap && oldMap.dispose) oldMap.dispose();
+    };
 
     SG.createUSFlagTexture = function() {
         var canvas = document.createElement('canvas');
@@ -418,7 +956,9 @@
         return texture;
     };
 })();
-// ===== SUBWAY SURFER - Scene Setup =====
+
+// ===== ENDLESS RUNNER - Scene =====
+// ===== ENDLESS RUNNER - Scene Setup =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -450,21 +990,64 @@
         SG.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
         SG.renderer.setSize(window.innerWidth, window.innerHeight);
         SG.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
+        SG.renderer.outputEncoding = THREE.sRGBEncoding;
+        SG.renderer.toneMapping = THREE.ReinhardToneMapping;
+        SG.renderer.toneMappingExposure = 0.96;
+        SG.renderer.shadowMap.enabled = true;
+        SG.renderer.shadowMap.type = THREE.BasicShadowMap;
         document.body.appendChild(SG.renderer.domElement);
 
-        SG.ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        SG.ambientLight = new THREE.AmbientLight(0xffffff, 0.38);
         SG.scene.add(SG.ambientLight);
 
-        var hemiLight = new THREE.HemisphereLight(0x87CEEB, 0x3a5a2a, 0.5);
-        SG.scene.add(hemiLight);
+        SG.hemiLight = new THREE.HemisphereLight(0xbfe7ff, 0x4b4033, 0.62);
+        SG.scene.add(SG.hemiLight);
 
-        var dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-        dirLight.position.set(10, 20, 5);
-        SG.scene.add(dirLight);
+        SG.dirLight = new THREE.DirectionalLight(0xfff2d2, 0.82);
+        SG.dirLight.position.set(-8, 16, 10);
+        SG.dirLight.castShadow = true;
+        SG.dirLight.shadow.mapSize.width = 1024;
+        SG.dirLight.shadow.mapSize.height = 1024;
+        SG.dirLight.shadow.camera.left = -12;
+        SG.dirLight.shadow.camera.right = 12;
+        SG.dirLight.shadow.camera.top = 16;
+        SG.dirLight.shadow.camera.bottom = -8;
+        SG.dirLight.shadow.camera.near = 2;
+        SG.dirLight.shadow.camera.far = 45;
+        SG.dirLight.shadow.bias = -0.0008;
+        SG.scene.add(SG.dirLight);
+
+        SG.realisticLightingProfile = {
+            shadows: true,
+            shadowMapSize: 1024,
+            toneMapping: 'Reinhard',
+            themeAware: true
+        };
+
+        if (SG.createSkyDome) SG.createSkyDome();
 
         SG.clock = new THREE.Clock();
 
         window.addEventListener('resize', SG.onResize);
+    };
+
+    SG.updateLightRigForTheme = function(themeIndex) {
+        if (!SG.ambientLight || !SG.hemiLight || !SG.dirLight) return;
+        var presets = [
+            { hemiSky: 0xbfe7ff, hemiGround: 0x4b4033, hemi: 0.62, sun: 0xfff2d2, sunPower: 0.82, pos: [-8, 16, 10], exposure: 0.96 },
+            { hemiSky: 0xd9f6d0, hemiGround: 0x314626, hemi: 0.66, sun: 0xf5ffd8, sunPower: 0.72, pos: [-6, 14, 8], exposure: 0.92 },
+            { hemiSky: 0xffd08a, hemiGround: 0x6a4726, hemi: 0.54, sun: 0xffcf7a, sunPower: 0.96, pos: [-10, 13, 5], exposure: 0.98 },
+            { hemiSky: 0xb5e7ff, hemiGround: 0x345066, hemi: 0.64, sun: 0xe9fbff, sunPower: 0.78, pos: [-7, 15, 12], exposure: 0.94 }
+        ];
+        var p = presets[Math.max(0, Math.min(3, themeIndex || 0))];
+        SG.ambientLight.intensity = 0.34;
+        SG.hemiLight.color.setHex(p.hemiSky);
+        SG.hemiLight.groundColor.setHex(p.hemiGround);
+        SG.hemiLight.intensity = p.hemi;
+        SG.dirLight.color.setHex(p.sun);
+        SG.dirLight.intensity = p.sunPower;
+        SG.dirLight.position.set(p.pos[0], p.pos[1], p.pos[2]);
+        if (SG.renderer) SG.renderer.toneMappingExposure = p.exposure;
     };
 
     SG.onResize = function() {
@@ -477,13 +1060,97 @@
         }
     };
 })();
-// ===== SUBWAY SURFER - Player =====
+
+// ===== ENDLESS RUNNER - Player =====
+// ===== ENDLESS RUNNER - Player =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
     const THREE = window.THREE;
 
     SG.playerModelPath = SG.playerModelPath || 'models/player.glb';
+    SG.jetpackModelPath = SG.jetpackModelPath || 'models/jetpack.glb';
+    SG.jetpackModelTuning = SG.jetpackModelTuning || {
+        targetHeight: 0.58,
+        rotationY: Math.PI,
+        yOffset: 0,
+        zOffset: 0
+    };
+    SG.characterCatalog = SG.characterCatalog || [
+        { id: 'runner', name: 'Neo Runner', path: 'models/player.glb', desc: 'Original endless runner' },
+        { id: 'adventurer', name: 'Adventurer', path: 'models/characters/Adventurer.gltf', desc: 'Backpack and field gear' },
+        { id: 'beach', name: 'Beach', path: 'models/characters/Beach.gltf', desc: 'Light summer outfit' },
+        { id: 'casual2', name: 'Casual 2', path: 'models/characters/Casual_2.gltf', desc: 'Street casual outfit' },
+        { id: 'hoodie', name: 'Hoodie', path: 'models/characters/Casual_Hoodie.gltf', desc: 'Casual hoodie outfit' },
+        { id: 'farmer', name: 'Farmer', path: 'models/characters/Farmer.gltf', desc: 'Workwear runner' },
+        { id: 'king', name: 'King', path: 'models/characters/King.gltf', desc: 'Royal outfit' },
+        { id: 'punk', name: 'Punk', path: 'models/characters/Punk.gltf', desc: 'High contrast punk outfit' },
+        { id: 'spacesuit', name: 'Spacesuit', path: 'models/characters/Spacesuit.gltf', desc: 'Space explorer suit' },
+        { id: 'suit', name: 'Suit', path: 'models/characters/Suit.gltf', desc: 'Formal runner' },
+        { id: 'swat', name: 'SWAT', path: 'models/characters/Swat.gltf', desc: 'Tactical outfit' },
+        { id: 'worker', name: 'Worker', path: 'models/characters/Worker.gltf', desc: 'Construction outfit' }
+    ];
+
+    function parseOwnedCharacters() {
+        try {
+            var saved = JSON.parse(localStorage.getItem('subwayOwnedCharacters') || '["runner"]');
+            if (Array.isArray(saved) && saved.length) return saved.indexOf('runner') >= 0 ? saved : ['runner'].concat(saved);
+        } catch(e) {}
+        return ['runner'];
+    }
+
+    function saveOwnedCharacters(owned) {
+        try { localStorage.setItem('subwayOwnedCharacters', JSON.stringify(owned)); } catch(e) {}
+    }
+
+    SG.getCharacterById = function(id) {
+        for (var i = 0; i < SG.characterCatalog.length; i++) {
+            if (SG.characterCatalog[i].id === id) return SG.characterCatalog[i];
+        }
+        return SG.characterCatalog[0];
+    };
+
+    SG.getOwnedCharacters = function() {
+        if (!Array.isArray(SG.state.ownedCharacters) || !SG.state.ownedCharacters.length) {
+            SG.state.ownedCharacters = parseOwnedCharacters();
+        }
+        return SG.state.ownedCharacters;
+    };
+
+    SG.characterIsOwned = function(id) {
+        return SG.getOwnedCharacters().indexOf(id) >= 0;
+    };
+
+    SG.getNextCharacterPrice = function() {
+        return Math.max(0, SG.getOwnedCharacters().length - 1) * 10000;
+    };
+
+    SG.selectCharacter = function(id) {
+        var character = SG.getCharacterById(id);
+        if (!character || !SG.characterIsOwned(character.id)) return false;
+        SG.state.selectedCharacter = character.id;
+        SG.playerModelPath = character.path;
+        try { localStorage.setItem('subwaySelectedCharacter', character.id); } catch(e) {}
+        if (SG.player) SG.reloadPlayerModel();
+        return true;
+    };
+
+    SG.buyCharacter = function(id) {
+        var character = SG.getCharacterById(id);
+        if (!character || SG.characterIsOwned(character.id)) return SG.selectCharacter(id);
+        var price = SG.getNextCharacterPrice();
+        if ((SG.state.credits || 0) < price) return false;
+        SG.state.credits -= price;
+        var owned = SG.getOwnedCharacters().slice();
+        owned.push(character.id);
+        SG.state.ownedCharacters = owned;
+        saveOwnedCharacters(owned);
+        SG.selectCharacter(character.id);
+        if (SG.updateMenuCredits) SG.updateMenuCredits();
+        if (SG.saveShopData) SG.saveShopData();
+        if (SG.accountSave) SG.accountSave();
+        return true;
+    };
 
     function rememberLegacyPart(part) {
         SG.playerLegacyParts = SG.playerLegacyParts || [];
@@ -495,6 +1162,13 @@
         var parts = SG.playerLegacyParts || [];
         for (var i = 0; i < parts.length; i++) {
             if (parts[i]) parts[i].visible = false;
+        }
+    }
+
+    function showLegacyBodyParts() {
+        var parts = SG.playerLegacyParts || [];
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i]) parts[i].visible = true;
         }
     }
 
@@ -513,6 +1187,7 @@
         box.getCenter(center);
         model.position.set(-center.x, -box.min.y, -center.z);
     }
+    SG.normalizePlayerModel = normalizeModel;
 
     function indexAnimationActions(gltf, model) {
         SG.playerMixer = null;
@@ -566,6 +1241,11 @@
     SG.loadPlayerModel = function() {
         if (SG.playerModelRequested || !SG.player || !THREE || !THREE.GLTFLoader) return;
         SG.playerModelRequested = true;
+        var selected = SG.state.selectedCharacter || localStorage.getItem('subwaySelectedCharacter') || 'runner';
+        if (!SG.characterIsOwned(selected)) selected = 'runner';
+        var character = SG.getCharacterById(selected);
+        SG.state.selectedCharacter = character.id;
+        SG.playerModelPath = character.path;
 
         var loader = new THREE.GLTFLoader();
         loader.load(SG.playerModelPath, function(gltf) {
@@ -574,7 +1254,7 @@
             var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
             if (!model) return;
 
-            model.name = 'PlayerGLB';
+            model.name = 'PlayerGLB-' + character.id;
             normalizeModel(model);
             model.traverse(function(node) {
                 if (node && node.isMesh) {
@@ -596,6 +1276,68 @@
         }, undefined, function(err) {
             SG.playerModelError = err;
             SG.playerModelLoaded = false;
+            showLegacyBodyParts();
+        });
+    };
+
+    SG.reloadPlayerModel = function() {
+        if (!SG.player || !THREE) return;
+        if (SG.playerModel && SG.playerModel.parent) {
+            SG.playerModel.parent.remove(SG.playerModel);
+            if (SG.disposeObject) SG.disposeObject(SG.playerModel);
+        }
+        SG.playerModel = null;
+        SG.playerModelLoaded = false;
+        SG.playerModelRequested = false;
+        SG.playerMixer = null;
+        SG.playerActions = {};
+        SG.playerAction = null;
+        showLegacyBodyParts();
+        SG.loadPlayerModel();
+    };
+
+    SG.normalizeJetpackModel = function(model) {
+        if (!model || !THREE) return;
+        model.updateMatrixWorld(true);
+        var box = new THREE.Box3().setFromObject(model);
+        var size = new THREE.Vector3();
+        var center = new THREE.Vector3();
+        box.getSize(size);
+        box.getCenter(center);
+        var maxDim = Math.max(size.x, size.y, size.z) || 1;
+        var scale = (SG.jetpackModelTuning.targetHeight || 0.72) / maxDim;
+        model.scale.setScalar(scale);
+        model.rotation.y = SG.jetpackModelTuning.rotationY || 0;
+        model.position.set(
+            -center.x * scale,
+            -center.y * scale + (SG.jetpackModelTuning.yOffset || 0),
+            -center.z * scale + (SG.jetpackModelTuning.zOffset || 0)
+        );
+        model.updateMatrixWorld(true);
+    };
+
+    SG.loadJetpackModel = function() {
+        if (!SG.jetpackPack || SG.jetpackModelRequested || !THREE || !THREE.GLTFLoader) return;
+        SG.jetpackModelRequested = true;
+        var loader = new THREE.GLTFLoader();
+        loader.load(SG.jetpackModelPath, function(gltf) {
+            if (!SG.jetpackPack) return;
+            var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+            if (!model) return;
+            model.name = 'JetpackGLB';
+            model.traverse(function(node) {
+                if (node && node.isMesh) {
+                    node.castShadow = true;
+                    node.receiveShadow = true;
+                }
+            });
+            SG.normalizeJetpackModel(model);
+            SG.jetpackModel = model;
+            SG.jetpackModelLoaded = true;
+            SG.jetpackPack.add(model);
+        }, undefined, function(err) {
+            SG.jetpackModelError = err;
+            SG.jetpackModelLoaded = false;
         });
     };
 
@@ -607,6 +1349,10 @@
         SG.playerModel = null;
         SG.playerModelLoaded = false;
         SG.playerModelRequested = false;
+        SG.state.ownedCharacters = parseOwnedCharacters();
+        SG.state.selectedCharacter = localStorage.getItem('subwaySelectedCharacter') || SG.state.selectedCharacter || 'runner';
+        if (!SG.characterIsOwned(SG.state.selectedCharacter)) SG.state.selectedCharacter = 'runner';
+        SG.playerModelPath = SG.getCharacterById(SG.state.selectedCharacter).path;
 
         var bodyMat = new THREE.MeshLambertMaterial({ color: 0x2255aa });
         SG.playerBody = rememberLegacyPart(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.4), bodyMat));
@@ -672,49 +1418,53 @@
         SG.shoesRWRight.visible = false;
         SG.player.add(SG.shoesRWRight);
 
-        // Jetpack pack (backpack)
+        // Jetpack pack: GLB model plus two flame emitters.
         SG.jetpackPack = new THREE.Group();
-        var packBox = new THREE.Mesh(
-            new THREE.BoxGeometry(0.4, 0.45, 0.2),
-            new THREE.MeshLambertMaterial({ color: 0xcc6622 })
-        );
-        packBox.position.set(0, 0, 0);
-        SG.jetpackPack.add(packBox);
+        SG.jetpackPack.name = 'JetpackPack';
+        SG.jetpackFlameGroups = [];
+        function createJetpackFlame(side) {
+            var flameGroup = new THREE.Group();
+            flameGroup.name = side < 0 ? 'JetpackFlameLeft' : 'JetpackFlameRight';
+            flameGroup.position.set(side * 0.14, -0.32, 0.01);
+            flameGroup.visible = false;
 
-        // Jetpack thruster nozzle (cone pointing down)
-        var nozzleMat = new THREE.MeshLambertMaterial({ color: 0x884422 });
-        var nozzle = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.12, 6), nozzleMat);
-        nozzle.rotation.x = Math.PI;
-        nozzle.position.set(0, -0.25, 0);
-        SG.jetpackPack.add(nozzle);
+            var outer = new THREE.Mesh(
+                new THREE.ConeGeometry(0.075, 0.36, 10),
+                new THREE.MeshBasicMaterial({ color: 0xff5a00, transparent: true, opacity: 0.88 })
+            );
+            outer.position.y = -0.06;
+            flameGroup.add(outer);
 
-        // Jetpack flame (initially invisible, shown during jetpack use)
-        SG.jetpackFlame = new THREE.Mesh(
-            new THREE.ConeGeometry(0.1, 0.3, 6),
-            new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.9 })
-        );
-        SG.jetpackFlame.position.set(0, -0.35, 0);
-        SG.jetpackFlame.visible = false;
-        SG.jetpackPack.add(SG.jetpackFlame);
+            var inner = new THREE.Mesh(
+                new THREE.ConeGeometry(0.038, 0.23, 10),
+                new THREE.MeshBasicMaterial({ color: 0xfff0a0, transparent: true, opacity: 0.95 })
+            );
+            inner.position.y = -0.02;
+            flameGroup.add(inner);
 
-        // Inner bright flame
-        SG.jetpackFlameInner = new THREE.Mesh(
-            new THREE.ConeGeometry(0.05, 0.18, 6),
-            new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.9 })
-        );
-        SG.jetpackFlameInner.position.set(0, -0.32, 0);
-        SG.jetpackFlameInner.visible = false;
-        SG.jetpackPack.add(SG.jetpackFlameInner);
-
-        SG.jetpackPack.position.set(0, 0.8, -0.3);
+            SG.jetpackPack.add(flameGroup);
+            SG.jetpackFlameGroups.push(flameGroup);
+            return flameGroup;
+        }
+        var leftFlame = createJetpackFlame(-1);
+        var rightFlame = createJetpackFlame(1);
+        SG.jetpackFlame = leftFlame.children[0];
+        SG.jetpackFlameInner = leftFlame.children[1];
+        SG.jetpackFlameRight = rightFlame.children[0];
+        SG.jetpackFlameRightInner = rightFlame.children[1];
+        SG.jetpackPack.position.set(0, 0.72, -0.24);
+        SG.jetpackPack.visible = false;
         SG.player.add(SG.jetpackPack);
+        SG.loadJetpackModel();
 
         SG.scene.add(SG.player);
         SG.loadPlayerModel();
         return SG.player;
     };
 })();
-// ===== SUBWAY SURFER - Track System =====
+
+// ===== ENDLESS RUNNER - Track =====
+// ===== ENDLESS RUNNER - Track System =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -724,25 +1474,54 @@
         var group = new THREE.Group();
         group.position.z = zPos;
 
-        var groundMat = new THREE.MeshBasicMaterial({ color: 0x4a4a4e });
+        var isPvp = !!(SG.state && SG.state.pvpMode);
+        var groundMat = isPvp
+            ? new THREE.MeshPhongMaterial({ color: 0x020407, emissive: 0x071528, specular: 0x6eefff, shininess: 142, transparent: true, opacity: 0.94 })
+            : (SG.createTrackGroundMaterial ? SG.createTrackGroundMaterial() : new THREE.MeshLambertMaterial({ color: 0x4a4a4e }));
         var ground = new THREE.Mesh(new THREE.BoxGeometry(SG.GROUND_WIDTH, 0.2, SG.TRACK_SEGMENT_LENGTH), groundMat);
         ground.position.y = -0.1;
+        ground.receiveShadow = true;
+        ground.userData.pvpGlassTrack = isPvp;
         group.add(ground);
 
-        var markMat = new THREE.MeshBasicMaterial({ color: 0x6a6a6e });
+        var markMat = isPvp
+            ? new THREE.MeshBasicMaterial({ color: 0x22e7ff, transparent: true, opacity: 0.72, blending: THREE.AdditiveBlending })
+            : (SG.createLanePaintMaterial ? SG.createLanePaintMaterial() : new THREE.MeshBasicMaterial({ color: 0x6a6a6e }));
         for (var lane = -1; lane <= 1; lane += 2) {
             var mark = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.01, SG.TRACK_SEGMENT_LENGTH - 2), markMat);
             mark.position.set(lane * (SG.LANE_WIDTH / 2), 0.01, 0);
             group.add(mark);
         }
 
-        var curbMat = new THREE.MeshBasicMaterial({ color: 0x5a5a5a });
+        var curbMat = isPvp
+            ? new THREE.MeshBasicMaterial({ color: 0xff2ccf, transparent: true, opacity: 0.92 })
+            : (SG.createCurbMaterial ? SG.createCurbMaterial() : new THREE.MeshLambertMaterial({ color: 0x5a5a5a }));
         for (var side = -1; side <= 1; side += 2) {
             var curb = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, SG.TRACK_SEGMENT_LENGTH), curbMat);
             curb.position.set(side * (SG.GROUND_WIDTH / 2 + 0.25), 0.1, 0);
+            curb.receiveShadow = true;
+            curb.userData.pvpNeonEdge = isPvp;
             group.add(curb);
+            if (isPvp) {
+                var railGlow = side < 0 ? 0xff2ccf : 0x8d35ff;
+                var glow = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.08, 0.04, SG.TRACK_SEGMENT_LENGTH),
+                    new THREE.MeshBasicMaterial({ color: railGlow, transparent: true, opacity: 0.82, blending: THREE.AdditiveBlending })
+                );
+                glow.position.set(side * (SG.GROUND_WIDTH / 2 + 0.46), 0.24, 0);
+                glow.userData.pvpNeonGlow = true;
+                group.add(glow);
+                var cyanTrim = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.035, 0.03, SG.TRACK_SEGMENT_LENGTH),
+                    new THREE.MeshBasicMaterial({ color: 0x22e7ff, transparent: true, opacity: 0.48, blending: THREE.AdditiveBlending })
+                );
+                cyanTrim.position.set(side * (SG.GROUND_WIDTH / 2 + 0.64), 0.3, 0);
+                cyanTrim.userData.pvpNeonGlow = true;
+                group.add(cyanTrim);
+            }
         }
 
+        group.userData.pvpTrack = isPvp;
         return group;
     };
 
@@ -754,11 +1533,173 @@
         }
     };
 })();
-// ===== SUBWAY SURFER - Buildings & Scenery =====
+
+// ===== ENDLESS RUNNER - Buildings =====
+// ===== ENDLESS RUNNER - Buildings & Scenery =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
     const THREE = window.THREE;
+
+    SG.sceneryModelPaths = SG.sceneryModelPaths || {
+        buildings: [
+            'models/scenery/buildings/building1_small.glb',
+            'models/scenery/buildings/building2_small.glb',
+            'models/scenery/buildings/building3_small.glb',
+            'models/scenery/buildings/building4.glb',
+            'models/scenery/buildings/house2.glb'
+        ],
+        trees: [
+            'models/scenery/trees/tree_1.glb',
+            'models/scenery/trees/tree_4.glb',
+            'models/scenery/trees/tree_7.glb',
+            'models/scenery/trees/pine_1.glb',
+            'models/scenery/trees/birch_2.glb'
+        ]
+    };
+    SG.sceneryModels = SG.sceneryModels || { buildings: [], trees: [] };
+
+    function tintSceneryModel(type, model) {
+        if (type !== 'trees') return;
+        model.traverse(function(node) {
+            if (!node || !node.isMesh || !node.material) return;
+            var mats = Array.isArray(node.material) ? node.material : [node.material];
+            var name = ((node.name || '') + ' ' + (node.material.name || '')).toLowerCase();
+            var isWood = name.indexOf('trunk') >= 0 || name.indexOf('bark') >= 0 || name.indexOf('wood') >= 0 || name.indexOf('stem') >= 0;
+            for (var mi = 0; mi < mats.length; mi++) {
+                var mat = mats[mi];
+                if (!mat || !mat.color) continue;
+                mat.color.setHex(isWood ? 0x6B4A2D : 0x2E7D32);
+                mat.needsUpdate = true;
+            }
+        });
+    }
+
+    SG.loadSceneryModels = function() {
+        if (!THREE || !THREE.GLTFLoader || SG.sceneryModelsLoading) return;
+        SG.sceneryModelsLoading = true;
+        var loader = new THREE.GLTFLoader();
+        ['buildings', 'trees'].forEach(function(type) {
+            SG.sceneryModelPaths[type].forEach(function(url) {
+                loader.load(url, function(gltf) {
+                    var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+                    if (!model) return;
+                    model.name = type + '-scenery-model';
+                    model.traverse(function(node) {
+                        if (node && node.isMesh) {
+                            node.castShadow = true;
+                            node.receiveShadow = true;
+                        }
+                    });
+                    tintSceneryModel(type, model);
+                    SG.sceneryModels[type].push(model);
+                }, undefined, function(err) {
+                    SG.sceneryModelError = err;
+                });
+            });
+        });
+    };
+
+    SG.cloneSceneryModel = function(type) {
+        var list = SG.sceneryModels && SG.sceneryModels[type];
+        if (!list || !list.length) return null;
+        var source = list[Math.floor(Math.random() * list.length)];
+        return source.clone(true);
+    };
+
+    function createAssetScenery(type, x, z) {
+        var model = SG.cloneSceneryModel(type);
+        if (!model) return null;
+        var group = new THREE.Group();
+        group.position.set(x, 0, z);
+        var scale = type === 'buildings' ? 1.28 + Math.random() * 0.16 : 0.86 + Math.random() * 0.34;
+        model.scale.multiplyScalar(scale);
+        model.rotation.y = type === 'buildings'
+            ? (Math.random() < 0.5 ? 0 : Math.PI / 2)
+            : Math.random() * Math.PI * 2;
+        group.add(model);
+        group.userData.sceneryType = type;
+        group.userData.depth = type === 'buildings' ? 4.8 * scale : 2.2 * scale;
+        SG.scene.add(group);
+        return group;
+    }
+
+    function createPvpCyberScenery(x, z) {
+        var group = new THREE.Group();
+        group.position.set(x, 0, z);
+        var side = x < 0 ? -1 : 1;
+        var neonColors = [0x22e7ff, 0xff2ccf, 0x8d35ff, 0x00ffd5];
+        var accent = neonColors[Math.floor(Math.random() * neonColors.length)];
+        var accent2 = neonColors[(neonColors.indexOf(accent) + 1 + Math.floor(Math.random() * 2)) % neonColors.length];
+        var towerCount = Math.random() > 0.62 ? 2 : 1;
+        var maxDepth = 0;
+
+        for (var t = 0; t < towerCount; t++) {
+            var w = 1.35 + Math.random() * 0.95;
+            var d = 1.55 + Math.random() * 1.15;
+            var h = 8.5 + Math.random() * 13.5;
+            var tx = t === 0 ? 0 : side * (1.5 + Math.random() * 0.9);
+            var tz = t === 0 ? 0 : (Math.random() - 0.5) * 2.8;
+            var tower = new THREE.Mesh(
+                new THREE.BoxGeometry(w, h, d),
+                new THREE.MeshPhongMaterial({
+                    color: 0x07111e,
+                    emissive: 0x031326,
+                    specular: 0x3be9ff,
+                    shininess: 76
+                })
+            );
+            tower.position.set(tx, h / 2, tz);
+            tower.castShadow = true;
+            tower.receiveShadow = true;
+            group.add(tower);
+            maxDepth = Math.max(maxDepth, d + Math.abs(tz));
+
+            var stripMatA = new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.78, blending: THREE.AdditiveBlending });
+            var stripMatB = new THREE.MeshBasicMaterial({ color: accent2, transparent: true, opacity: 0.58, blending: THREE.AdditiveBlending });
+            for (var s = -1; s <= 1; s += 2) {
+                var strip = new THREE.Mesh(new THREE.BoxGeometry(0.035, h * 0.82, 0.035), stripMatA);
+                strip.position.set(tx + s * (w / 2 + 0.02), h * 0.52, tz + d / 2 + 0.03);
+                group.add(strip);
+            }
+            for (var y = 1.5; y < h - 0.8; y += 1.4) {
+                var win = new THREE.Mesh(new THREE.BoxGeometry(w * 0.64, 0.045, 0.04), stripMatB);
+                win.position.set(tx, y, tz + d / 2 + 0.04);
+                group.add(win);
+            }
+        }
+
+        if (Math.random() > 0.22) {
+            var adW = 1.55 + Math.random() * 0.85;
+            var adH = 0.58 + Math.random() * 0.38;
+            var adMat = new THREE.MeshBasicMaterial({
+                color: accent2,
+                transparent: true,
+                opacity: 0.64,
+                side: THREE.DoubleSide,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            var ad = new THREE.Mesh(new THREE.PlaneGeometry(adW, adH), adMat);
+            ad.position.set(-side * 0.08, 4.2 + Math.random() * 4.6, -0.9 + Math.random() * 1.8);
+            ad.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+            ad.renderOrder = 70;
+            group.add(ad);
+
+            var frameMat = new THREE.MeshBasicMaterial({ color: 0xff2ccf, transparent: true, opacity: 0.62, blending: THREE.AdditiveBlending });
+            var frame = new THREE.Mesh(new THREE.BoxGeometry(0.05, adH + 0.18, adW + 0.18), frameMat);
+            frame.position.copy(ad.position);
+            frame.rotation.y = ad.rotation.y;
+            frame.renderOrder = 69;
+            group.add(frame);
+        }
+
+        group.userData.sceneryType = 'pvpCyber';
+        group.userData.depth = Math.max(5.0, maxDepth + 1.8);
+        group.userData.pvpNeonStyled = true;
+        SG.scene.add(group);
+        return group;
+    }
 
     SG.THEME_COLORS = [
         { // 0: City
@@ -779,16 +1720,26 @@
         }
     ];
 
+    SG.THEME_DISTANCE_THRESHOLDS = {
+        forest: 260,
+        desert: 760,
+        arctic: 1350
+    };
+
     SG.createScenery = function(x, z) {
+        if (SG.state && SG.state.pvpMode) return createPvpCyberScenery(x, z);
         var group = new THREE.Group();
         group.position.set(x, 0, z);
         var theme = SG.state.theme || 0;
 
         if (theme === 0) {
+            var cityAsset = createAssetScenery('buildings', x, z);
+            if (cityAsset) return cityAsset;
+            if (SG.sceneryModelPaths.buildings && SG.sceneryModelPaths.buildings.length) return null;
             var colors = [0x8B7355, 0x6B8E8B, 0x9B8B6B, 0x7B6B5B, 0x5B7B6B, 0x8B7B5B];
-            var h = 3 + Math.random() * 6;
-            var w = 1.5 + Math.random();
-            var d = 1.5 + Math.random();
+            var h = 5 + Math.random() * 7;
+            var w = 2.2 + Math.random() * 1.2;
+            var d = 2.2 + Math.random() * 1.2;
             var mesh = new THREE.Mesh(
                 new THREE.BoxGeometry(w, h, d),
                 new THREE.MeshLambertMaterial({ color: colors[Math.floor(Math.random() * colors.length)] })
@@ -796,6 +1747,9 @@
             mesh.position.y = h / 2;
             group.add(mesh);
         } else if (theme === 1) {
+            var treeAsset = createAssetScenery('trees', x, z);
+            if (treeAsset) return treeAsset;
+            if (SG.sceneryModelPaths.trees && SG.sceneryModelPaths.trees.length) return null;
             var trunkH = 2 + Math.random() * 3;
             var trunk = new THREE.Mesh(
                 new THREE.CylinderGeometry(0.15, 0.2, trunkH, 6),
@@ -871,6 +1825,58 @@
         return group;
     };
 
+    SG.getScenerySpacing = function(theme) {
+        if (SG.state && SG.state.pvpMode) return 9.4;
+        if (theme === 0) return 10.8;
+        if (theme === 1) return 5.2;
+        return 6.5;
+    };
+
+    SG.getSceneryRowCount = function(theme) {
+        if (SG.state && SG.state.pvpMode) return Math.random() > 0.58 ? 2 : 1;
+        if (theme === 0) return 1;
+        if (theme === 1 && Math.random() > 0.45) return 2;
+        return 1;
+    };
+
+    SG.spawnSceneryRow = function(z, side, row) {
+        var theme = SG.state.theme || 0;
+        var isPvp = !!(SG.state && SG.state.pvpMode);
+        var base = SG.GROUND_WIDTH / 2 + (isPvp ? 2.45 : (theme === 0 ? 2.25 : 1.7));
+        var laneOffset = isPvp ? row * 3.8 : (theme === 0 ? row * 3.9 : row * 2.25);
+        var jitter = theme === 0 && !isPvp ? 0 : (Math.random() - 0.5) * (isPvp ? 0.45 : 0.7);
+        var x = side * (base + laneOffset + jitter);
+        var zJitter = theme === 0 && !isPvp ? 0 : (Math.random() - 0.5) * (isPvp ? 1.4 : 0.9);
+        return SG.createScenery(x, z + zJitter);
+    };
+
+    SG.canPlaceScenery = function(x, z, depth) {
+        var minDepth = depth || 6;
+        for (var i = 0; i < SG.state.buildings.length; i++) {
+            var other = SG.state.buildings[i];
+            if (!other || !other.position) continue;
+            if (Math.abs(other.position.x - x) > 1.2) continue;
+            var otherDepth = other.userData && other.userData.depth ? other.userData.depth : minDepth;
+            var minGap = (minDepth + otherDepth) * 0.5 + 1.2;
+            if (Math.abs(other.position.z - z) < minGap) return false;
+        }
+        return true;
+    };
+
+    SG.addSceneryRow = function(z, side, row) {
+        var theme = SG.state.theme || 0;
+        var isPvp = !!(SG.state && SG.state.pvpMode);
+        var base = SG.GROUND_WIDTH / 2 + (isPvp ? 2.45 : (theme === 0 ? 2.25 : 1.7));
+        var laneOffset = isPvp ? row * 3.8 : (theme === 0 ? row * 3.9 : row * 2.25);
+        var x = side * (base + laneOffset);
+        var expectedDepth = isPvp ? 6.0 : (theme === 0 ? 7.0 : 3.5);
+        if (!SG.canPlaceScenery(x, z, expectedDepth)) return null;
+        var scenery = SG.spawnSceneryRow(z, side, row);
+        if (!scenery) return null;
+        SG.state.buildings.push(scenery);
+        return scenery;
+    };
+
     SG.spawnBuildings = function() {
         for (var i = SG.state.buildings.length - 1; i >= 0; i--) {
             if (SG.state.buildings[i].position.z > SG.DESPAWN_BEHIND) {
@@ -884,13 +1890,15 @@
             ? Math.min.apply(null, SG.state.buildings.map(function(b) { return b.position.z; }))
             : 0;
 
-        for (var z = farthestZ; z > -SG.SPAWN_AHEAD; z -= 6 + Math.random() * 8) {
-            if (z > farthestZ) continue;
+        var theme = SG.state.theme || 0;
+        var spacing = SG.getScenerySpacing(theme);
+        var startZ = SG.state.buildings.length > 0 ? farthestZ - spacing : 0;
+        for (var z = startZ; z > -SG.SPAWN_AHEAD; z -= spacing) {
             for (var side = -1; side <= 1; side += 2) {
-                if (Math.random() > 0.3) {
-                    var x = side * (SG.GROUND_WIDTH / 2 + 2 + Math.random() * 3);
-                    var scenery = SG.createScenery(x, z);
-                    SG.state.buildings.push(scenery);
+                var rows = SG.getSceneryRowCount(theme);
+                for (var row = 0; row < rows; row++) {
+                    if (theme !== 0 && Math.random() < 0.18) continue;
+                    SG.addSceneryRow(z - row * spacing * 0.5, side, row);
                 }
             }
         }
@@ -906,6 +1914,8 @@
         SG.scene.fog.color.setHex(theme.fog);
         SG.scene.fog.near = themeIndex >= 2 ? 40 : 60;
         SG.scene.fog.far = themeIndex >= 2 ? 90 : 120;
+        if (SG.updateSkyDome) SG.updateSkyDome(themeIndex, 'normal');
+        if (SG.updateLightRigForTheme) SG.updateLightRigForTheme(themeIndex);
 
         for (var si = 0; si < SG.state.trackSegments.length; si++) {
             var seg = SG.state.trackSegments[si];
@@ -930,12 +1940,13 @@
         }
         SG.state.buildings = [];
         var spawnAhead = SG.state.started ? SG.SPAWN_AHEAD : 200;
-        for (var z = 0; z > -spawnAhead; z -= 6 + Math.random() * 8) {
+        var spacing = SG.getScenerySpacing(themeIndex);
+        for (var z = 0; z > -spawnAhead; z -= spacing) {
             for (var side = -1; side <= 1; side += 2) {
-                if (Math.random() > 0.3) {
-                    var x = side * (SG.GROUND_WIDTH / 2 + 2 + Math.random() * 3);
-                    var sc = SG.createScenery(x, z);
-                    SG.state.buildings.push(sc);
+                var rows = SG.getSceneryRowCount(themeIndex);
+                for (var row = 0; row < rows; row++) {
+                    if (themeIndex !== 0 && Math.random() < 0.18) continue;
+                    SG.addSceneryRow(z - row * spacing * 0.5, side, row);
                 }
             }
         }
@@ -959,89 +1970,259 @@
     SG.checkThemeChange = function() {
         var score = Math.floor(SG.state.score);
         var newTheme = 0;
-        if (score >= 3000) newTheme = 3;
-        else if (score >= 1500) newTheme = 2;
-        else if (score >= 500) newTheme = 1;
+        if (score >= SG.THEME_DISTANCE_THRESHOLDS.arctic) newTheme = 3;
+        else if (score >= SG.THEME_DISTANCE_THRESHOLDS.desert) newTheme = 2;
+        else if (score >= SG.THEME_DISTANCE_THRESHOLDS.forest) newTheme = 1;
         if (newTheme !== SG.state.theme) {
             SG.switchTheme(newTheme);
         }
     };
 })();
-// ===== SUBWAY SURFER - Obstacles =====
+
+// ===== ENDLESS RUNNER - Obstacles =====
+// ===== ENDLESS RUNNER - Obstacles =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
     const THREE = window.THREE;
 
+    SG.vehicleModels = SG.vehicleModels || {};
+    SG.vehicleModelPaths = SG.vehicleModelPaths || {
+        train: 'models/vehicles/train.glb',
+        bus: 'models/vehicles/bus.glb'
+    };
+
+    SG.loadVehicleModels = function() {
+        if (!THREE || !THREE.GLTFLoader || SG.vehicleModelsLoading) return;
+        SG.vehicleModelsLoading = true;
+        var loader = new THREE.GLTFLoader();
+        Object.keys(SG.vehicleModelPaths).forEach(function(key) {
+            loader.load(SG.vehicleModelPaths[key], function(gltf) {
+                var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+                if (!model) return;
+                model.name = key + '-vehicle-model';
+                model.traverse(function(node) {
+                    if (node && node.isMesh) {
+                        node.castShadow = true;
+                        node.receiveShadow = true;
+                    }
+                });
+                SG.vehicleModels[key] = model;
+            }, undefined, function(err) {
+                SG.vehicleModelError = err;
+            });
+        });
+    };
+
+    SG.cloneVehicleModel = function(key) {
+        var source = SG.vehicleModels && SG.vehicleModels[key];
+        if (!source) return null;
+        var clone = source.clone(true);
+        clone.name = key + '-vehicle-obstacle';
+        return clone;
+    };
+
+    SG.getObstacleLanes = function(obstacle) {
+        if (!obstacle || !obstacle.userData) return [];
+        if (Array.isArray(obstacle.userData.blockedLanes)) return obstacle.userData.blockedLanes.slice();
+        if (obstacle.userData.type === 'full_barrier' || obstacle.userData.moving) return [0, 1, 2];
+        if (typeof obstacle.userData.lane === 'number') return [obstacle.userData.lane];
+        return [0, 1, 2];
+    };
+
+    SG.getObstacleDepth = function(obstacle) {
+        if (!obstacle || !obstacle.userData) return 2;
+        var depth = obstacle.userData.visualDepth || obstacle.userData.depth || 2;
+        if (obstacle.userData.hasRamp) depth = Math.max(depth, 9.5);
+        if (obstacle.userData.moving) depth += 1.5;
+        return depth;
+    };
+
+    SG.obstacleLanesOverlap = function(a, b) {
+        for (var i = 0; i < a.length; i++) {
+            if (b.indexOf(a[i]) >= 0) return true;
+        }
+        return false;
+    };
+
+    SG.canPlaceObstacle = function(obstacle, z) {
+        var lanes = SG.getObstacleLanes(obstacle);
+        var depth = SG.getObstacleDepth(obstacle);
+        for (var i = 0; i < SG.state.obstacles.length; i++) {
+            var other = SG.state.obstacles[i];
+            if (!other || !other.userData) continue;
+            if (!SG.obstacleLanesOverlap(lanes, SG.getObstacleLanes(other))) continue;
+            var minGap = (depth + SG.getObstacleDepth(other)) * 0.5 + 2.0;
+            if (Math.abs(other.position.z - z) < minGap) return false;
+        }
+        return true;
+    };
+
+    SG.trackObstacle = function(obstacle, lane, z) {
+        if (!obstacle) return false;
+        if (!SG.canPlaceObstacle(obstacle, z)) {
+            SG.disposeObject(obstacle);
+            return false;
+        }
+        SG.scene.add(obstacle);
+        SG.state.obstacles.push(obstacle);
+        SG.state.coinObstacleMap.set(obstacle.uuid, []);
+        SG.spawnCoinsNearObstacle(obstacle, lane, z);
+        return true;
+    };
+
+    SG.canPlaceCoinAt = function(lane, z, ignoreObstacle) {
+        for (var i = 0; i < SG.state.obstacles.length; i++) {
+            var obstacle = SG.state.obstacles[i];
+            if (!obstacle || obstacle === ignoreObstacle) continue;
+            var lanes = SG.getObstacleLanes(obstacle);
+            if (lanes.indexOf(lane) < 0) continue;
+            var minGap = SG.getObstacleDepth(obstacle) * 0.5 + 1.1;
+            if (Math.abs(obstacle.position.z - z) < minGap) return false;
+        }
+        if (ignoreObstacle) {
+            var ignoreLanes = SG.getObstacleLanes(ignoreObstacle);
+            if (ignoreLanes.indexOf(lane) >= 0) {
+                var ignoreGap = SG.getObstacleDepth(ignoreObstacle) * 0.5 + 1.1;
+                if (Math.abs(ignoreObstacle.position.z - z) < ignoreGap) return false;
+            }
+        }
+        return true;
+    };
+
+    SG.findSafeCoinLane = function(preferred, z, ignoreObstacle) {
+        var lanes = [preferred, (preferred + 1) % 3, (preferred + 2) % 3];
+        for (var i = 0; i < lanes.length; i++) {
+            if (SG.canPlaceCoinAt(lanes[i], z, ignoreObstacle)) return lanes[i];
+        }
+        return -1;
+    };
+
+    SG.addSafeCoin = function(lane, z, yOffset, ignoreObstacle, mapEntry) {
+        var safeLane = SG.findSafeCoinLane(lane, z, ignoreObstacle);
+        if (safeLane < 0) return null;
+        var coin = SG.createCoin(safeLane, z, yOffset);
+        SG.scene.add(coin);
+        SG.state.coinObjects.push(coin);
+        if (mapEntry) mapEntry.push(coin);
+        return coin;
+    };
+
+    SG.vehicleColorPalette = SG.vehicleColorPalette || [
+        0xE53935, 0x1E88E5, 0x43A047, 0xFB8C00,
+        0x8E24AA, 0x00ACC1, 0xFDD835, 0x6D4C41
+    ];
+
+    SG.pickVehicleColor = function() {
+        var palette = SG.vehicleColorPalette || [0xE53935];
+        SG.vehicleColorIndex = (SG.vehicleColorIndex || 0) + 1;
+        return palette[(SG.vehicleColorIndex - 1) % palette.length];
+    };
+
+    SG.tintVehicleModel = function(model, color) {
+        if (!model || !model.traverse || !THREE || !THREE.Color) return;
+        var tint = new THREE.Color(color);
+        model.traverse(function(node) {
+            if (!node || !node.isMesh || !node.material) return;
+            var mats = Array.isArray(node.material) ? node.material : [node.material];
+            var tinted = mats.map(function(mat) {
+                if (!mat || !mat.clone) return mat;
+                var clone = mat.clone();
+                if (clone.color) {
+                    var base = clone.color.clone();
+                    var brightness = (base.r + base.g + base.b) / 3;
+                    if (brightness > 0.16) {
+                        clone.color.copy(base.lerp(tint, 0.58));
+                    }
+                }
+                clone.needsUpdate = true;
+                return clone;
+            });
+            node.material = Array.isArray(node.material) ? tinted : tinted[0];
+        });
+    };
+
     SG.createTrain = function(lane, zPos, isMoving) {
         var group = new THREE.Group();
         var laneX = SG.LANE_POSITIONS[lane];
         var moving = (isMoving !== false) && Math.random() < 0.18;
-        var colors = [0xE53935, 0x1E88E5, 0x43A047, 0xFB8C00, 0x8E24AA];
-        var mainColor = colors[Math.floor(Math.random() * colors.length)];
+        var mainColor = SG.pickVehicleColor();
+        var model = SG.cloneVehicleModel('train');
 
-        var body = new THREE.Mesh(
-            new THREE.BoxGeometry(2.4, 1.8, 6),
-            new THREE.MeshLambertMaterial({ color: mainColor })
-        );
-        body.position.set(0, 0.9, 0);
-        group.add(body);
+        if (model) {
+            model.rotation.y = Math.PI;
+            SG.tintVehicleModel(model, mainColor);
+            group.add(model);
+            group.userData.assetModel = 'train.glb';
+            group.userData.vehicleColor = mainColor;
+        } else {
+            if (SG.vehicleModelPaths.train) return null;
+            var body = new THREE.Mesh(
+                new THREE.BoxGeometry(2.4, 1.8, 6),
+                new THREE.MeshLambertMaterial({ color: mainColor })
+            );
+            group.userData.vehicleColor = mainColor;
+            body.position.set(0, 0.9, 0);
+            group.add(body);
 
-        var winMat = new THREE.MeshBasicMaterial({ color: 0x88CCFF, transparent: true, opacity: 0.7 });
-        for (var i = -1; i <= 1; i++) {
-            for (var side = -1; side <= 1; side += 2) {
-                var win = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.05), winMat);
-                win.position.set(side * 1.21, 1.0, i * 1.5);
-                group.add(win);
+            var winMat = new THREE.MeshBasicMaterial({ color: 0x88CCFF, transparent: true, opacity: 0.7 });
+            for (var i = -1; i <= 1; i++) {
+                for (var side = -1; side <= 1; side += 2) {
+                    var win = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.05), winMat);
+                    win.position.set(side * 1.21, 1.0, i * 1.5);
+                    group.add(win);
+                }
             }
-        }
 
-        var roof = new THREE.Mesh(
-            new THREE.BoxGeometry(2.0, 0.1, 5.6),
-            new THREE.MeshLambertMaterial({ color: 0xDDDDDD })
-        );
-        roof.position.set(0, 1.85, 0);
-        group.add(roof);
+            var roof = new THREE.Mesh(
+                new THREE.BoxGeometry(2.0, 0.1, 5.6),
+                new THREE.MeshLambertMaterial({ color: 0xDDDDDD })
+            );
+            roof.position.set(0, 1.85, 0);
+            group.add(roof);
 
-        var doorMat = new THREE.MeshBasicMaterial({ color: 0xCCCCCC });
-        var door = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.9, 0.6), doorMat);
-        door.position.set(0, 0.8, 0);
-        group.add(door);
+            var doorMat = new THREE.MeshBasicMaterial({ color: 0xCCCCCC });
+            var door = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.9, 0.6), doorMat);
+            door.position.set(0, 0.8, 0);
+            group.add(door);
 
-        var lightMat = new THREE.MeshBasicMaterial({ color: 0xFFFFAA });
-        for (var side2 = -1; side2 <= 1; side2 += 2) {
-            var l = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.15, 0.05), lightMat);
-            l.position.set(side2 * 0.6, 0.5, 3.05);
-            group.add(l);
+            var lightMat = new THREE.MeshBasicMaterial({ color: 0xFFFFAA });
+            for (var side2 = -1; side2 <= 1; side2 += 2) {
+                var l = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.15, 0.05), lightMat);
+                l.position.set(side2 * 0.6, 0.5, 3.05);
+                group.add(l);
+            }
         }
 
         var hasRamp = Math.random() < 0.3;
         if (hasRamp) {
-            var rampMat = new THREE.MeshLambertMaterial({ color: 0xFF6600 });
-            var ramp = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.08, 3.0), rampMat);
+            var rampMat = SG.createWarningPanelMaterial ? SG.createWarningPanelMaterial() : new THREE.MeshLambertMaterial({ color: 0xFF6600 });
+            var ramp = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.07, 2.35), rampMat);
             ramp.position.set(0, 0.9, 4.5);
             ramp.rotation.x = 0.65;
+            ramp.userData.rampSurface = true;
             group.add(ramp);
-            var railMat = new THREE.MeshLambertMaterial({ color: 0xDD4400 });
+            var railMat = SG.createDarkMetalMaterial ? SG.createDarkMetalMaterial() : new THREE.MeshLambertMaterial({ color: 0xDD4400 });
             for (var side3 = -1; side3 <= 1; side3 += 2) {
-                var r = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 3.0), railMat);
-                r.position.set(side3 * 1.2, 1.2, 4.5);
+                var r = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.36, 2.35), railMat);
+                r.position.set(side3 * 0.78, 1.12, 4.5);
                 r.rotation.x = 0.65;
                 group.add(r);
             }
             var warnMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
             for (var i2 = -2; i2 <= 2; i2++) {
                 if (i2 === 0) continue;
-                var s = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.02, 0.06), warnMat);
+                var s = new THREE.Mesh(new THREE.BoxGeometry(1.22, 0.02, 0.045), warnMat);
                 s.position.set(0, 0.03, 4.5 + i2 * 0.5);
                 group.add(s);
             }
             var tipMat = new THREE.MeshBasicMaterial({ color: 0xFFFF00 });
-            var tip = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.15, 0.05), tipMat);
+            var tip = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.10, 0.045), tipMat);
             tip.position.set(0, 0.05, 5.8);
             group.add(tip);
 
             group.userData.hasRamp = true;
+            group.userData.rampWidth = 1.55;
         }
 
         group.position.set(laneX, 0, zPos);
@@ -1050,6 +2231,7 @@
         group.userData.width = 2.0;
         group.userData.height = 1.8;
         group.userData.depth = 5.5;
+        group.userData.visualDepth = hasRamp ? 9.5 : 5.8;
         group.userData.hasRamp = hasRamp;
         group.userData.moving = moving;
         if (moving) {
@@ -1076,7 +2258,7 @@
 
         var barrier = new THREE.Mesh(
             new THREE.BoxGeometry(1.6, 0.6, 1.0),
-            new THREE.MeshLambertMaterial({ color: 0xFF6600 })
+            SG.createWarningPanelMaterial ? SG.createWarningPanelMaterial() : new THREE.MeshLambertMaterial({ color: 0xFF6600 })
         );
         barrier.position.set(0, 0.3, 0);
         group.add(barrier);
@@ -1103,43 +2285,60 @@
         group.add(cap);
 
         group.position.set(laneX, 0, zPos);
-        group.userData = { type: 'barrier', lane: lane, width: 1.6, height: 0.6, depth: 1.0 };
+        group.userData = { type: 'barrier', lane: lane, width: 1.6, height: 0.6, depth: 1.0, visualDepth: 1.4 };
         return group;
     };
 
-    SG.createFullLaneBarrier = function(zPos) {
+    SG.createFullLaneBarrier = function(zPos, openLane) {
         var group = new THREE.Group();
+        openLane = (typeof openLane === 'number' && openLane >= 0 && openLane <= 2) ? openLane : Math.floor(Math.random() * 3);
+        var blockedLanes = [0, 1, 2].filter(function(lane) { return lane !== openLane; });
 
-        var beamMat = new THREE.MeshLambertMaterial({ color: 0xFF4444 });
-        var beam = new THREE.Mesh(new THREE.BoxGeometry(SG.GROUND_WIDTH + 1.5, 0.5, 1.2), beamMat);
-        beam.position.set(0, 0.25, 0);
-        group.add(beam);
+        var beamMat = SG.createWarningPanelMaterial ? SG.createWarningPanelMaterial() : new THREE.MeshLambertMaterial({ color: 0xFF4444 });
+        var stripeMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+        var laneBeamWidth = Math.min(SG.LANE_WIDTH * 0.78, 1.7);
+        for (var bi = 0; bi < blockedLanes.length; bi++) {
+            var lane = blockedLanes[bi];
+            var laneX = SG.LANE_POSITIONS[lane];
+            var beam = new THREE.Mesh(new THREE.BoxGeometry(laneBeamWidth, 0.5, 1.2), beamMat);
+            beam.position.set(laneX, 0.25, 0);
+            group.add(beam);
 
-        var stripe = new THREE.Mesh(
-            new THREE.BoxGeometry(SG.GROUND_WIDTH + 1.0, 0.05, 0.05),
-            new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
-        );
-        stripe.position.set(0, 0.5, 0.6);
-        group.add(stripe);
-        var stripe2 = stripe.clone();
-        stripe2.position.z = -0.6;
-        group.add(stripe2);
+            var stripe = new THREE.Mesh(new THREE.BoxGeometry(laneBeamWidth * 0.9, 0.05, 0.05), stripeMat);
+            stripe.position.set(laneX, 0.5, 0.6);
+            group.add(stripe);
+            var stripe2 = stripe.clone();
+            stripe2.position.z = -0.6;
+            group.add(stripe2);
+        }
 
-        var postMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
-        for (var side = -1; side <= 1; side += 2) {
+        var postMat = SG.createDarkMetalMaterial ? SG.createDarkMetalMaterial() : new THREE.MeshLambertMaterial({ color: 0x888888 });
+        var postXs = [
+            SG.LANE_POSITIONS[0] - laneBeamWidth / 2 - 0.12,
+            SG.LANE_POSITIONS[2] + laneBeamWidth / 2 + 0.12
+        ];
+        for (var side = 0; side < postXs.length; side++) {
             var post = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.7, 0.15), postMat);
-            post.position.set(side * (SG.GROUND_WIDTH / 2 + 0.8), 0.35, 0);
+            post.position.set(postXs[side], 0.35, 0);
             group.add(post);
             var light = new THREE.Mesh(
                 new THREE.SphereGeometry(0.08, 4, 4),
                 new THREE.MeshBasicMaterial({ color: 0xFF0000 })
             );
-            light.position.set(side * (SG.GROUND_WIDTH / 2 + 0.8), 0.75, 0);
+            light.position.set(postXs[side], 0.75, 0);
             group.add(light);
         }
 
         group.position.set(0, 0, zPos);
-        group.userData = { type: 'full_barrier', width: SG.GROUND_WIDTH + 1.5, height: 0.5, depth: 1.2 };
+        group.userData = {
+            type: 'full_barrier',
+            openLane: openLane,
+            blockedLanes: blockedLanes,
+            width: laneBeamWidth,
+            height: 0.5,
+            depth: 1.2,
+            visualDepth: 1.6
+        };
         return group;
     };
 
@@ -1147,7 +2346,7 @@
         var group = new THREE.Group();
         var laneX = SG.LANE_POSITIONS[lane];
 
-        var bodyMat = new THREE.MeshLambertMaterial({ color: 0xFF3300 });
+        var bodyMat = SG.createWarningPanelMaterial ? SG.createWarningPanelMaterial() : new THREE.MeshLambertMaterial({ color: 0xFF3300 });
         var body = new THREE.Mesh(
             new THREE.BoxGeometry(1.2, 0.25, 1.0),
             bodyMat
@@ -1155,7 +2354,7 @@
         body.position.set(0, 0.9, 0);
         group.add(body);
 
-        var armMat = new THREE.MeshLambertMaterial({ color: 0xDD8800 });
+        var armMat = SG.createDarkMetalMaterial ? SG.createDarkMetalMaterial() : new THREE.MeshLambertMaterial({ color: 0xDD8800 });
         for (var i = -1; i <= 1; i += 2) {
             var arm = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 0.04), armMat);
             arm.position.set(i * 0.3, 1.05, 0);
@@ -1186,7 +2385,7 @@
         }
 
         group.position.set(laneX, 0, zPos);
-        group.userData = { type: 'low_flying', lane: lane, width: 1.0, height: 0.8, depth: 0.8, yOffset: 0.8 };
+        group.userData = { type: 'low_flying', lane: lane, width: 1.0, height: 0.8, depth: 0.8, visualDepth: 1.2, yOffset: 0.8 };
         return group;
     };
 
@@ -1195,23 +2394,23 @@
         var laneX = SG.LANE_POSITIONS[lane];
 
         var top = new THREE.Mesh(
-            new THREE.BoxGeometry(2.6, 0.5, 5.0),
-            new THREE.MeshLambertMaterial({ color: 0xFF6600 })
+            new THREE.BoxGeometry(1.42, 0.28, 3.75),
+            SG.createWarningPanelMaterial ? SG.createWarningPanelMaterial() : new THREE.MeshLambertMaterial({ color: 0xFF6600 })
         );
-        top.position.set(0, 1.4, 0);
+        top.position.set(0, 1.18, 0);
         group.add(top);
 
         var stripe = new THREE.Mesh(
-            new THREE.BoxGeometry(2.4, 0.05, 4.8),
+            new THREE.BoxGeometry(1.24, 0.035, 3.45),
             new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
         );
-        stripe.position.set(0, 1.15, 0);
+        stripe.position.set(0, 0.98, 0);
         group.add(stripe);
 
-        var supMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
+        var supMat = SG.createDarkMetalMaterial ? SG.createDarkMetalMaterial() : new THREE.MeshLambertMaterial({ color: 0x555555 });
         for (var side = -1; side <= 1; side += 2) {
-            var sup = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.8, 0.15), supMat);
-            sup.position.set(side * 1.2, 0.9, 0);
+            var sup = new THREE.Mesh(new THREE.BoxGeometry(0.10, 1.34, 0.10), supMat);
+            sup.position.set(side * 0.66, 0.67, 0);
             group.add(sup);
         }
 
@@ -1219,7 +2418,7 @@
         for (var side2 = -1; side2 <= 1; side2 += 2) {
             for (var end = -1; end <= 1; end += 2) {
                 var w = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.25, 0.08), warnMat);
-                w.position.set(side2 * 1.25, 1.2, end * 2.4);
+                w.position.set(side2 * 0.72, 0.96, end * 1.78);
                 group.add(w);
             }
         }
@@ -1228,13 +2427,13 @@
         for (var side3 = -1; side3 <= 1; side3 += 2) {
             for (var end2 = -1; end2 <= 1; end2 += 2) {
                 var m = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.12, 0.05), markerMat);
-                m.position.set(side3 * 1.0, 0.1, end2 * 2.8);
+                m.position.set(side3 * 0.60, 0.1, end2 * 2.12);
                 group.add(m);
             }
         }
 
         group.position.set(laneX, 0, zPos);
-        group.userData = { type: 'roll_under', lane: lane, width: 2.0, height: 0.5, depth: 5.0 };
+        group.userData = { type: 'roll_under', lane: lane, width: 1.35, height: 0.28, depth: 3.75, visualDepth: 4.1, yOffset: 1.18 };
         return group;
     };
 
@@ -1265,10 +2464,7 @@
                         if (t < 0.55) obs = SG.createTrain(lane, z, false);
                         else if (t < 0.80) obs = SG.createLowFlyingObstacle(lane, z);
                         else obs = SG.createRollUnderTrain(lane, z);
-                        SG.scene.add(obs);
-                        SG.state.obstacles.push(obs);
-                        SG.state.coinObstacleMap.set(obs.uuid, []);
-                        SG.spawnCoinsNearObstacle(obs, lane, z);
+                        SG.trackObstacle(obs, lane, z);
                     }
                 } else {
                     var lane2 = pi % 3;
@@ -1285,10 +2481,7 @@
                     else if (type < 0.60) obs2 = SG.createLowFlyingObstacle(lane2, z);
                     else if (type < 0.75) obs2 = SG.createFullLaneBarrier(z);
                     else obs2 = SG.createRollUnderTrain(lane2, z);
-                    SG.scene.add(obs2);
-                    SG.state.obstacles.push(obs2);
-                    SG.state.coinObstacleMap.set(obs2.uuid, []);
-                    SG.spawnCoinsNearObstacle(obs2, lane2, z);
+                    SG.trackObstacle(obs2, lane2, z);
                 }
             }
             for (var zc = -5; zc > -28; zc -= 5) {
@@ -1309,9 +2502,8 @@
 
         if (ahead.length < targetCount) {
             var z2 = spawnZ;
-            var zBlocked = SG.state.obstacles.some(function(o) {
-                return Math.abs(o.position.z - z2) < 4;
-            });
+            var rowProbe = { position: { z: z2 }, userData: { type: 'row_probe', lane: 1, depth: 1.0, visualDepth: 1.0 } };
+            var zBlocked = !SG.canPlaceObstacle(rowProbe, z2);
             if (!zBlocked) {
                 if (Math.random() < 0.10) {
                     var openLane2 = Math.floor(Math.random() * 3);
@@ -1323,10 +2515,7 @@
                         if (t2 < 0.55) obs3 = SG.createTrain(lane3, z2, true);
                         else if (t2 < 0.80) obs3 = SG.createLowFlyingObstacle(lane3, z2);
                         else obs3 = SG.createRollUnderTrain(lane3, z2);
-                        SG.scene.add(obs3);
-                        SG.state.obstacles.push(obs3);
-                        SG.state.coinObstacleMap.set(obs3.uuid, []);
-                        SG.spawnCoinsNearObstacle(obs3, lane3, z2);
+                        SG.trackObstacle(obs3, lane3, z2);
                     }
                 } else {
                     var busy = new Set();
@@ -1360,10 +2549,7 @@
                     else if (type2 < 0.60) obs4 = SG.createLowFlyingObstacle(lane4, z2);
                     else if (type2 < 0.75) obs4 = SG.createFullLaneBarrier(z2);
                     else obs4 = SG.createRollUnderTrain(lane4, z2);
-                    SG.scene.add(obs4);
-                    SG.state.obstacles.push(obs4);
-                    SG.state.coinObstacleMap.set(obs4.uuid, []);
-                    SG.spawnCoinsNearObstacle(obs4, lane4, z2);
+                    SG.trackObstacle(obs4, lane4, z2);
                 }
             }
         }
@@ -1371,16 +2557,15 @@
 
     SG.spawnCoinsNearObstacle = function(obstacle, lane, z) {
         var coinChance = Math.random();
+        var depth = SG.getObstacleDepth(obstacle);
+        var safeStartZ = z - depth * 0.5 - 2.4;
+        var mapEntry = SG.state.coinObstacleMap.get(obstacle.uuid);
         if (coinChance < 0.5) {
             var coinLane = Math.floor(Math.random() * 3);
             while (coinLane === lane && Math.random() > 0.3) {
                 coinLane = (coinLane + 1) % 3;
             }
-            var coin = SG.createCoin(coinLane, z - 3 - Math.random() * 5, 0.3);
-            SG.scene.add(coin);
-            SG.state.coinObjects.push(coin);
-            var mapEntry = SG.state.coinObstacleMap.get(obstacle.uuid);
-            if (mapEntry) mapEntry.push(coin);
+            SG.addSafeCoin(coinLane, safeStartZ - Math.random() * 4, 0.3, obstacle, mapEntry);
         } else if (coinChance < 0.7) {
             var coinLane2 = Math.floor(Math.random() * 3);
             while (coinLane2 === lane && Math.random() > 0.4) {
@@ -1388,17 +2573,25 @@
             }
             var patterns = ['line', 'arc', 'double', 'zigzag', 'arc', 'zigzag'];
             var pattern = patterns[Math.floor(Math.random() * patterns.length)];
-            var coins = SG.createCoinPattern(coinLane2, z - 4, pattern);
+            var coins = SG.createCoinPattern(coinLane2, safeStartZ - 1.0, pattern);
+            var mapEntry2 = SG.state.coinObstacleMap.get(obstacle.uuid);
             for (var ci = 0; ci < coins.length; ci++) {
-                SG.scene.add(coins[ci]);
-                SG.state.coinObjects.push(coins[ci]);
-                var mapEntry2 = SG.state.coinObstacleMap.get(obstacle.uuid);
-                if (mapEntry2) mapEntry2.push(coins[ci]);
+                var coin = coins[ci];
+                var coinLane = Math.round((coin.position.x + SG.LANE_WIDTH) / SG.LANE_WIDTH);
+                if (coinLane < 0 || coinLane > 2 || !SG.canPlaceCoinAt(coinLane, coin.position.z, obstacle)) {
+                    SG.disposeObject(coin);
+                    continue;
+                }
+                SG.scene.add(coin);
+                SG.state.coinObjects.push(coin);
+                if (mapEntry2) mapEntry2.push(coin);
             }
         }
     };
 })();
-// ===== SUBWAY SURFER - Coins =====
+
+// ===== ENDLESS RUNNER - Coins =====
+// ===== ENDLESS RUNNER - Coins =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -1408,32 +2601,71 @@
         var group = new THREE.Group();
         var laneX = SG.LANE_POSITIONS[lane];
 
+        var coinY = 0.6 + (yOffset || 0);
+        var goldMat = new THREE.MeshLambertMaterial({ color: 0xFFD34D, emissive: 0x5a3200, emissiveIntensity: 0.18 });
+        var rimMat = new THREE.MeshLambertMaterial({ color: 0xFFAA00, emissive: 0x6c3900, emissiveIntensity: 0.25 });
+        var darkDetailMat = new THREE.MeshBasicMaterial({ color: 0x7A3B00 });
+        var brightMat = new THREE.MeshBasicMaterial({ color: 0xFFF4B8, transparent: true, opacity: 0.9 });
+
         var coin = new THREE.Mesh(
-            new THREE.CylinderGeometry(SG.COIN_RADIUS, SG.COIN_RADIUS, 0.08, 10),
-            new THREE.MeshBasicMaterial({ color: 0xFFD700 })
+            new THREE.CylinderGeometry(SG.COIN_RADIUS, SG.COIN_RADIUS, 0.1, 16),
+            goldMat
         );
         coin.rotation.x = Math.PI / 2;
-        coin.position.set(0, 0.6 + (yOffset || 0), 0);
+        coin.position.set(0, coinY, 0);
         group.add(coin);
 
+        var outerRim = new THREE.Mesh(
+            new THREE.TorusGeometry(SG.COIN_RADIUS * 0.92, 0.035, 6, 24),
+            rimMat
+        );
+        outerRim.position.set(0, coinY, 0.06);
+        group.add(outerRim);
+
+        var innerRim = new THREE.Mesh(
+            new THREE.TorusGeometry(SG.COIN_RADIUS * 0.48, 0.018, 6, 20),
+            darkDetailMat
+        );
+        innerRim.position.set(0, coinY, 0.065);
+        group.add(innerRim);
+
         var glow = new THREE.Mesh(
-            new THREE.RingGeometry(SG.COIN_RADIUS * 0.5, SG.COIN_RADIUS * 1.1, 10),
+            new THREE.RingGeometry(SG.COIN_RADIUS * 0.55, SG.COIN_RADIUS * 1.22, 18),
             new THREE.MeshBasicMaterial({ color: 0xFFD700, transparent: true, opacity: 0.25 })
         );
         glow.rotation.x = Math.PI / 2;
-        glow.position.set(0, 0.6 + (yOffset || 0), 0);
+        glow.position.set(0, coinY, 0);
         group.add(glow);
 
-        var dot = new THREE.Mesh(
-            new THREE.CircleGeometry(SG.COIN_RADIUS * 0.3, 6),
-            new THREE.MeshBasicMaterial({ color: 0xFFA500 })
+        var star = new THREE.Shape();
+        for (var si = 0; si < 10; si++) {
+            var radius = si % 2 === 0 ? SG.COIN_RADIUS * 0.28 : SG.COIN_RADIUS * 0.12;
+            var angle = -Math.PI / 2 + si * Math.PI / 5;
+            var sx = Math.cos(angle) * radius;
+            var sy = Math.sin(angle) * radius;
+            if (si === 0) star.moveTo(sx, sy);
+            else star.lineTo(sx, sy);
+        }
+        star.closePath();
+        var emblem = new THREE.Mesh(
+            new THREE.ShapeGeometry(star),
+            darkDetailMat
         );
-        dot.rotation.x = Math.PI / 2;
-        dot.position.set(0, 0.6 + (yOffset || 0), 0.01);
-        group.add(dot);
+        emblem.position.set(0, coinY, 0.071);
+        group.add(emblem);
+
+        var highlight = new THREE.Mesh(
+            new THREE.CircleGeometry(SG.COIN_RADIUS * 0.08, 12),
+            brightMat
+        );
+        highlight.position.set(0, coinY, 0.076);
+        group.add(highlight);
 
         group.position.set(laneX, 0, zPos);
-        group.userData = { lane: lane, collected: false };
+        for (var ci = 0; ci < group.children.length; ci++) {
+            group.children[ci].userData.baseY = group.children[ci].position.y;
+        }
+        group.userData = { lane: lane, collected: false, baseCoinY: coinY, coinDetail: 'high-contrast-centered-detail' };
         return group;
     };
 
@@ -1473,7 +2705,513 @@
         return coins;
     };
 })();
-// ===== SUBWAY SURFER - Particles =====
+
+// ===== ENDLESS RUNNER - Guns =====
+// ===== ENDLESS RUNNER - Gun Pickups =====
+(function() {
+    'use strict';
+    var SG = window.__SG = window.__SG || {};
+    var THREE = window.THREE;
+
+    SG.GUN_DURATION = 30;
+    SG.GUN_SPAWN_MIN = 10;
+    SG.GUN_SPAWN_MAX = 16;
+    SG.gunModels = SG.gunModels || {};
+    SG.gunModelPaths = SG.gunModelPaths || {
+        pistol: 'models/guns/pistol.glb',
+        longPistol: 'models/guns/long-pistol.glb',
+        rifle: 'models/guns/rifle.glb',
+        sniper: 'models/guns/sniper-rifle.glb'
+    };
+    SG.gunCatalog = SG.gunCatalog || [
+        { id: 'pistol', name: 'Pistol', modelKey: 'pistol', power: 1.0, fireInterval: 0.34, color: 0x4be7ff, range: 36, pickupScale: 1.0, viewScale: 1.0 },
+        { id: 'longPistol', name: 'Long Pistol', modelKey: 'longPistol', power: 1.55, fireInterval: 0.26, color: 0x86ff7a, range: 42, pickupScale: 1.0, viewScale: 1.0 },
+        { id: 'rifle', name: 'Rifle', modelKey: 'rifle', power: 2.35, fireInterval: 0.2, color: 0xffd34e, range: 50, pickupScale: 1.0, viewScale: 1.05 },
+        { id: 'sniper', name: 'Sniper Rifle', modelKey: 'sniper', power: 3.4, fireInterval: 0.16, color: 0xff5fd7, range: 58, pickupScale: 1.0, viewScale: 1.12 }
+    ];
+
+    SG.tuneGunMaterials = function(root, def) {
+        if (!root || !root.traverse) return;
+        root.traverse(function(node) {
+            if (!node || !node.isMesh || !node.material) return;
+            var mats = Array.isArray(node.material) ? node.material : [node.material];
+            for (var i = 0; i < mats.length; i++) {
+                var mat = mats[i];
+                if (!mat || !mat.color) continue;
+                if (mat.emissive) mat.emissive.setHex(0x000000);
+                mat.emissiveIntensity = 0;
+                mat.needsUpdate = true;
+            }
+        });
+    };
+
+    SG.getGunDef = function(id) {
+        for (var i = 0; i < SG.gunCatalog.length; i++) {
+            if (SG.gunCatalog[i].id === id) return SG.gunCatalog[i];
+        }
+        return SG.gunCatalog[0];
+    };
+
+    SG.loadGunModels = function() {
+        if (!THREE || !THREE.GLTFLoader || SG.gunModelsLoading) return;
+        SG.gunModelsLoading = true;
+        var loader = new THREE.GLTFLoader();
+        Object.keys(SG.gunModelPaths).forEach(function(key) {
+            loader.load(SG.gunModelPaths[key], function(gltf) {
+                var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+                if (!model) return;
+                model.name = key + '-gun-model';
+                model.traverse(function(node) {
+                    if (!node || !node.isMesh) return;
+                    node.castShadow = true;
+                    node.receiveShadow = true;
+                });
+                var def = SG.getGunDef(Object.keys(SG.gunModelPaths).filter(function(id) { return SG.gunModelPaths[id] === SG.gunModelPaths[key]; })[0]);
+                SG.tuneGunMaterials(model, def);
+                SG.gunModels[key] = model;
+            }, undefined, function(err) {
+                SG.gunModelError = err;
+            });
+        });
+    };
+
+    SG.cloneGunModel = function(def, forView) {
+        def = def || SG.gunCatalog[0];
+        var source = SG.gunModels && SG.gunModels[def.modelKey];
+        if (!source) return SG.createFallbackGunModel(def, forView);
+        var clone = source.clone(true);
+        clone.name = def.id + (forView ? '-view-gun' : '-pickup-gun');
+        clone.scale.multiplyScalar(forView ? def.viewScale : def.pickupScale);
+        SG.tuneGunMaterials(clone, def);
+        return clone;
+    };
+
+    SG.createFallbackGunModel = function(def, forView) {
+        var group = new THREE.Group();
+        group.name = def.id + '-fallback-gun';
+        var bodyMat = new THREE.MeshStandardMaterial({ color: 0x1b2434, roughness: 0.55, metalness: 0.2 });
+        var accentMat = new THREE.MeshStandardMaterial({ color: def.color || 0x4be7ff, emissive: def.color || 0x4be7ff, emissiveIntensity: 0.25, roughness: 0.4 });
+        var len = def.id === 'sniper' ? 1.8 : def.id === 'rifle' ? 1.5 : def.id === 'longPistol' ? 1.15 : 0.9;
+        var body = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, len), bodyMat);
+        body.position.y = 0.18;
+        group.add(body);
+        var barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, len * 0.62, 12), accentMat);
+        barrel.rotation.x = Math.PI / 2;
+        barrel.position.set(0, 0.24, -len * 0.38);
+        group.add(barrel);
+        var grip = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.38, 0.18), bodyMat);
+        grip.rotation.x = -0.35;
+        grip.position.set(0, -0.08, len * 0.18);
+        group.add(grip);
+        group.scale.setScalar(forView ? 1.0 : 0.9);
+        return group;
+    };
+
+    SG.createGunPickup = function(lane, z, def) {
+        def = def || SG.gunCatalog[Math.floor(Math.random() * SG.gunCatalog.length)];
+        var group = new THREE.Group();
+        group.name = def.id + '-pickup';
+        group.position.set(SG.LANE_POSITIONS[lane], 0.16, z);
+        var model = SG.cloneGunModel(def, false);
+        model.rotation.set(-0.08, 0, 0);
+        model.position.y = 0.22;
+        group.add(model);
+
+        var ringMat = new THREE.MeshBasicMaterial({
+            color: def.color,
+            transparent: true,
+            opacity: 0.45,
+            side: THREE.DoubleSide
+        });
+        var ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.52, 28), ringMat);
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.y = 0.03;
+        group.add(ring);
+
+        var light = new THREE.PointLight(def.color, 0.45, 3.2);
+        light.position.y = 0.65;
+        group.add(light);
+
+        group.userData = {
+            type: 'gun_pickup',
+            lane: lane,
+            gunId: def.id,
+            gunName: def.name,
+            color: def.color,
+            collected: false
+        };
+        return group;
+    };
+
+    SG.canPlaceGunPickup = function(lane, z) {
+        if (SG.state.pvpMode) return false;
+        if (SG.state.homelander) return false;
+        if (!SG.canPlaceCoinAt || !SG.canPlaceCoinAt(lane, z, null)) return false;
+        for (var i = 0; i < SG.state.gunPickups.length; i++) {
+            if (Math.abs(SG.state.gunPickups[i].position.z - z) < 24) return false;
+        }
+        return true;
+    };
+
+    SG.spawnGunPickups = function(delta) {
+        if (SG.state.pvpMode) return;
+        if (!SG.state.started || SG.state.gameOver || SG.state.paused || SG.state.homelander) return;
+        SG.state.gunSpawnTimer -= delta;
+        if (SG.state.gunSpawnTimer > 0) return;
+        SG.state.gunSpawnTimer = SG.GUN_SPAWN_MIN + Math.random() * (SG.GUN_SPAWN_MAX - SG.GUN_SPAWN_MIN);
+        if (SG.state.gunPickups.length >= 2) return;
+
+        var z = -(42 + Math.random() * 46);
+        var lane = Math.floor(Math.random() * SG.LANE_COUNT);
+        for (var tries = 0; tries < 6 && !SG.canPlaceGunPickup(lane, z); tries++) {
+            lane = (lane + 1) % SG.LANE_COUNT;
+            z -= 8;
+        }
+        if (!SG.canPlaceGunPickup(lane, z)) return;
+        var def = SG.gunCatalog[Math.floor(Math.random() * SG.gunCatalog.length)];
+        var pickup = SG.createGunPickup(lane, z, def);
+        SG.scene.add(pickup);
+        SG.state.gunPickups.push(pickup);
+    };
+
+    SG.collectGunPickup = function(pickup) {
+        if (SG.state.pvpMode) return false;
+        if (!pickup || pickup.userData.collected || SG.state.homelander) return false;
+        var def = SG.getGunDef(pickup.userData.gunId);
+        pickup.userData.collected = true;
+        SG.state.activeGun = {
+            id: def.id,
+            name: def.name,
+            power: def.power,
+            fireInterval: def.fireInterval,
+            range: def.range,
+            color: def.color
+        };
+        SG.state.gunTimer = SG.GUN_DURATION;
+        SG.state.gunShotCooldown = 0;
+        if (SG.scene) SG.scene.remove(pickup);
+        var idx = SG.state.gunPickups.indexOf(pickup);
+        if (idx >= 0) SG.state.gunPickups.splice(idx, 1);
+        if (SG.disposeObject) SG.disposeObject(pickup);
+        SG.refreshGunViewModel();
+        SG.updateGunCrosshair();
+        SG.flashGunHUD('Picked up ' + def.name);
+        return true;
+    };
+
+    SG.clearActiveGun = function() {
+        SG.state.activeGun = null;
+        SG.state.gunTimer = 0;
+        SG.state.gunShotCooldown = 0;
+        if (SG.gunViewModel) SG.gunViewModel.visible = false;
+        if (SG.playerGunModel) SG.playerGunModel.visible = false;
+        SG.updateGunCrosshair();
+        SG.updateGunHUD();
+    };
+
+    SG.clearGunSystem = function() {
+        for (var i = 0; i < SG.state.gunPickups.length; i++) {
+            if (SG.scene) SG.scene.remove(SG.state.gunPickups[i]);
+            if (SG.disposeObject) SG.disposeObject(SG.state.gunPickups[i]);
+        }
+        SG.state.gunPickups = [];
+        SG.state.gunSpawnTimer = 6;
+        SG.clearActiveGun();
+    };
+
+    SG.refreshGunViewModel = function() {
+        if (!THREE || !SG.scene) return;
+        if (SG.gunViewModel) {
+            SG.scene.remove(SG.gunViewModel);
+            if (SG.disposeObject) SG.disposeObject(SG.gunViewModel);
+        }
+        if (SG.playerGunModel && SG.player) {
+            SG.player.remove(SG.playerGunModel);
+            if (SG.disposeObject) SG.disposeObject(SG.playerGunModel);
+        }
+        SG.gunViewModel = new THREE.Group();
+        SG.gunViewModel.name = 'first-person-gun-viewmodel';
+        var def = SG.getGunDef(SG.state.activeGun && SG.state.activeGun.id);
+        var model = SG.cloneGunModel(def, true);
+        model.position.set(0, -0.02, 0);
+        model.rotation.set(0.12, 0, 0);
+        SG.gunViewModel.add(model);
+        SG.gunViewModel.visible = false;
+        SG.scene.add(SG.gunViewModel);
+
+        SG.playerGunModel = new THREE.Group();
+        SG.playerGunModel.name = 'third-person-held-gun';
+        var held = SG.cloneGunModel(def, false);
+        held.position.set(0, 0, 0);
+        held.rotation.set(0.08, Math.PI, 0);
+        held.scale.multiplyScalar(0.82);
+        SG.playerGunModel.add(held);
+        SG.playerGunModel.position.set(-0.34, 0.66, 0.02);
+        SG.playerGunModel.rotation.set(0, 0, 0);
+        SG.playerGunModel.visible = false;
+        if (SG.player) SG.player.add(SG.playerGunModel);
+    };
+
+    SG.updateGunViewModel = function() {
+        if (!SG.gunViewModel || !SG.camera) return;
+        var show = !!(SG.state.firstPerson && SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander && !SG.state.pvpMode && SG.state.started && !SG.state.paused && !SG.state.gameOver);
+        SG.gunViewModel.visible = show;
+        if (SG.playerGunModel) {
+            SG.playerGunModel.visible = !!(!SG.state.firstPerson && SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander && !SG.state.pvpMode && SG.state.started && !SG.state.paused && !SG.state.gameOver);
+        }
+        if (SG.updateGunCrosshair) SG.updateGunCrosshair();
+        if (!show) return;
+        var forward = new THREE.Vector3();
+        var right = new THREE.Vector3(1, 0, 0).applyQuaternion(SG.camera.quaternion);
+        var down = new THREE.Vector3(0, -1, 0).applyQuaternion(SG.camera.quaternion);
+        SG.camera.getWorldDirection(forward);
+        SG.gunViewModel.position.copy(SG.camera.position)
+            .add(right.multiplyScalar(0.34))
+            .add(down.multiplyScalar(0.4))
+            .add(forward.multiplyScalar(0.82));
+        SG.gunViewModel.quaternion.copy(SG.camera.quaternion);
+    };
+
+    SG.getGunMuzzlePosition = function() {
+        if (!THREE || !SG.player) return null;
+        if (SG.state.firstPerson && SG.camera) {
+            var forward = new THREE.Vector3();
+            var right = new THREE.Vector3(1, 0, 0).applyQuaternion(SG.camera.quaternion);
+            var down = new THREE.Vector3(0, -1, 0).applyQuaternion(SG.camera.quaternion);
+            SG.camera.getWorldDirection(forward);
+            return SG.camera.position.clone()
+                .add(right.multiplyScalar(0.34))
+                .add(down.multiplyScalar(0.27))
+                .add(forward.multiplyScalar(1.12));
+        }
+        return SG.player.position.clone().add(new THREE.Vector3(0.32, 0.92, -0.58));
+    };
+
+    SG.findGunTarget = function() {
+        if (!SG.state.activeGun || !SG.player) return null;
+        var lane = SG.state.currentLane;
+        var best = null;
+        var bestZ = -9999;
+        var range = SG.state.activeGun.range || 40;
+        for (var i = 0; i < SG.state.obstacles.length; i++) {
+            var obs = SG.state.obstacles[i];
+            if (!obs || !obs.userData || obs.userData.type === 'train') continue;
+            if (obs.position.z > 2 || obs.position.z < -range) continue;
+            var lanes = SG.getObstacleLanes ? SG.getObstacleLanes(obs) : [obs.userData.lane];
+            if (lanes.indexOf(lane) < 0) continue;
+            if (obs.position.z > bestZ) {
+                best = obs;
+                bestZ = obs.position.z;
+            }
+        }
+        return best;
+    };
+
+    SG.getObstacleGunHp = function(obstacle) {
+        if (!obstacle || !obstacle.userData) return 3;
+        if (typeof obstacle.userData.gunHp === 'number') return obstacle.userData.gunHp;
+        var type = obstacle.userData.type;
+        if (type === 'full_barrier') return 4.4;
+        if (type === 'roll_under') return 3.3;
+        if (type === 'low_flying') return 2.7;
+        if (type === 'barrier') return 2.4;
+        return 3.2;
+    };
+
+    SG.destroyObstacleByGun = function(obstacle) {
+        if (!obstacle || !SG.scene) return;
+        var idx = SG.state.obstacles.indexOf(obstacle);
+        if (idx >= 0) SG.state.obstacles.splice(idx, 1);
+        if (SG.state.coinObstacleMap) SG.state.coinObstacleMap.delete(obstacle.uuid);
+        var pos = obstacle.position.clone();
+        SG.scene.remove(obstacle);
+        if (SG.disposeObject) SG.disposeObject(obstacle);
+        if (SG.spawnDestroyParticles) SG.spawnDestroyParticles(pos);
+    };
+
+    SG.createGunBeam = function(target) {
+        if (!THREE || !SG.scene || !SG.player || !SG.state.activeGun) return;
+        var start = SG.getGunMuzzlePosition() || SG.player.position.clone();
+        var forward = new THREE.Vector3(0, 0, -1);
+        if (SG.camera) SG.camera.getWorldDirection(forward);
+        var end = target ? target.position.clone() : start.clone().add(forward.multiplyScalar(SG.state.activeGun.range));
+        end.y += target ? Math.min(target.userData.height || 1, 1.1) * 0.55 : 0;
+        var dir = end.clone().sub(start);
+        var len = Math.max(0.1, dir.length());
+        var shotColor = SG.state.activeGun.color || 0xffe34d;
+        var mat = new THREE.MeshBasicMaterial({
+            color: shotColor,
+            transparent: true,
+            opacity: 1,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        var beam = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, len, 12), mat);
+        beam.position.copy(start).add(dir.clone().multiplyScalar(0.5));
+        beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), end.clone().sub(start).normalize());
+        beam.userData = { vx: 0, vy: 0, vz: 0, life: 1, decay: 0.18 };
+        SG.scene.add(beam);
+        SG.state.particles.push(beam);
+
+        var glowMat = new THREE.MeshBasicMaterial({
+            color: SG.state.activeGun.color || 0x4be7ff,
+            transparent: true,
+            opacity: 0.42,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        var glow = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, len, 12), glowMat);
+        glow.position.copy(beam.position);
+        glow.quaternion.copy(beam.quaternion);
+        glow.userData = { vx: 0, vy: 0, vz: 0, life: 1, decay: 0.22 };
+        SG.scene.add(glow);
+        SG.state.particles.push(glow);
+
+        var flashMat = new THREE.MeshBasicMaterial({
+            color: 0xfff36a,
+            transparent: true,
+            opacity: 0.98,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        var flash = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 8), flashMat);
+        flash.position.copy(start);
+        flash.userData = { vx: 0, vy: 0, vz: 0, life: 1, decay: 0.32 };
+        SG.scene.add(flash);
+        SG.state.particles.push(flash);
+    };
+
+    SG.playGunSound = function() {
+        if (!SG.audioCtx || SG.state.muted) return;
+        SG.scheduleSound(0, function(t) {
+            try {
+                var sfx = SG.state.sfxVolume || 0.8;
+                var master = SG.audioCtx.createGain();
+                master.gain.setValueAtTime(0.32 * sfx, t);
+                master.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+                master.connect(SG.audioCtx.destination);
+
+                var body = SG.audioCtx.createOscillator();
+                body.type = 'sawtooth';
+                body.frequency.setValueAtTime(150, t);
+                body.frequency.exponentialRampToValueAtTime(58, t + 0.11);
+                body.connect(master);
+                body.start(t);
+                body.stop(t + 0.16);
+
+                var crack = SG.audioCtx.createOscillator();
+                crack.type = 'square';
+                crack.frequency.setValueAtTime(1250, t);
+                crack.frequency.exponentialRampToValueAtTime(310, t + 0.045);
+                crack.connect(master);
+                crack.start(t);
+                crack.stop(t + 0.055);
+
+                var bufferSize = Math.floor(SG.audioCtx.sampleRate * 0.055);
+                var buffer = SG.audioCtx.createBuffer(1, bufferSize, SG.audioCtx.sampleRate);
+                var data = buffer.getChannelData(0);
+                for (var i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2);
+                }
+                var noise = SG.audioCtx.createBufferSource();
+                var noiseGain = SG.audioCtx.createGain();
+                noise.buffer = buffer;
+                noiseGain.gain.setValueAtTime(0.22 * sfx, t);
+                noiseGain.gain.linearRampToValueAtTime(0, t + 0.055);
+                noise.connect(noiseGain);
+                noiseGain.connect(SG.audioCtx.destination);
+                noise.start(t);
+            } catch(e) {}
+        });
+    };
+
+    SG.shootGun = function() {
+        if (!SG.state.started || SG.state.paused || SG.state.gameOver || SG.state.homelander) return false;
+        if (!SG.state.activeGun || SG.state.gunTimer <= 0 || SG.state.gunShotCooldown > 0) return false;
+        if (!SG.audioCtx && SG.initAudio) SG.initAudio();
+        SG.state.gunShotCooldown = SG.state.activeGun.fireInterval || 0.24;
+        var target = SG.findGunTarget();
+        SG.createGunBeam(target);
+        SG.playGunSound();
+        if (target) {
+            var hp = SG.getObstacleGunHp(target) - SG.state.activeGun.power;
+            target.userData.gunHp = hp;
+            if (hp <= 0) SG.destroyObstacleByGun(target);
+        }
+        return true;
+    };
+
+    SG.flashGunHUD = function(text) {
+        var el = document.getElementById('gun-hud');
+        if (!el) return;
+        el.textContent = text;
+        el.style.display = 'block';
+        el.style.borderColor = 'rgba(75,231,255,0.55)';
+    };
+
+    SG.updateGunHUD = function() {
+        var el = document.getElementById('gun-hud');
+        if (!el) return;
+        if (!SG.state.activeGun || SG.state.gunTimer <= 0 || SG.state.homelander) {
+            el.style.display = 'none';
+            SG.updateGunCrosshair();
+            return;
+        }
+        el.style.display = 'block';
+        el.textContent = 'GUN: ' + SG.state.activeGun.name + '  ' + SG.state.gunTimer.toFixed(1) + 's';
+        SG.updateGunCrosshair();
+    };
+
+    SG.updateGunCrosshair = function() {
+        var el = document.getElementById('gun-crosshair');
+        if (!el) return;
+        var show = !!(SG.state.firstPerson && SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander && SG.state.started && !SG.state.paused && !SG.state.gameOver);
+        el.style.display = show ? 'block' : 'none';
+        el.style.visibility = show ? 'visible' : 'hidden';
+        el.style.opacity = show ? '1' : '0';
+    };
+
+    SG.updateGunSystem = function(delta) {
+        if (SG.state.pvpMode) {
+            if ((SG.state.gunPickups && SG.state.gunPickups.length) || SG.state.activeGun) SG.clearGunSystem();
+            return;
+        }
+        SG.spawnGunPickups(delta);
+
+        for (var i = SG.state.gunPickups.length - 1; i >= 0; i--) {
+            var pickup = SG.state.gunPickups[i];
+            pickup.position.z += SG.state.speed * delta * 60;
+            pickup.rotation.y += delta * 1.8;
+            var bob = Math.sin(SG.state.gameTime * 3 + pickup.id) * 0.08;
+            if (pickup.children[0]) pickup.children[0].position.y = 0.22 + bob;
+            if (!SG.state.homelander && SG.player) {
+                var dx = Math.abs(SG.player.position.x - pickup.position.x);
+                var dz = Math.abs(SG.player.position.z - pickup.position.z);
+                if (dx < 0.85 && dz < 0.9) {
+                    SG.collectGunPickup(pickup);
+                    continue;
+                }
+            }
+            if (pickup.position.z > SG.DESPAWN_BEHIND) {
+                SG.scene.remove(pickup);
+                SG.state.gunPickups.splice(i, 1);
+                if (SG.disposeObject) SG.disposeObject(pickup);
+            }
+        }
+
+        if (SG.state.gunShotCooldown > 0) SG.state.gunShotCooldown = Math.max(0, SG.state.gunShotCooldown - delta);
+        if (SG.state.activeGun && SG.state.gunTimer > 0 && !SG.state.homelander) {
+            SG.state.gunTimer = Math.max(0, SG.state.gunTimer - delta);
+            if (SG.state.gunTimer <= 0) SG.clearActiveGun();
+        }
+        if (SG.state.homelander && SG.state.activeGun) SG.clearActiveGun();
+        SG.updateGunViewModel();
+        SG.updateGunHUD();
+    };
+})();
+
+// ===== ENDLESS RUNNER - Particles =====
+// ===== ENDLESS RUNNER - Particles =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -1556,7 +3294,9 @@
         }
     };
 })();
-// ===== SUBWAY SURFER - Collision Detection =====
+
+// ===== ENDLESS RUNNER - Collision =====
+// ===== ENDLESS RUNNER - Collision Detection =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -1586,8 +3326,8 @@
 
             var obsY, obsH;
             if (od.type === 'roll_under') {
-                obsY = 1.65;
-                obsH = 0.5;
+                obsY = od.yOffset || 1.28;
+                obsH = od.height || 0.38;
             } else if (od.type === 'low_flying') {
                 obsY = 1.0;
                 obsH = 0.8;
@@ -1613,13 +3353,28 @@
             }
 
             if (od.type === 'full_barrier') {
+                if (Array.isArray(od.blockedLanes)) {
+                    var playerLane = state.currentLane;
+                    var nearestDist = Infinity;
+                    for (var li = 0; li < SG.LANE_POSITIONS.length; li++) {
+                        var laneDist = Math.abs(playerPos.x - SG.LANE_POSITIONS[li]);
+                        if (laneDist < nearestDist) {
+                            nearestDist = laneDist;
+                            playerLane = li;
+                        }
+                    }
+                    if (od.blockedLanes.indexOf(playerLane) < 0) continue;
+                    obsBox.x = SG.LANE_POSITIONS[playerLane];
+                    obsBox.w = od.width || 1.6;
+                }
                 if (state.isJumping && state.playerHeight > 0.9) continue;
             }
 
             if (od.type === 'train' && od.hasRamp && !state.onRoof) {
                 var trainBack = obs.position.z + (od.depth || 5.5) / 2;
+                var rampReach = (od.rampWidth || 2.0) / 2 + playerHitbox.w / 2;
                 if (playerPos.z >= trainBack - 1.5 && playerPos.z <= trainBack + 3.5 &&
-                    Math.abs(playerPos.x - obsBox.x) < 1.5) {
+                    Math.abs(playerPos.x - obsBox.x) < rampReach) {
                     state.onRoof = true;
                     continue;
                 }
@@ -1672,16 +3427,23 @@
                 if (!mat.color) continue;
                 var hex = mat.color.getHex();
                 if (on) {
-                    if (child.userData._origColor === undefined) {
-                        child.userData._origColor = hex;
+                    mat.userData = mat.userData || {};
+                    if (mat.userData._origColor === undefined) {
+                        mat.userData._origColor = hex;
                     }
                     var g = gray(hex);
                     mat.color.setHex(g);
-                } else if (child.userData._origColor !== undefined) {
-                    mat.color.setHex(child.userData._origColor);
-                    delete child.userData._origColor;
+                } else {
+                    mat.userData = mat.userData || {};
+                    if (mat.userData._origColor !== undefined) {
+                        mat.color.setHex(mat.userData._origColor);
+                        delete mat.userData._origColor;
+                    } else if (child.userData._origColor !== undefined) {
+                        mat.color.setHex(child.userData._origColor);
+                    }
                 }
             }
+            if (!on && child.userData._origColor !== undefined) delete child.userData._origColor;
         });
 
         if (SG.ambientLight) {
@@ -1690,7 +3452,9 @@
         }
     };
 })();
-// ===== SUBWAY SURFER - UI System =====
+
+// ===== ENDLESS RUNNER - Ui =====
+// ===== ENDLESS RUNNER - UI System =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
@@ -1709,6 +3473,10 @@
                 SG.state.canDoubleJump = data.doubleJump || false;
                 SG.state.canJetpack = data.jetpack || false;
                 SG.state.canRoofWalk = data.roofWalk || false;
+                SG.state.ownedCharacters = Array.isArray(data.ownedCharacters) && data.ownedCharacters.length ? data.ownedCharacters : ['runner'];
+                SG.state.selectedCharacter = data.selectedCharacter || SG.state.selectedCharacter || 'runner';
+                localStorage.setItem('subwayOwnedCharacters', JSON.stringify(SG.state.ownedCharacters));
+                localStorage.setItem('subwaySelectedCharacter', SG.state.selectedCharacter);
             }
         } catch(e) {}
     };
@@ -1720,7 +3488,9 @@
                 equippedAbility: SG.state.equippedAbility,
                 doubleJump: SG.state.canDoubleJump,
                 jetpack: SG.state.canJetpack,
-                roofWalk: SG.state.canRoofWalk
+                roofWalk: SG.state.canRoofWalk,
+                ownedCharacters: SG.getOwnedCharacters ? SG.getOwnedCharacters() : (SG.state.ownedCharacters || ['runner']),
+                selectedCharacter: SG.state.selectedCharacter || 'runner'
             };
             localStorage.setItem('subwayShop', JSON.stringify(data));
         } catch(e) {}
@@ -1745,7 +3515,7 @@
         // showShop continues below...
         var prices = [0, 10000, 50000, 100000];
         var names = ['None', 'Double Jump', 'Jetpack', 'Roof Walk'];
-        var descs = ['No ability equipped', 'Double jump in mid-air', 'Fly for 30s every 15s cooldown', 'Walk on top of obstacles'];
+        var descs = ['No ability equipped', 'Double jump in mid-air', 'Fly for 15s, max altitude, 30s cooldown', 'Walk on top of obstacles'];
         var icons = ['🚫', '🦘', '🚀', '🏃'];
 
         var html = '<div class="menu-content" style="max-height:85vh;overflow-y:auto;">';
@@ -1818,9 +3588,187 @@
 
     };  // end showShop
 
+    SG.characterOverlay = null;
+    SG.characterPreview = null;
+
+    function esc(str) {
+        return String(str || '').replace(/[&<>"']/g, function(ch) {
+            return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+        });
+    }
+
+    function disposeCharacterPreviewModel() {
+        if (!SG.characterPreview || !SG.characterPreview.model) return;
+        SG.characterPreview.scene.remove(SG.characterPreview.model);
+        if (SG.disposeObject) SG.disposeObject(SG.characterPreview.model);
+        SG.characterPreview.model = null;
+        SG.characterPreview.mixer = null;
+    }
+
+    SG.previewCharacter = function(id) {
+        if (!SG.characterPreview || !THREE || !THREE.GLTFLoader) return;
+        var character = SG.getCharacterById ? SG.getCharacterById(id) : null;
+        if (!character) return;
+        SG.characterPreview.current = character.id;
+        disposeCharacterPreviewModel();
+        var loader = new THREE.GLTFLoader();
+        loader.load(character.path, function(gltf) {
+            var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+            if (!model || !SG.characterPreview || SG.characterPreview.current !== character.id) return;
+            model.name = 'Preview-' + character.id;
+            if (SG.normalizePlayerModel) SG.normalizePlayerModel(model);
+            model.traverse(function(node) {
+                if (node && node.isMesh) {
+                    node.castShadow = true;
+                    node.receiveShadow = true;
+                }
+            });
+            SG.characterPreview.model = model;
+            SG.characterPreview.scene.add(model);
+            SG.characterPreview.previewTime = 0;
+            if (character.id !== 'runner' && gltf.animations && gltf.animations.length && THREE.AnimationMixer) {
+                SG.characterPreview.mixer = new THREE.AnimationMixer(model);
+                var clip = gltf.animations.filter(function(c) { return String(c.name).toLowerCase() === 'idle'; })[0] || gltf.animations[0];
+                SG.characterPreview.mixer.clipAction(clip).play();
+            }
+        }, undefined, function(err) {
+            SG.characterPreview.error = err;
+        });
+    };
+
+    function ensureCharacterPreview(canvas) {
+        if (!canvas || !THREE) return;
+        if (!SG.characterPreview) {
+            var renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+            var scene = new THREE.Scene();
+            var camera = new THREE.PerspectiveCamera(35, 1, 0.1, 30);
+            camera.position.set(0, 1.15, 4.0);
+            var hemi = new THREE.HemisphereLight(0xffffff, 0x273347, 1.5);
+            scene.add(hemi);
+            var key = new THREE.DirectionalLight(0xffffff, 1.8);
+            key.position.set(2, 4, 3);
+            scene.add(key);
+            SG.characterPreview = { renderer: renderer, scene: scene, camera: camera, model: null, mixer: null, clock: new THREE.Clock(), current: null, running: false, previewTime: 0 };
+        } else if (SG.characterPreview.renderer.domElement !== canvas) {
+            SG.characterPreview.renderer.dispose();
+            SG.characterPreview.renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+            SG.characterPreview.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        }
+
+        function loop() {
+            if (!SG.characterOverlay || SG.characterOverlay.style.display === 'none' || !SG.characterPreview) {
+                if (SG.characterPreview) SG.characterPreview.running = false;
+                return;
+            }
+            SG.characterPreview.running = true;
+            var w = Math.max(220, canvas.clientWidth || 320);
+            var h = Math.max(260, canvas.clientHeight || 360);
+            SG.characterPreview.renderer.setSize(w, h, false);
+            SG.characterPreview.camera.aspect = w / h;
+            SG.characterPreview.camera.updateProjectionMatrix();
+            var delta = Math.min(SG.characterPreview.clock.getDelta(), 0.033);
+            SG.characterPreview.previewTime += delta;
+            if (SG.characterPreview.mixer) SG.characterPreview.mixer.update(delta);
+            if (SG.characterPreview.model) SG.characterPreview.model.rotation.y = Math.sin(SG.characterPreview.previewTime * 0.7) * 0.35;
+            SG.characterPreview.renderer.render(SG.characterPreview.scene, SG.characterPreview.camera);
+            requestAnimationFrame(loop);
+        }
+        if (!SG.characterPreview.running) loop();
+    }
+
+    SG.showCharacters = function() {
+        if (!SG.characterOverlay) {
+            SG.characterOverlay = document.createElement('div');
+            SG.characterOverlay.id = 'characters-overlay';
+            SG.characterOverlay.className = 'overlay';
+            SG.characterOverlay.onclick = function(e) { if (e.target === SG.characterOverlay || e.target.closest('.modal-close-btn')) SG.characterOverlay.style.display = 'none'; };
+            SG.characterOverlay.addEventListener('touchend', function(e) { if (e.target === SG.characterOverlay || e.target.closest('.modal-close-btn')) { e.preventDefault(); SG.characterOverlay.style.display = 'none'; } });
+            document.body.appendChild(SG.characterOverlay);
+        }
+
+        var selected = SG.state.selectedCharacter || 'runner';
+        var owned = SG.getOwnedCharacters ? SG.getOwnedCharacters() : ['runner'];
+        var nextPrice = SG.getNextCharacterPrice ? SG.getNextCharacterPrice() : 0;
+        var html = '<div class="menu-content character-modal">';
+        html += '<h1 class="menu-title" style="font-size:28px;margin-bottom:5px;">CHARACTERS</h1>';
+        html += '<div class="character-credit-line">' + (SG.state.credits || 0) + ' credits</div>';
+        html += '<div class="character-layout">';
+        html += '<div class="character-preview-wrap"><canvas id="character-preview-canvas"></canvas><div id="character-preview-name">' + esc((SG.getCharacterById ? SG.getCharacterById(selected).name : selected)) + '</div></div>';
+        html += '<div class="character-list">';
+        for (var i = 0; i < SG.characterCatalog.length; i++) {
+            var ch = SG.characterCatalog[i];
+            var isOwned = owned.indexOf(ch.id) >= 0;
+            var isSelected = selected === ch.id;
+            html += '<div class="character-card' + (isOwned ? ' owned' : '') + (isSelected ? ' selected' : '') + '" onclick="__neoPreviewCharacter(\'' + ch.id + '\')">';
+            html += '<div class="character-info"><div class="character-name">' + esc(ch.name) + '</div><div class="character-desc">' + esc(ch.desc) + '</div></div>';
+            if (isSelected) html += '<button class="diff-btn active" disabled>SELECTED</button>';
+            else if (isOwned) html += '<button class="diff-btn" onclick="event.stopPropagation();__neoSelectCharacter(\'' + ch.id + '\')">SELECT</button>';
+            else html += '<button class="diff-btn" onclick="event.stopPropagation();__neoBuyCharacter(\'' + ch.id + '\')">' + nextPrice + 'cr</button>';
+            html += '</div>';
+        }
+        html += '</div></div>';
+        html += '<div class="menu-btn modal-close-btn">CLOSE</div>';
+        html += '</div>';
+
+        SG.characterOverlay.innerHTML = html;
+        SG.characterOverlay.style.display = 'flex';
+
+        window.__neoPreviewCharacter = function(id) {
+            var ch = SG.getCharacterById(id);
+            var nameEl = document.getElementById('character-preview-name');
+            if (ch && nameEl) nameEl.textContent = ch.name;
+            SG.previewCharacter(id);
+        };
+        window.__neoSelectCharacter = function(id) {
+            if (SG.selectCharacter(id)) {
+                if (SG.saveShopData) SG.saveShopData();
+                if (SG.accountSave) SG.accountSave();
+                SG.showCharacters();
+            }
+        };
+        window.__neoBuyCharacter = function(id) {
+            if (SG.buyCharacter(id)) SG.showCharacters();
+        };
+
+        ensureCharacterPreview(document.getElementById('character-preview-canvas'));
+        SG.previewCharacter(selected);
+    };
+
     SG.updateMenuCredits = function() {
         var el = document.getElementById('menu-credits');
         if (el) el.textContent = '💰 TOTAL: ' + SG.state.credits;
+    };
+
+    SG.getSpeedKmh = function() {
+        var metersPerSecond = typeof SG.state.instantSpeedMps === 'number'
+            ? SG.state.instantSpeedMps
+            : (SG.getDistanceRate ? SG.getDistanceRate(SG.state.speed) : ((SG.state.speed || 0) * 10));
+        return Math.max(0, Math.round(metersPerSecond * 3.6));
+    };
+
+    SG.updateSpeedHUD = function() {
+        var el = SG.speedHudEl || document.getElementById('third-person-speed-hud');
+        if (!el || !SG.camera || !SG.player || !window.THREE) return;
+        if (!SG.state.started || SG.state.gameOver || SG.state.firstPerson || SG.state.homelander) {
+            el.style.display = 'none';
+            return;
+        }
+
+        var pos = SG.player.position.clone();
+        pos.x += 0.26;
+        pos.y += 1.45;
+        pos.project(SG.camera);
+
+        if (pos.z < -1 || pos.z > 1) {
+            el.style.display = 'none';
+            return;
+        }
+
+        el.textContent = SG.getSpeedKmh() + ' km/h';
+        el.style.left = ((pos.x * 0.5 + 0.5) * window.innerWidth) + 'px';
+        el.style.top = ((-pos.y * 0.5 + 0.5) * window.innerHeight) + 'px';
+        el.style.display = 'block';
     };
 
     // ===== SETTINGS OVERLAY =====
@@ -1836,24 +3784,68 @@
         }
         var music = parseFloat(localStorage.getItem('subwayMusicVol') || '0.5');
         var sfx = parseFloat(localStorage.getItem('subwaySfxVol') || '0.8');
+        var rollDelay = Math.max(0, Math.min(1000, parseInt(localStorage.getItem('subwayRollReleaseDelay') || String(SG.state.rollReleaseDelay || 200))));
+        var bindings = SG.getKeyBindings ? SG.getKeyBindings() : { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown' };
+        var thirdPersonView = localStorage.getItem('subwayThirdPersonView') || SG.state.thirdPersonView || 'near';
+        var fpPitch = Math.max(-5, Math.min(5, parseFloat(localStorage.getItem('subwayFirstPersonPitchDeg') || String(typeof SG.state.firstPersonPitchDeg === 'number' ? SG.state.firstPersonPitchDeg : 1))));
         SG.state.musicVolume = music;
         SG.state.sfxVolume = sfx;
+        SG.state.rollReleaseDelay = rollDelay;
+        SG.state.thirdPersonView = thirdPersonView;
+        SG.state.firstPersonPitchDeg = fpPitch;
 
-        var html = '<div class="menu-content" style="max-width:360px;">';
+        var actionOrder = ['up', 'down', 'left', 'right'];
+        var viewOptions = [
+            { key: 'far', label: 'Farthest', desc: 'Current camera distance' },
+            { key: 'medium', label: 'Medium', desc: 'Closer third-person view' },
+            { key: 'near', label: 'Closest', desc: 'Most immersive third-person view' }
+        ];
+        var html = '<div class="menu-content" style="max-width:640px;width:min(94vw,640px);max-height:88vh;overflow:auto;">';
         html += '<h1 class="menu-title" style="font-size:24px;">⚙ SETTINGS</h1>';
         html += '<div style="margin:12px 0;text-align:center;">';
         html += '<span class="s-label">🔊 Master</span>';
         html += '<button class="diff-btn" id="__mute-btn">' + (SG.state.muted ? 'OFF' : 'ON') + '</button>';
         html += '</div>';
         html += '<div style="margin:10px 0;">';
-        html += '<div class="s-label" style="margin-bottom:6px;">🎵 Music</div>';
-        html += '<div style="display:flex;align-items:center;gap:8px;"><input type="range" min="0" max="1" step="0.1" value="' + music + '" class="__vol-slider" data-key="subwayMusicVol"><span class="vol-pct">' + Math.round(music * 100) + '%</span></div>';
+        html += '<div style="display:grid;grid-template-columns:30px 76px 1fr 44px;align-items:center;gap:8px;">';
+        html += '<span style="justify-self:start;font-size:18px;">🎵</span><span class="s-label">Music</span><input type="range" min="0" max="1" step="0.1" value="' + music + '" class="__vol-slider" data-key="subwayMusicVol"><span class="vol-pct">' + Math.round(music * 100) + '%</span>';
+        html += '</div>';
         html += '</div>';
         html += '<div style="margin:10px 0;">';
-        html += '<div class="s-label" style="margin-bottom:6px;">🔊 SFX</div>';
-        html += '<div style="display:flex;align-items:center;gap:8px;"><input type="range" min="0" max="1" step="0.1" value="' + sfx + '" class="__vol-slider" data-key="subwaySfxVol"><span class="vol-pct">' + Math.round(sfx * 100) + '%</span></div>';
+        html += '<div style="display:grid;grid-template-columns:30px 76px 1fr 44px;align-items:center;gap:8px;">';
+        html += '<span style="justify-self:start;font-size:18px;">🔊</span><span class="s-label">SFX</span><input type="range" min="0" max="1" step="0.1" value="' + sfx + '" class="__vol-slider" data-key="subwaySfxVol"><span class="vol-pct">' + Math.round(sfx * 100) + '%</span>';
         html += '</div>';
-        html += '<div style="color:#aaa;font-size:13px;margin:12px 0;">↑ Jump | ↓ Roll | ← → Move | 👁 FPV</div>';
+        html += '</div>';
+        html += '<div style="margin:14px 0 10px;">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:end;gap:10px;margin-bottom:6px;"><div><div class="s-label">Crouch Release Delay / 蹲起延迟</div><div style="color:#aaa;font-size:12px;text-align:left;">How long the character stays crouched after releasing Down</div></div><span id="__roll-delay-val" class="vol-pct">' + rollDelay + 'ms</span></div>';
+        html += '<input type="range" min="0" max="1000" step="50" value="' + rollDelay + '" id="__roll-delay" style="width:100%;">';
+        html += '</div>';
+        html += '<div style="margin:14px 0 10px;">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:end;gap:10px;margin-bottom:6px;"><div><div class="s-label">First-Person View Height / 第一人称视角高度</div><div style="color:#aaa;font-size:12px;text-align:left;">Adjust camera pitch from -5° to +5°</div></div><span id="__fp-pitch-val" class="vol-pct">' + fpPitch.toFixed(0) + '°</span></div>';
+        html += '<div style="display:grid;grid-template-columns:42px 1fr 42px;align-items:center;gap:8px;"><button class="diff-btn" id="__fp-pitch-down" style="min-width:42px;padding:8px;">-</button><input type="range" min="-5" max="5" step="1" value="' + fpPitch + '" id="__fp-pitch" style="width:100%;"><button class="diff-btn" id="__fp-pitch-up" style="min-width:42px;padding:8px;">+</button></div>';
+        html += '</div>';
+        html += '<div style="margin:14px 0 10px;">';
+        html += '<div class="s-label" style="margin-bottom:8px;">Third-Person Camera</div>';
+        html += '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">';
+        for (var vi = 0; vi < viewOptions.length; vi++) {
+            var view = viewOptions[vi];
+            var active = view.key === thirdPersonView ? ' selected' : '';
+            html += '<button class="diff-btn __view-btn' + active + '" data-view="' + view.key + '" style="min-height:58px;padding:8px 6px;border:1px solid rgba(255,255,255,0.2);transition:background 0.12s,border-color 0.12s,box-shadow 0.12s,transform 0.12s;color:#fff;"><strong>' + view.label + '</strong><small style="display:block;color:#aaa;font-size:11px;margin-top:4px;line-height:1.2;">' + view.desc + '</small></button>';
+        }
+        html += '</div>';
+        html += '</div>';
+        html += '<div style="margin:14px 0 8px;">';
+        html += '<div class="s-label" style="margin-bottom:8px;">Key Bindings</div>';
+        html += '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">';
+        for (var ai = 0; ai < actionOrder.length; ai++) {
+            var action = actionOrder[ai];
+            var label = SG.keyBindingLabels && SG.keyBindingLabels[action] ? SG.keyBindingLabels[action] : action;
+            var keyLabel = SG.formatKeyName ? SG.formatKeyName(bindings[action]) : bindings[action];
+            html += '<button class="diff-btn __bind-btn" data-action="' + action + '" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 10px;"><span>' + label + '</span><strong>' + keyLabel + '</strong></button>';
+        }
+        html += '</div>';
+        html += '<button class="diff-btn" id="__reset-bindings" style="width:100%;margin-top:8px;">RESET KEYS</button>';
+        html += '</div>';
         html += '<div class="menu-btn modal-close-btn" id="__settings-close">CLOSE</div>';
         html += '</div>';
 
@@ -1878,8 +3870,101 @@
                 localStorage.setItem(key, String(val));
                 if (key === 'subwayMusicVol') SG.state.musicVolume = val;
                 else if (key === 'subwaySfxVol') SG.state.sfxVolume = val;
+                if (SG.updateHomelanderAudioVolume) SG.updateHomelanderAudioVolume();
                 var pct = this.parentNode.querySelector('.vol-pct');
                 if (pct) pct.textContent = Math.round(val * 100) + '%';
+            };
+        }
+        var rollDelaySlider = document.getElementById('__roll-delay');
+        if (rollDelaySlider) {
+            rollDelaySlider.oninput = function() {
+                var val = Math.max(0, Math.min(1000, parseInt(this.value || '200')));
+                SG.state.rollReleaseDelay = val;
+                localStorage.setItem('subwayRollReleaseDelay', String(val));
+                var out = document.getElementById('__roll-delay-val');
+                if (out) out.textContent = val + 'ms';
+            };
+        }
+        var fpPitchSlider = document.getElementById('__fp-pitch');
+        function setFirstPersonPitch(val) {
+            val = Math.max(-5, Math.min(5, parseFloat(val || '1')));
+            SG.state.firstPersonPitchDeg = val;
+            localStorage.setItem('subwayFirstPersonPitchDeg', String(val));
+            if (fpPitchSlider) fpPitchSlider.value = String(val);
+            var out = document.getElementById('__fp-pitch-val');
+            if (out) out.textContent = val.toFixed(0) + '°';
+        }
+        if (fpPitchSlider) {
+            fpPitchSlider.oninput = function() { setFirstPersonPitch(this.value); };
+        }
+        var fpPitchDown = document.getElementById('__fp-pitch-down');
+        var fpPitchUp = document.getElementById('__fp-pitch-up');
+        if (fpPitchDown) fpPitchDown.onclick = function(e) { e.preventDefault(); setFirstPersonPitch((SG.state.firstPersonPitchDeg || 1) - 1); };
+        if (fpPitchUp) fpPitchUp.onclick = function(e) { e.preventDefault(); setFirstPersonPitch((SG.state.firstPersonPitchDeg || 1) + 1); };
+        function refreshViewButtons() {
+            var btns = overlay.querySelectorAll('.__view-btn');
+            for (var vi = 0; vi < btns.length; vi++) {
+                var active = btns[vi].getAttribute('data-view') === SG.state.thirdPersonView;
+                btns[vi].classList.toggle('selected', active);
+                btns[vi].setAttribute('aria-pressed', active ? 'true' : 'false');
+                btns[vi].style.borderColor = active ? '#22d3ee' : 'rgba(255,255,255,0.2)';
+                btns[vi].style.background = active ? 'linear-gradient(135deg, rgba(34,211,238,0.34), rgba(250,204,21,0.18))' : '';
+                btns[vi].style.boxShadow = active ? '0 0 0 2px rgba(34,211,238,0.35), 0 0 20px rgba(34,211,238,0.28)' : 'none';
+                btns[vi].style.transform = active ? 'translateY(-1px)' : 'translateY(0)';
+            }
+        }
+        var viewBtns = overlay.querySelectorAll('.__view-btn');
+        for (var vk = 0; vk < viewBtns.length; vk++) {
+            viewBtns[vk].onclick = function(e) {
+                e.preventDefault();
+                var view = this.getAttribute('data-view') || 'far';
+                SG.state.thirdPersonView = view;
+                localStorage.setItem('subwayThirdPersonView', view);
+                refreshViewButtons();
+            };
+        }
+        refreshViewButtons();
+        function refreshBindingButtons() {
+            var btns = overlay.querySelectorAll('.__bind-btn');
+            var current = SG.getKeyBindings ? SG.getKeyBindings() : bindings;
+            for (var bi = 0; bi < btns.length; bi++) {
+                var action = btns[bi].getAttribute('data-action');
+                var strong = btns[bi].querySelector('strong');
+                if (strong) strong.textContent = SG.formatKeyName ? SG.formatKeyName(current[action]) : current[action];
+                btns[bi].classList.remove('selected');
+            }
+        }
+        var bindBtns = overlay.querySelectorAll('.__bind-btn');
+        for (var bj = 0; bj < bindBtns.length; bj++) {
+            bindBtns[bj].onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var btn = this;
+                var action = btn.getAttribute('data-action');
+                refreshBindingButtons();
+                btn.classList.add('selected');
+                var strong = btn.querySelector('strong');
+                if (strong) strong.textContent = '...';
+                var capture = function(ev) {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    document.removeEventListener('keydown', capture, true);
+                    if (ev.key === 'Escape') {
+                        refreshBindingButtons();
+                        return;
+                    }
+                    if (SG.setKeyBinding) SG.setKeyBinding(action, ev.key);
+                    refreshBindingButtons();
+                };
+                setTimeout(function() { document.addEventListener('keydown', capture, true); }, 0);
+            };
+        }
+        var resetBindings = document.getElementById('__reset-bindings');
+        if (resetBindings) {
+            resetBindings.onclick = function(e) {
+                e.preventDefault();
+                if (SG.resetKeyBindings) SG.resetKeyBindings();
+                refreshBindingButtons();
             };
         }
         // Wire up close button
@@ -1901,15 +3986,17 @@
         SG.menuOverlay.innerHTML = '' +
             '<div class="menu-shell">' +
                 '<aside class="menu-sidebar">' +
-                    '<div class="menu-brand">SUBWAY SURFER<small>NEO EDITION</small></div>' +
+                    '<div class="menu-brand">ENDLESS RUNNER<small>NEO EDITION</small></div>' +
                     '<div class="menu-nav-btn" id="shop-btn-menu"><span class="nav-ico">🛒</span> Shop</div>' +
+                    '<div class="menu-nav-btn" id="characters-btn"><span class="nav-ico">◆</span> Characters</div>' +
                     '<div class="menu-nav-btn" id="profile-btn"><span class="nav-ico">👤</span> Profile</div>' +
                     '<div class="menu-nav-btn" id="leaderboard-btn"><span class="nav-ico">🏆</span> Leaderboard</div>' +
+                    '<div class="menu-nav-btn" id="pvp-btn-menu"><span class="nav-ico">VS</span> PVP</div>' +
                     '<div class="menu-nav-btn" id="settings-btn-menu"><span class="nav-ico">⚙</span> Settings</div>' +
                     '<div class="menu-nav-btn danger" id="signout-btn"><span class="nav-ico">🚪</span> Sign Out</div>' +
                 '</aside>' +
                 '<section class="menu-main">' +
-                    '<h1 class="menu-title">SUBWAY SURFER</h1>' +
+                    '<h1 class="menu-title">ENDLESS RUNNER</h1>' +
                     '<p class="menu-subtitle">Neo Edition</p>' +
                     '<div class="tap-to-start pulse">TAP TO START</div>' +
                     '<div class="diff-select">' +
@@ -1929,6 +4016,14 @@
             '</div>';
         SG.uiOverlay.appendChild(SG.menuOverlay);
 
+        var pvpOverlay = document.createElement('div');
+        pvpOverlay.id = 'pvp-overlay';
+        pvpOverlay.className = 'overlay';
+        pvpOverlay.style.display = 'none';
+        pvpOverlay.innerHTML = '<div id="pvp-panel" style="width:min(1040px,94vw);max-height:88vh;overflow:auto;background:rgba(4,6,14,.92);border:1px solid rgba(255,44,207,.45);box-shadow:0 0 34px rgba(155,77,255,.28);padding:24px;border-radius:8px;color:#f5f7ff;font-family:Arial,sans-serif;"></div>';
+        SG.uiOverlay.appendChild(pvpOverlay);
+        SG.pvpOverlay = pvpOverlay;
+
         // ===== PAUSE OVERLAY =====
         SG.pauseOverlay = document.createElement('div');
         SG.pauseOverlay.id = 'pause-overlay';
@@ -1946,8 +4041,43 @@
         var consoleEl = document.createElement('div');
         consoleEl.id = 'dev-console';
         consoleEl.style.display = 'none';
-        consoleEl.innerHTML = '<input type="text" id="console-input" placeholder="enter command..." autofocus/>';
+        consoleEl.innerHTML = '<div id="console-output"></div><div class="console-row"><span class="console-prompt">&gt;</span><input type="text" id="console-input" placeholder="help" autofocus/></div>';
         SG.uiOverlay.appendChild(consoleEl);
+
+        SG.speedHudEl = document.createElement('div');
+        SG.speedHudEl.id = 'third-person-speed-hud';
+        SG.speedHudEl.style.cssText = 'position:fixed;left:50%;top:50%;z-index:18;display:none;pointer-events:none;transform:translate(-8px,2px);padding:3px 7px;border-radius:5px;background:rgba(0,0,0,0.16);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.94);font:700 12px/1.25 Arial,sans-serif;text-shadow:0 1px 6px rgba(0,0,0,0.85);letter-spacing:0;';
+        SG.uiOverlay.appendChild(SG.speedHudEl);
+
+        var pvpHud = document.createElement('div');
+        pvpHud.id = 'pvp-hud';
+        pvpHud.style.cssText = 'position:absolute;top:16px;left:16px;display:none;min-width:220px;max-width:280px;padding:10px 12px;border-radius:8px;background:rgba(4,5,12,0.52);border:1px solid rgba(34,231,255,0.34);box-shadow:0 0 18px rgba(34,231,255,0.16),0 0 22px rgba(255,44,207,0.12);color:rgba(245,247,255,0.92);font:700 12px/1.45 Arial,sans-serif;pointer-events:none;text-shadow:0 1px 7px rgba(0,0,0,0.9);';
+        SG.uiOverlay.appendChild(pvpHud);
+        SG.pvpHudEl = pvpHud;
+
+        var pvpExit = document.createElement('button');
+        pvpExit.id = 'pvp-exit-btn';
+        pvpExit.type = 'button';
+        pvpExit.textContent = 'EXIT';
+        pvpExit.style.cssText = 'position:fixed;right:18px;bottom:18px;display:none;z-index:100000;height:40px;padding:0 18px;border-radius:6px;border:1px solid rgba(255,44,207,0.72);background:rgba(5,7,16,0.86);box-shadow:0 0 18px rgba(255,44,207,0.4),0 0 22px rgba(34,231,255,0.2);color:#fff;font:900 12px/40px Arial,sans-serif;letter-spacing:0;cursor:pointer;pointer-events:auto;text-shadow:0 0 10px rgba(255,44,207,0.9);';
+        pvpExit.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (SG.exitPvpToLobby) SG.exitPvpToLobby();
+        });
+        pvpExit.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (SG.exitPvpToLobby) SG.exitPvpToLobby();
+        });
+        document.body.appendChild(pvpExit);
+        SG.pvpExitBtnEl = pvpExit;
+
+        var pvpDeath = document.createElement('div');
+        pvpDeath.id = 'pvp-death-feed';
+        pvpDeath.style.cssText = 'position:absolute;top:96px;left:50%;transform:translateX(-50%);display:none;z-index:40;pointer-events:none;padding:7px 16px;border-radius:6px;background:rgba(4,5,12,0.45);border:1px solid rgba(255,216,77,0.32);box-shadow:0 0 20px rgba(255,44,207,0.18),0 0 14px rgba(34,231,255,0.12);color:#fff3a6;font:900 18px/1.25 Arial,sans-serif;text-shadow:0 0 12px rgba(255,44,207,0.85),0 1px 8px rgba(0,0,0,0.95);letter-spacing:0;';
+        SG.uiOverlay.appendChild(pvpDeath);
+        SG.pvpDeathFeedEl = pvpDeath;
 
         // ===== PAUSE BUTTON =====
         SG.pauseBtnEl = document.createElement('div');
@@ -2066,6 +4196,32 @@
             SG.uiOverlay.appendChild(el);
         })();
 
+        // ===== GUN TIMER =====
+        (function() {
+            var el = document.createElement('div');
+            el.id = 'gun-hud';
+            el.style.cssText = 'position:absolute;top:116px;right:16px;color:rgba(255,255,255,0.86);font-size:11px;text-shadow:0 1px 8px rgba(0,0,0,0.9);background:rgba(0,0,0,0.32);padding:3px 10px;border-radius:10px;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);border:1px solid rgba(75,231,255,0.24);display:none;pointer-events:none;';
+            el.textContent = '';
+            SG.uiOverlay.appendChild(el);
+        })();
+
+        // ===== GUN CROSSHAIR =====
+        (function() {
+            var cross = document.createElement('div');
+            cross.id = 'gun-crosshair';
+            cross.style.cssText = 'position:fixed;left:50%;top:50%;width:24px;height:24px;transform:translate(-50%,-50%);display:none;visibility:hidden;opacity:0;pointer-events:none;z-index:9999;';
+            var h = document.createElement('div');
+            h.style.cssText = 'position:absolute;left:2px;right:2px;top:11px;height:2px;background:#ffe84a;box-shadow:0 0 6px rgba(255,232,74,0.95),0 0 1px #000;';
+            var v = document.createElement('div');
+            v.style.cssText = 'position:absolute;top:2px;bottom:2px;left:11px;width:2px;background:#ffe84a;box-shadow:0 0 6px rgba(255,232,74,0.95),0 0 1px #000;';
+            var dot = document.createElement('div');
+            dot.style.cssText = 'position:absolute;left:10px;top:10px;width:4px;height:4px;border-radius:50%;background:#fff38a;box-shadow:0 0 7px rgba(255,232,74,1);';
+            cross.appendChild(h);
+            cross.appendChild(v);
+            cross.appendChild(dot);
+            SG.uiOverlay.appendChild(cross);
+        })();
+
         // ===== GAME OVER SCREEN =====
         var gameOverDiv = document.createElement('div');
         gameOverDiv.id = 'game-over-screen';
@@ -2132,6 +4288,12 @@
 
         document.body.appendChild(SG.uiOverlay);
 
+        var countdownDiv = document.createElement('div');
+        countdownDiv.id = 'start-countdown';
+        countdownDiv.style.cssText = 'display:none;position:fixed;inset:0;align-items:center;justify-content:center;z-index:99999;pointer-events:none;font-family:Arial Black,Impact,sans-serif;font-size:clamp(78px,18vw,220px);font-weight:900;letter-spacing:0;color:#fff3a6;text-shadow:0 0 24px rgba(255,190,40,.95),0 8px 0 rgba(0,0,0,.38),0 0 2px #111;transform:translateY(-3vh);';
+        document.body.appendChild(countdownDiv);
+        SG.countdownOverlay = countdownDiv;
+
         // ===== EVENT LISTENERS =====
         SG.restartBtnEl.addEventListener('click', SG.restartGame);
         SG.restartBtnEl.addEventListener('touchend', function(e) { e.preventDefault(); SG.restartGame(); });
@@ -2163,6 +4325,11 @@
             shopBtnMenu.addEventListener('click', function(e) { e.stopPropagation(); SG.showShop(); });
             shopBtnMenu.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showShop(); });
         }
+        var charactersBtn = document.getElementById('characters-btn');
+        if (charactersBtn) {
+            charactersBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showCharacters(); });
+            charactersBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showCharacters(); });
+        }
         var profileBtn = document.getElementById('profile-btn');
         if (profileBtn) {
             profileBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showProfile(); });
@@ -2172,6 +4339,11 @@
         if (leaderboardBtn) {
             leaderboardBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showLeaderboard(); });
             leaderboardBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showLeaderboard(); });
+        }
+        var pvpBtn = document.getElementById('pvp-btn-menu');
+        if (pvpBtn) {
+            pvpBtn.addEventListener('click', function(e) { e.stopPropagation(); SG.showPvpLobby(); });
+            pvpBtn.addEventListener('touchend', function(e) { e.stopPropagation(); e.preventDefault(); SG.showPvpLobby(); });
         }
         var settingsBtn = document.getElementById('settings-btn-menu');
         if (settingsBtn) {
@@ -2210,27 +4382,130 @@
 
         var conInput = document.getElementById('console-input');
         if (conInput) {
+            SG.consoleHistory = SG.consoleHistory || [];
+            SG.consoleHistoryIndex = SG.consoleHistory.length;
+            SG.consoleCommands = SG.consoleCommands || {};
+
+            SG.consoleLog = function(text, kind) {
+                var out = document.getElementById('console-output');
+                if (!out) return;
+                var line = document.createElement('div');
+                line.className = 'console-line' + (kind ? ' ' + kind : '');
+                line.textContent = String(text);
+                out.appendChild(line);
+                while (out.children.length > 80) out.removeChild(out.firstChild);
+                out.scrollTop = out.scrollHeight;
+            };
+
+            SG.clearConsole = function() {
+                var out = document.getElementById('console-output');
+                if (out) out.innerHTML = '';
+            };
+
+            SG.registerConsoleCommand = function(name, description, handler) {
+                SG.consoleCommands[name] = { description: description, handler: handler };
+            };
+
+            SG.registerConsoleCommand('help', 'List available commands', function() {
+                var names = Object.keys(SG.consoleCommands).filter(function(name) { return name !== 'homelander'; }).sort();
+                SG.consoleLog('Commands: ' + names.join(', '), 'ok');
+                SG.consoleLog('Try: status, speed 20, coins 5000, ability jetpack, normal');
+            });
+            SG.registerConsoleCommand('clear', 'Clear console output', function() { SG.clearConsole(); });
+            SG.registerConsoleCommand('status', 'Show run state', function() {
+                var speedLevel = SG.getSpeedLevel ? SG.getSpeedLevel(SG.state.speed) : 1;
+                SG.consoleLog('score=' + Math.floor(SG.state.score || 0) + 'm coins=' + (SG.state.coins || 0) + ' speed=' + speedLevel + 'x ability=' + (SG.state.equippedAbility || 0), 'ok');
+            });
+            SG.registerConsoleCommand('speed', 'Set speed level 1-50', function(args) {
+                var level = Math.max(1, Math.min(50, parseInt(args[0] || '1', 10) || 1));
+                SG.state.speed = SG.speedForLevel ? SG.speedForLevel(level) : SG.START_SPEED + (SG.MAX_SPEED - SG.START_SPEED) * ((level - 1) / 49);
+                SG.consoleLog('speed set to ' + level + 'x', 'ok');
+            });
+            SG.registerConsoleCommand('coins', 'Add credits/coins to this run', function(args) {
+                var amount = Math.max(0, parseInt(args[0] || '0', 10) || 0);
+                SG.state.coins += amount;
+                SG.state.credits += amount;
+                if (SG.updateMenuCredits) SG.updateMenuCredits();
+                SG.consoleLog('added ' + amount + ' coins and credits', 'ok');
+            });
+            SG.registerConsoleCommand('ability', 'Equip ability: none/double/jetpack/roof', function(args) {
+                var key = String(args[0] || '').toLowerCase();
+                var map = { none: 0, double: 1, dj: 1, jetpack: 2, jet: 2, roof: 3 };
+                if (!(key in map)) { SG.consoleLog('usage: ability none|double|jetpack|roof', 'err'); return; }
+                SG.state.equippedAbility = map[key];
+                if (SG.state.equippedAbility === 1) SG.state.canDoubleJump = true;
+                if (SG.state.equippedAbility === 2) SG.state.canJetpack = true;
+                if (SG.state.equippedAbility === 3) SG.state.canRoofWalk = true;
+                if (SG.saveShopData) SG.saveShopData();
+                SG.consoleLog('equipped ability ' + key, 'ok');
+            });
+            SG.registerConsoleCommand('restart', 'Restart current run', function() {
+                if (SG.restartGame) SG.restartGame();
+                SG.consoleLog('run restarted', 'ok');
+            });
+            SG.registerConsoleCommand('homelander', 'Easter egg: enable Homelander mode', function() {
+                SG.state.homelander = true;
+                SG.pendingHomelanderVoice = true;
+                if (SG.activateHomelander) SG.activateHomelander();
+                SG.consoleLog('homelander mode enabled', 'ok');
+            });
+            SG.registerConsoleCommand('normal', 'Disable Homelander mode', function() {
+                if (SG.deactivateHomelander) SG.deactivateHomelander();
+                SG.consoleLog('homelander mode disabled', 'ok');
+            });
+            SG.registerConsoleCommand('quit', 'Alias for normal', function() {
+                if (SG.deactivateHomelander) SG.deactivateHomelander();
+                SG.consoleLog('homelander mode disabled', 'ok');
+            });
+
+            SG.executeConsoleCommand = function(raw) {
+                raw = String(raw || '').trim();
+                if (!raw) return;
+                SG.consoleLog('> ' + raw, 'cmd');
+                SG.consoleHistory.push(raw);
+                SG.consoleHistoryIndex = SG.consoleHistory.length;
+                var parts = raw.split(/\s+/);
+                var name = parts.shift().toLowerCase();
+                var cmd = SG.consoleCommands[name];
+                if (!cmd) {
+                    SG.consoleLog('unknown command: ' + name + ' (type help)', 'err');
+                    return;
+                }
+                try {
+                    cmd.handler(parts, raw);
+                } catch (err) {
+                    SG.consoleLog('error: ' + (err && err.message ? err.message : err), 'err');
+                }
+            };
+
             function submitConsoleCommand() {
-                var val = conInput.value.trim().toLowerCase();
+                var val = conInput.value.trim();
                 conInput.value = '';
-                document.getElementById('dev-console').style.display = 'none';
-                if (SG.state.paused) SG.state.paused = false;
-                if (val === 'homelander') {
-                    SG.state.homelander = true;
-                    SG.activateHomelander();
-                }
-                if (val === 'quit' && SG.state.homelander) {
-                    SG.deactivateHomelander();
-                }
+                SG.executeConsoleCommand(val);
             }
             conInput.addEventListener('keydown', function(e) {
+                if (e.key === '`' || e.key === '~') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    SG.toggleConsole();
+                    return;
+                }
                 if (e.key === 'Enter' || e.keyCode === 13) {
                     e.preventDefault();
                     submitConsoleCommand();
                 }
+                if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    SG.consoleHistoryIndex = Math.max(0, SG.consoleHistoryIndex - 1);
+                    conInput.value = SG.consoleHistory[SG.consoleHistoryIndex] || '';
+                }
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    SG.consoleHistoryIndex = Math.min(SG.consoleHistory.length, SG.consoleHistoryIndex + 1);
+                    conInput.value = SG.consoleHistory[SG.consoleHistoryIndex] || '';
+                }
                 if (e.key === 'Escape') {
-                    document.getElementById('dev-console').style.display = 'none';
-                    if (SG.state.paused) SG.state.paused = false;
+                    if (SG.closeConsole) SG.closeConsole();
                 }
                 e.stopPropagation();
             });
@@ -2240,7 +4515,10 @@
                 }
             });
             conInput.addEventListener('blur', function() {
-                if (conInput.value.trim()) submitConsoleCommand();
+                setTimeout(function() {
+                    var con = document.getElementById('dev-console');
+                    if (con && con.style.display === 'flex') conInput.focus();
+                }, 0);
             });
         }
 
@@ -2266,12 +4544,790 @@
         bindMobileBtn('m-roll', SG.roll, 's');
     };
 
-    // ===== Toggle functions (on SG for cross-module access) =====
-    SG.startGameFromMenu = function() {
-        if (SG.state.started) return;
+    // ===== PVP room shell =====
+    SG.pvpRooms = SG.pvpRooms || [];
+    SG.pvpRequiresServer = true;
+
+    SG.getLocalPvpName = function() {
+        return (SG.state && SG.state.username) || localStorage.getItem('subwayUsername') || 'You';
+    };
+
+    SG.createLocalPvpRoom = function() {
+        var room = {
+            id: 'LOCAL-' + Math.floor(1000 + Math.random() * 9000),
+            name: 'Cyber Sprint',
+            host: SG.getLocalPvpName(),
+            localHost: true,
+            players: [
+                { name: SG.getLocalPvpName(), ready: false, local: true, lane: 1, startOffset: 0 }
+            ],
+            maxPlayers: 3,
+            locked: false
+        };
+        SG.state.pvpRoom = room;
+        SG.renderPvpLobby();
+    };
+
+    SG.joinLocalPvpRoom = function(roomId) {
+        var room = null;
+        for (var i = 0; i < SG.pvpRooms.length; i++) {
+            if (SG.pvpRooms[i].id === roomId) room = SG.pvpRooms[i];
+        }
+        if (!room) return;
+        var copy = {
+            id: room.id,
+            name: room.name,
+            host: room.host,
+            localHost: false,
+            players: room.players.filter(function(p) { return p && !p.bot; }).slice(0, 2).map(function(p, idx) {
+                return { name: p.name, ready: !!p.ready, lane: typeof p.lane === 'number' ? p.lane : idx, startOffset: typeof p.startOffset === 'number' ? p.startOffset : (-4 - idx * 4), characterId: p.characterId };
+            }),
+            maxPlayers: 3,
+            locked: room.locked
+        };
+        copy.players.push({ name: SG.getLocalPvpName(), ready: false, local: true, lane: 1 });
+        SG.state.pvpRoom = copy;
+        SG.renderPvpLobby();
+    };
+
+    SG.invitePvpBot = function() {
+        // Local AI opponents were removed for server-backed PVP testing.
+        SG.renderPvpLobby();
+    };
+
+    function sanitizePvpPlayer(player, idx, localName) {
+        if (!player || player.bot) return null;
+        var name = player.name || player.username || player.id || ('Player ' + (idx + 1));
+        var isLocal = !!player.local || name === localName || player.id === SG.state.pvpLocalPlayerId;
+        return {
+            id: player.id || player.playerId || name,
+            name: name,
+            ready: !!player.ready,
+            local: isLocal,
+            lane: typeof player.lane === 'number' ? Math.max(0, Math.min(2, player.lane)) : (isLocal ? 1 : (idx % 2 ? 2 : 0)),
+            startOffset: typeof player.startOffset === 'number' ? player.startOffset : (isLocal ? 0 : -4 - idx * 4),
+            characterId: player.characterId || player.character || 'runner',
+            alive: player.alive !== false
+        };
+    }
+
+    function sanitizePvpRoom(room) {
+        if (!room) return null;
+        var localName = SG.getLocalPvpName();
+        var players = (room.players || []).map(function(player, idx) {
+            return sanitizePvpPlayer(player, idx, localName);
+        }).filter(Boolean);
+        return {
+            id: room.id || room.roomId || ('ROOM-' + Math.floor(1000 + Math.random() * 9000)),
+            name: room.name || 'Cyber Sprint',
+            host: room.host || room.hostName || '',
+            localHost: !!room.localHost || room.host === localName || room.hostName === localName,
+            players: players,
+            maxPlayers: room.maxPlayers || 3,
+            locked: !!room.locked
+        };
+    }
+
+    SG.setPvpRoomsFromServer = function(rooms) {
+        SG.pvpRooms = (Array.isArray(rooms) ? rooms : []).map(sanitizePvpRoom).filter(Boolean);
+        if (SG.pvpOverlay && SG.pvpOverlay.style.display !== 'none' && !SG.state.pvpRoom) SG.renderPvpLobby();
+    };
+
+    SG.setPvpRoomFromServer = function(room) {
+        SG.state.pvpRoom = sanitizePvpRoom(room);
+        if (SG.pvpOverlay && SG.pvpOverlay.style.display !== 'none') SG.renderPvpLobby();
+    };
+
+    SG.togglePvpReady = function() {
+        var room = SG.state.pvpRoom;
+        if (!room) return;
+        for (var i = 0; i < room.players.length; i++) {
+            if (room.players[i].local) room.players[i].ready = !room.players[i].ready;
+        }
+        SG.renderPvpLobby();
+    };
+
+    SG.isPvpRoomReady = function(room) {
+        if (!room || room.players.length < 1) return false;
+        if (room.localHost && room.players.length === 1) return true;
+        for (var i = 0; i < room.players.length; i++) {
+            if (!room.players[i].ready) return false;
+        }
+        return true;
+    };
+
+    SG.closePvpLobby = function() {
+        if (SG.leavePvpRoom && SG.state && SG.state.pvpRoom) {
+            SG.leavePvpRoom();
+        } else if (SG.state) {
+            SG.state.pvpRoom = null;
+        }
+        if (SG.state) {
+            SG.state.pvpMode = false;
+            SG.state.pvpResult = null;
+            SG.state.pvpSpectating = false;
+            SG.state.pvpLocalDead = false;
+            SG.state.pvpSpectateIndex = 0;
+        }
+        if (SG.quitToMenu) SG.quitToMenu();
+        if (SG.pvpOverlay) SG.pvpOverlay.style.display = 'none';
+        if (SG.menuOverlay) SG.menuOverlay.style.display = 'flex';
+    };
+
+    SG.renderPvpLobby = function() {
+        var panel = document.getElementById('pvp-panel');
+        if (!panel) return;
+        var room = SG.state.pvpRoom;
+        var html = '<div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px;">' +
+            '<div><div style="font-size:28px;font-weight:900;color:#fff;letter-spacing:0;">PVP Rooms</div>' +
+            '<div style="color:rgba(231,224,255,.72);font-size:13px;margin-top:4px;">Server-backed rooms only. No local AI opponents.</div></div>' +
+            '<button id="pvp-close" style="height:38px;padding:0 16px;border-radius:6px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#fff;font-weight:800;cursor:pointer;">Close</button></div>';
+        if (!room) {
+            html += '<button id="pvp-create" style="width:100%;height:44px;margin-bottom:16px;border:0;border-radius:6px;background:linear-gradient(90deg,#ff2ccf,#8d35ff);color:#fff;font-weight:900;cursor:pointer;">Create Room</button>';
+            html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;">';
+            var listedRooms = (SG.pvpRooms || []).filter(function(listedRoom) { return listedRoom && !listedRoom.localOnly && !listedRoom.bot; });
+            if (!listedRooms.length) {
+                html += '<div style="grid-column:1/-1;border:1px solid rgba(141,53,255,.28);background:rgba(255,255,255,.04);border-radius:8px;padding:18px;color:rgba(231,224,255,.76);font-size:13px;line-height:1.5;">No server rooms loaded yet. Start the PVP server bridge, then refresh this panel or create a room.</div>';
+            }
+            for (var r = 0; r < listedRooms.length; r++) {
+                var listed = listedRooms[r];
+                html += '<div style="border:1px solid rgba(141,53,255,.35);background:rgba(255,255,255,.05);border-radius:8px;padding:14px;">' +
+                    '<div style="font-size:17px;font-weight:900;color:#fff;">' + listed.name + '</div>' +
+                    '<div style="font-size:12px;color:rgba(231,224,255,.7);margin:5px 0 12px;">Host: ' + listed.host + ' | ' + listed.players.length + '/' + listed.maxPlayers + '</div>' +
+                    '<button class="pvp-join" data-room="' + listed.id + '" style="width:100%;height:36px;border-radius:6px;border:1px solid rgba(255,44,207,.55);background:rgba(255,44,207,.14);color:#fff;font-weight:800;cursor:pointer;">Join</button>' +
+                '</div>';
+            }
+            html += '</div>';
+        } else {
+            html += '<div style="display:grid;grid-template-columns:1.2fr .8fr;gap:16px;">';
+            html += '<section style="border:1px solid rgba(255,44,207,.35);border-radius:8px;padding:16px;background:rgba(255,255,255,.045);">' +
+                '<div style="font-size:20px;font-weight:900;color:#fff;margin-bottom:4px;">' + room.name + '</div>' +
+                '<div style="font-size:12px;color:rgba(231,224,255,.7);margin-bottom:14px;">Room ' + room.id + ' | Host: ' + room.host + ' | Max 3 players</div>';
+            for (var p = 0; p < room.players.length; p++) {
+                var player = room.players[p];
+                var status = player.declined ? 'DECLINED' : (player.ready ? 'READY' : (player.invited ? 'INVITED' : 'WAITING'));
+                html += '<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;margin:8px 0;padding:10px;border-radius:6px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);">' +
+                    '<div><strong>' + player.name + '</strong><span style="margin-left:8px;color:' + (player.ready ? '#68ffcc' : '#ffd36b') + ';">' + status + '</span><div style="font-size:11px;color:rgba(231,224,255,.58);">Lane ' + (player.lane + 1) + '</div></div>';
+                html += '<div></div>';
+                html += '</div>';
+            }
+            if (room.players.length < 2) {
+                html += '<div style="margin-top:12px;padding:10px 12px;border-radius:6px;background:rgba(255,216,77,.08);border:1px solid rgba(255,216,77,.22);color:rgba(255,239,181,.9);font-size:12px;">Waiting for real server players. Local AI placeholders are disabled.</div>';
+            }
+            var ready = SG.isPvpRoomReady(room);
+            html += '<div style="display:flex;gap:10px;margin-top:16px;">' +
+                '<button id="pvp-ready" style="flex:1;height:40px;border-radius:6px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.08);color:#fff;font-weight:900;cursor:pointer;">Ready</button>' +
+                '<button id="pvp-start" ' + (!room.localHost || !ready ? 'disabled' : '') + ' style="flex:1;height:40px;border-radius:6px;border:0;background:' + (room.localHost && ready ? 'linear-gradient(90deg,#ff2ccf,#8d35ff)' : 'rgba(255,255,255,.12)') + ';color:#fff;font-weight:900;cursor:' + (room.localHost && ready ? 'pointer' : 'not-allowed') + ';">Start Game</button>' +
+                '<button id="pvp-leave" style="height:40px;padding:0 14px;border-radius:6px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;font-weight:800;cursor:pointer;">Leave</button>' +
+            '</div></section>';
+            html += '<aside style="border:1px solid rgba(141,53,255,.32);border-radius:8px;padding:16px;background:rgba(0,0,0,.22);font-size:13px;color:rgba(241,237,255,.82);line-height:1.5;">' +
+                '<strong style="display:block;color:#fff;font-size:16px;margin-bottom:8px;">PVP Rules</strong>' +
+                '<div>Scene: cyber glass track</div><div>Difficulty: medium obstacles</div><div>Countdown: 10 seconds</div><div>Pause and console disabled</div><div>Players: no body collision</div><div>Opponents: server snapshots only</div></aside>';
+            html += '</div>';
+        }
+        panel.innerHTML = html;
+        var close = document.getElementById('pvp-close');
+        if (close) close.onclick = SG.closePvpLobby;
+        var create = document.getElementById('pvp-create');
+        if (create) create.onclick = SG.createLocalPvpRoom;
+        var leave = document.getElementById('pvp-leave');
+        if (leave) leave.onclick = function() {
+            if (SG.leavePvpRoom) SG.leavePvpRoom();
+            else {
+                SG.state.pvpRoom = null;
+                SG.renderPvpLobby();
+            }
+        };
+        var readyBtn = document.getElementById('pvp-ready');
+        if (readyBtn) readyBtn.onclick = SG.togglePvpReady;
+        var startBtn = document.getElementById('pvp-start');
+        if (startBtn) startBtn.onclick = SG.startPvpRace;
+        var joins = panel.querySelectorAll('.pvp-join');
+        for (var j = 0; j < joins.length; j++) joins[j].onclick = function() { SG.joinLocalPvpRoom(this.getAttribute('data-room')); };
+    };
+
+    SG.showPvpLobby = function() {
+        if (!SG.pvpOverlay) return;
+        SG.renderPvpLobby();
+        SG.pvpOverlay.style.display = 'flex';
+    };
+
+    SG.playPvpOpponentAnimation = function(opponent, name) {
+        if (!opponent || !opponent.actions) return;
+        var next = opponent.actions[String(name || '').toLowerCase()];
+        if (!next || opponent.action === next) return;
+        if (opponent.action) opponent.action.fadeOut(0.12);
+        next.reset().fadeIn(0.12).play();
+        opponent.action = next;
+    };
+
+    SG.loadPvpOpponentModel = function(opponent, characterId) {
+        if (!opponent || !opponent.group || opponent.modelRequested || !THREE || !THREE.GLTFLoader) return;
+        opponent.modelRequested = true;
+        var character = SG.getCharacterById ? SG.getCharacterById(characterId || 'runner') : null;
+        var path = character && character.path ? character.path : 'models/player.glb';
+        var loader = new THREE.GLTFLoader();
+        loader.load(path, function(gltf) {
+            if (!opponent.group) return;
+            var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+            if (!model) return;
+            model.name = 'PvpOpponentModel-' + (character ? character.id : 'runner');
+            if (SG.normalizePlayerModel) SG.normalizePlayerModel(model);
+            model.traverse(function(node) {
+                if (node && node.isMesh) {
+                    node.castShadow = true;
+                    node.receiveShadow = true;
+                }
+            });
+            var placeholder = opponent.group.getObjectByName('pvp-opponent-placeholder');
+            if (placeholder) placeholder.visible = false;
+            opponent.model = model;
+            opponent.group.add(model);
+            opponent.actions = {};
+            if (gltf.animations && gltf.animations.length && THREE.AnimationMixer) {
+                opponent.mixer = new THREE.AnimationMixer(model);
+                for (var i = 0; i < gltf.animations.length; i++) {
+                    var clip = gltf.animations[i];
+                    opponent.actions[String(clip.name || '').toLowerCase()] = opponent.mixer.clipAction(clip);
+                }
+                SG.playPvpOpponentAnimation(opponent, 'Run');
+            }
+            if (SG.applyPvpNeonStyleToObject) SG.applyPvpNeonStyleToObject(opponent.group, 'opponent', opponent.colorIndex || 0);
+        }, undefined, function() {
+            opponent.modelError = true;
+        });
+    };
+
+    SG.createPvpGhostGroup = function(name, lane, color) {
+        var group = new THREE.Group();
+        group.userData.pvpGhost = true;
+        group.userData.pvpOpponent = true;
+        group.userData.name = name;
+        group.userData.lane = lane;
+        var mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.46, depthWrite: false });
+        var coreGeo = THREE.CapsuleGeometry ? new THREE.CapsuleGeometry(0.28, 0.9, 4, 8) : new THREE.CylinderGeometry(0.28, 0.28, 1.25, 12);
+        var core = new THREE.Mesh(coreGeo, mat);
+        core.name = 'pvp-opponent-placeholder';
+        core.position.y = 0.85;
+        core.renderOrder = 80;
+        group.add(core);
+        var head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12), mat);
+        head.position.y = 1.62;
+        head.renderOrder = 80;
+        group.add(head);
+        var chest = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.018, 8, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.68, depthWrite: false, blending: THREE.AdditiveBlending }));
+        chest.position.y = 1.12;
+        chest.rotation.x = Math.PI / 2;
+        chest.renderOrder = 82;
+        group.add(chest);
+        var halo = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.62, 32), new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.78, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+        halo.position.y = 0.05;
+        halo.rotation.x = Math.PI / 2;
+        halo.renderOrder = 81;
+        group.add(halo);
+        var labelCanvas = document.createElement('canvas');
+        labelCanvas.width = 256;
+        labelCanvas.height = 64;
+        var labelCtx = labelCanvas.getContext('2d');
+        labelCtx.fillStyle = 'rgba(0,0,0,0.2)';
+        labelCtx.fillRect(0, 0, 256, 64);
+        labelCtx.font = '700 28px Arial';
+        labelCtx.textAlign = 'center';
+        labelCtx.textBaseline = 'middle';
+        labelCtx.fillStyle = '#ffffff';
+        labelCtx.shadowColor = '#' + color.toString(16).padStart(6, '0');
+        labelCtx.shadowBlur = 14;
+        labelCtx.fillText(name, 128, 32);
+        var labelTex = new THREE.CanvasTexture(labelCanvas);
+        var label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex, transparent: true, depthWrite: false }));
+        label.position.y = 2.1;
+        label.scale.set(1.6, 0.4, 1);
+        label.renderOrder = 83;
+        group.add(label);
+        group.position.set(SG.LANE_POSITIONS[lane], SG.PLAYER_Y, -2);
+        group.renderOrder = 80;
+        return group;
+    };
+
+    SG.spawnPvpGhosts = function(room) {
+        SG.state.pvpGhosts = [];
+        SG.state.pvpOpponents = [];
+        if (!room || !SG.scene) return;
+        var colors = [0xff2ccf, 0x8d35ff, 0x42f5ff];
+        var characterIds = ['punk', 'swat', 'adventurer'];
+        for (var i = 0; i < room.players.length; i++) {
+            var p = room.players[i];
+            if (p.local || p.bot) continue;
+            var opponent = {
+                id: p.id || p.playerId || p.name,
+                name: p.name,
+                lane: typeof p.lane === 'number' ? p.lane : (i % 3),
+                targetLane: typeof p.lane === 'number' ? p.lane : (i % 3),
+                distance: typeof p.distance === 'number' ? p.distance : 0,
+                speedBias: 0.9 + i * 0.18,
+                startOffset: typeof p.startOffset === 'number' ? p.startOffset : (-4 - SG.state.pvpGhosts.length * 4),
+                isJumping: false,
+                isRolling: false,
+                jumpTimer: 0,
+                rollTimer: 0,
+                laneTimer: 0.9 + i * 0.55,
+                alive: p.alive !== false,
+                status: 'RUN',
+                colorIndex: i,
+                serverControlled: true,
+                group: SG.createPvpGhostGroup(p.name, typeof p.lane === 'number' ? p.lane : (i % 3), colors[i % colors.length])
+            };
+            opponent.group.position.z = opponent.startOffset;
+            SG.scene.add(opponent.group);
+            SG.state.pvpGhosts.push(opponent);
+            SG.state.pvpOpponents.push(opponent);
+            SG.loadPvpOpponentModel(opponent, p.characterId || characterIds[SG.state.pvpOpponents.length % characterIds.length]);
+        }
+    };
+
+    SG.updatePvpOpponentState = function(opponent, index, delta) {
+        if (!opponent || !opponent.alive) return;
+        if (opponent.serverControlled) {
+            opponent.status = !opponent.alive ? 'OUT' : (opponent.isJumping ? 'JUMP' : (opponent.isRolling ? 'ROLL' : (opponent.targetLane !== opponent.lane ? 'LANE' : 'RUN')));
+            return;
+        }
+        return;
+        opponent.laneTimer -= delta;
+        if (opponent.laneTimer <= 0) {
+            opponent.laneTimer = 1.0 + ((index + Math.floor(SG.state.gameTime * 2)) % 3) * 0.45;
+            var nextLane = (opponent.targetLane + (index % 2 ? 1 : 2)) % 3;
+            opponent.targetLane = nextLane;
+        }
+        var phase = SG.state.gameTime + index * 1.7;
+        if (!opponent.isJumping && !opponent.isRolling && Math.sin(phase * 1.15) > 0.985) {
+            opponent.isJumping = true;
+            opponent.jumpTimer = 0.72;
+        }
+        if (!opponent.isJumping && !opponent.isRolling && Math.cos(phase * 1.35) > 0.985) {
+            opponent.isRolling = true;
+            opponent.rollTimer = 0.62;
+        }
+        if (opponent.isJumping) {
+            opponent.jumpTimer -= delta;
+            if (opponent.jumpTimer <= 0) opponent.isJumping = false;
+        }
+        if (opponent.isRolling) {
+            opponent.rollTimer -= delta;
+            if (opponent.rollTimer <= 0) opponent.isRolling = false;
+        }
+        opponent.status = opponent.isJumping ? 'JUMP' : (opponent.isRolling ? 'ROLL' : (opponent.lane !== opponent.targetLane ? 'LANE' : 'RUN'));
+        if (opponent.distance > 520 + index * 110) {
+            opponent.alive = false;
+            opponent.status = 'OUT';
+            if (SG.showPvpDeathNotice) SG.showPvpDeathNotice(opponent.name);
+            if (opponent.group) opponent.group.visible = false;
+        }
+    };
+
+    SG.applyPvpOpponentSnapshot = function(opponent, snapshot) {
+        if (!opponent || !snapshot) return;
+        var wasAlive = opponent.alive !== false;
+        if (typeof snapshot.lane === 'number') opponent.targetLane = Math.max(0, Math.min(2, snapshot.lane));
+        if (typeof snapshot.distance === 'number') opponent.distance = Math.max(opponent.distance || 0, snapshot.distance);
+        if (typeof snapshot.isJumping === 'boolean') {
+            opponent.isJumping = snapshot.isJumping;
+            if (snapshot.isJumping && opponent.jumpTimer <= 0) opponent.jumpTimer = 0.5;
+        }
+        if (typeof snapshot.isRolling === 'boolean') {
+            opponent.isRolling = snapshot.isRolling;
+            if (snapshot.isRolling && opponent.rollTimer <= 0) opponent.rollTimer = 0.45;
+        }
+        if (typeof snapshot.alive === 'boolean') {
+            opponent.alive = snapshot.alive;
+            if (wasAlive && opponent.alive === false && SG.showPvpDeathNotice) SG.showPvpDeathNotice(opponent.name);
+        }
+        opponent.status = !opponent.alive ? 'OUT' : (opponent.isJumping ? 'JUMP' : (opponent.isRolling ? 'ROLL' : (opponent.targetLane !== opponent.lane ? 'LANE' : 'RUN')));
+    };
+
+    SG.upsertPvpOpponentFromServer = function(snapshot) {
+        if (!snapshot || snapshot.local || snapshot.bot || !SG.scene) return null;
+        var id = snapshot.id || snapshot.playerId || snapshot.name;
+        if (!id) return null;
+        var opponent = null;
+        for (var i = 0; i < SG.state.pvpOpponents.length; i++) {
+            if (SG.state.pvpOpponents[i].id === id || SG.state.pvpOpponents[i].name === id) opponent = SG.state.pvpOpponents[i];
+        }
+        if (!opponent) {
+            var lane = typeof snapshot.lane === 'number' ? Math.max(0, Math.min(2, snapshot.lane)) : 0;
+            opponent = {
+                id: id,
+                name: snapshot.name || id,
+                lane: lane,
+                targetLane: lane,
+                distance: 0,
+                startOffset: typeof snapshot.startOffset === 'number' ? snapshot.startOffset : -4 - SG.state.pvpOpponents.length * 4,
+                isJumping: false,
+                isRolling: false,
+                jumpTimer: 0,
+                rollTimer: 0,
+                alive: true,
+                status: 'RUN',
+                colorIndex: SG.state.pvpOpponents.length,
+                serverControlled: true,
+                group: SG.createPvpGhostGroup(snapshot.name || id, lane, [0xff2ccf, 0x8d35ff, 0x42f5ff][SG.state.pvpOpponents.length % 3])
+            };
+            opponent.group.position.z = opponent.startOffset;
+            SG.scene.add(opponent.group);
+            SG.state.pvpGhosts.push(opponent);
+            SG.state.pvpOpponents.push(opponent);
+            SG.loadPvpOpponentModel(opponent, snapshot.characterId || snapshot.character || 'runner');
+        }
+        SG.applyPvpOpponentSnapshot(opponent, snapshot);
+        return opponent;
+    };
+
+    SG.getLocalPvpSnapshot = function() {
+        return {
+            lane: SG.state.targetLane,
+            distance: Math.floor(SG.state.score || 0),
+            isJumping: !!SG.state.isJumping,
+            isRolling: !!SG.state.isRolling,
+            alive: !SG.state.pvpLocalDead,
+            spectating: !!SG.state.pvpSpectating,
+            characterId: SG.state.selectedCharacter || 'runner',
+            timestamp: Date.now()
+        };
+    };
+
+    SG.pvpPhase2Protocol = {
+        transport: 'websocket',
+        clientSendHz: 20,
+        serverBroadcastHz: 20,
+        snapshotFields: ['lane', 'distance', 'isJumping', 'isRolling', 'alive', 'spectating', 'characterId', 'timestamp'],
+        noPlayerCollision: true,
+        spectatorCamera: true
+    };
+
+    SG.updatePvpGhosts = function(delta) {
+        if (!SG.state.pvpMode) return;
+        var playerDistance = SG.state.score || 0;
+        for (var i = 0; i < SG.state.pvpGhosts.length; i++) {
+            var ghost = SG.state.pvpGhosts[i];
+            SG.updatePvpOpponentState(ghost, i, delta);
+            if (ghost.mixer) ghost.mixer.update(delta);
+            if (!ghost.alive) continue;
+            var lead = Math.max(-12, Math.min(8, ghost.startOffset + (ghost.distance - playerDistance) * 0.22));
+            if (ghost.group) {
+                ghost.group.position.x += (SG.LANE_POSITIONS[ghost.targetLane] - ghost.group.position.x) * 0.12;
+                ghost.group.position.z += (lead - ghost.group.position.z) * 0.12;
+                var jumpY = ghost.isJumping ? Math.sin((1 - ghost.jumpTimer / 0.72) * Math.PI) * 1.0 : 0;
+                var rollScaleY = ghost.isRolling ? 0.58 : 1;
+                ghost.group.position.y = SG.PLAYER_Y + jumpY + Math.sin(SG.state.gameTime * 9 + i) * 0.025;
+                ghost.group.scale.y += (rollScaleY - ghost.group.scale.y) * 0.18;
+                ghost.group.rotation.y = Math.PI;
+                ghost.group.visible = true;
+                SG.playPvpOpponentAnimation(ghost, ghost.isRolling ? 'Slide' : (ghost.isJumping ? 'Jump' : (ghost.status === 'LANE' ? (ghost.targetLane < ghost.lane ? 'StrafeLeft' : 'StrafeRight') : 'Run')));
+                if (Math.abs(ghost.group.position.x - SG.LANE_POSITIONS[ghost.targetLane]) < 0.08) ghost.lane = ghost.targetLane;
+            }
+        }
+        if (SG.pvpHudEl) {
+            var lines = ['PVP ROOM ' + (SG.state.pvpRoom ? SG.state.pvpRoom.id : 'LOCAL')];
+            lines.push((SG.state.pvpLocalDead ? 'You OUT' : 'You RUN') + ' ' + Math.floor(playerDistance) + 'm');
+            for (var g = 0; g < SG.state.pvpGhosts.length; g++) {
+                var op = SG.state.pvpGhosts[g];
+                lines.push(op.name + ' ' + op.status + ' L' + (op.targetLane + 1) + ' ' + Math.floor(op.distance) + 'm');
+            }
+            if (SG.state.pvpSpectating) lines.push('SPECTATING: ' + (SG.getPvpSpectateTargetName ? SG.getPvpSpectateTargetName() : 'PLAYER'));
+            SG.pvpHudEl.innerHTML = lines.join('<br>');
+        }
+        if (SG.state.pvpLocalDead && SG.getAlivePvpOpponents && SG.getAlivePvpOpponents().length === 0 && SG.finishPvpMatch) {
+            SG.finishPvpMatch();
+        }
+    };
+
+    SG.buildPvpResult = function(playerDistance) {
+        var rows = [{ name: SG.getLocalPvpName(), distance: playerDistance || 0 }];
+        for (var i = 0; i < SG.state.pvpGhosts.length; i++) {
+            rows.push({ name: SG.state.pvpGhosts[i].name, distance: SG.state.pvpGhosts[i].distance || 0 });
+        }
+        rows.sort(function(a, b) { return b.distance - a.distance; });
+        return rows;
+    };
+
+    SG.getAlivePvpOpponents = function() {
+        return (SG.state.pvpOpponents || SG.state.pvpGhosts || []).filter(function(op) {
+            return op && op.alive !== false && op.group;
+        });
+    };
+
+    SG.getPvpSpectateTarget = function() {
+        var alive = SG.getAlivePvpOpponents ? SG.getAlivePvpOpponents() : [];
+        if (!alive.length) return null;
+        SG.state.pvpSpectateIndex = Math.max(0, Math.min(alive.length - 1, SG.state.pvpSpectateIndex || 0));
+        return alive[SG.state.pvpSpectateIndex].group;
+    };
+
+    SG.getPvpSpectateTargetName = function() {
+        var alive = SG.getAlivePvpOpponents ? SG.getAlivePvpOpponents() : [];
+        if (!alive.length) return 'NONE';
+        SG.state.pvpSpectateIndex = Math.max(0, Math.min(alive.length - 1, SG.state.pvpSpectateIndex || 0));
+        return alive[SG.state.pvpSpectateIndex].name;
+    };
+
+    SG.cyclePvpSpectateTarget = function(dir) {
+        if (!SG.state.pvpSpectating) return;
+        var alive = SG.getAlivePvpOpponents ? SG.getAlivePvpOpponents() : [];
+        if (!alive.length) return;
+        SG.state.pvpSpectateIndex = (SG.state.pvpSpectateIndex + dir + alive.length) % alive.length;
+        if (SG.updatePvpGhosts) SG.updatePvpGhosts(0);
+    };
+
+    SG.enterPvpSpectator = function() {
+        if (SG.showPvpDeathNotice) SG.showPvpDeathNotice(SG.getLocalPvpName ? SG.getLocalPvpName() : 'You');
+        SG.state.pvpLocalDead = true;
+        SG.state.pvpSpectating = true;
+        SG.state.pvpSpectateIndex = 0;
+        SG.state.gameOver = false;
         SG.state.started = true;
+        SG.state.paused = false;
+        SG.state.firstPerson = false;
+        SG.state.isJumping = false;
+        SG.state.isRolling = false;
+        if (SG.player) SG.player.visible = false;
+        if (SG.pvpPlayerAura) SG.pvpPlayerAura.visible = false;
+        if (SG.gameOverEl) SG.gameOverEl.classList.remove('visible');
+        if (SG.pvpHudEl) {
+            SG.pvpHudEl.style.display = 'block';
+            SG.pvpHudEl.innerHTML = 'SPECTATING: ' + SG.getPvpSpectateTargetName();
+        }
+        if (SG.pvpExitBtnEl) SG.pvpExitBtnEl.style.display = 'block';
+    };
+
+    SG.showPvpDeathNotice = function(name) {
+        if (!SG.state.pvpMode || !SG.pvpDeathFeedEl) return;
+        var safeName = String(name || 'PLAYER').replace(/[<>&]/g, '');
+        SG.pvpDeathFeedEl.textContent = safeName + ' DIED';
+        SG.pvpDeathFeedEl.style.display = 'block';
+        SG.pvpDeathFeedEl.style.opacity = '1';
+        SG.pvpDeathFeedEl.style.transform = 'translateX(-50%) translateY(0) scale(1.02)';
+        if (SG.pvpDeathFeedTimer) clearTimeout(SG.pvpDeathFeedTimer);
+        SG.pvpDeathFeedTimer = setTimeout(function() {
+            if (!SG.pvpDeathFeedEl) return;
+            SG.pvpDeathFeedEl.style.transition = 'opacity 220ms ease, transform 220ms ease';
+            SG.pvpDeathFeedEl.style.opacity = '0';
+            SG.pvpDeathFeedEl.style.transform = 'translateX(-50%) translateY(-6px) scale(0.98)';
+            SG.pvpDeathFeedTimer = setTimeout(function() {
+                if (!SG.pvpDeathFeedEl) return;
+                SG.pvpDeathFeedEl.style.display = 'none';
+                SG.pvpDeathFeedEl.style.transition = '';
+                SG.pvpDeathFeedEl.style.transform = 'translateX(-50%)';
+            }, 240);
+        }, 1900);
+    };
+
+    SG.finishPvpMatch = function() {
+        if (!SG.state.pvpMode) return;
+        SG.state.pvpSpectating = false;
+        SG.state.gameOver = true;
+        SG.state.started = false;
+        SG.state.pvpResult = SG.buildPvpResult ? SG.buildPvpResult(SG.state.score || 0) : null;
+        if (SG.gameOverEl) {
+            var title = SG.gameOverEl.querySelector('h1');
+            if (title) title.textContent = 'PVP FINISHED';
+            var oldRanks = document.getElementById('pvp-results');
+            if (oldRanks) oldRanks.remove();
+            if (SG.state.pvpResult) {
+                var ranks = document.createElement('div');
+                ranks.id = 'pvp-results';
+                ranks.style.cssText = 'margin:12px auto 16px;max-width:320px;text-align:left;font:700 13px/1.5 Arial,sans-serif;color:#f7eaff;background:rgba(14,4,24,.55);border:1px solid rgba(255,44,207,.3);border-radius:8px;padding:10px 12px;';
+                ranks.innerHTML = SG.state.pvpResult.map(function(row, idx) {
+                    return '<div>' + (idx + 1) + '. ' + row.name + ' - ' + Math.floor(row.distance) + 'm</div>';
+                }).join('');
+                SG.gameOverEl.insertBefore(ranks, SG.restartBtnEl || null);
+            }
+            SG.gameOverEl.classList.add('visible');
+        }
+    };
+
+    SG.exitPvpToLobby = function() {
+        SG.stopBgMusic();
+        SG.state.pvpMode = false;
+        SG.state.started = false;
+        SG.state.gameOver = false;
+        SG.state.countdownActive = false;
+        SG.state.pvpResult = null;
+        SG.state.pvpSpectating = false;
+        SG.state.pvpLocalDead = false;
+        SG.state.pvpSpectateIndex = 0;
+        if (SG.pvpHudEl) SG.pvpHudEl.style.display = 'none';
+        if (SG.pvpExitBtnEl) SG.pvpExitBtnEl.style.display = 'none';
+        if (SG.pvpDeathFeedEl) SG.pvpDeathFeedEl.style.display = 'none';
+        if (SG.gameOverEl) {
+            SG.gameOverEl.classList.remove('visible');
+            var title = SG.gameOverEl.querySelector('h1');
+            if (title) title.textContent = 'GAME OVER';
+            var oldRanks = document.getElementById('pvp-results');
+            if (oldRanks) oldRanks.remove();
+        }
+        SG.resetAllGameObjects();
+        SG.resetCyberMode();
+        SG.spawnInitialTrack();
+        SG.spawnBuildings();
+        SG.spawnObstacles();
+        if (SG.menuOverlay) SG.menuOverlay.style.display = 'none';
+        if (SG.pvpOverlay) {
+            SG.renderPvpLobby();
+            SG.pvpOverlay.style.display = 'flex';
+        }
+    };
+
+    SG.startPvpRace = function() {
+        var room = SG.state.pvpRoom;
+        if (!SG.isPvpRoomReady(room) || !room.localHost) return;
+        if (SG.cancelStartCountdown) SG.cancelStartCountdown();
+        SG.stopBgMusic();
+        SG.stopPoliceChase();
+        SG.resetAllGameObjects();
+        SG.state.pvpMode = true;
+        SG.state.pvpResult = null;
+        SG.state.difficulty = 1;
+        SG.state.score = 0;
+        SG.state.coins = 0;
+        SG.state.speed = SG.START_SPEED;
+        SG.state.gameOver = false;
+        SG.state.started = false;
+        SG.state.paused = false;
+        SG.state.pvpSpectating = false;
+        SG.state.pvpLocalDead = false;
+        SG.state.pvpSpectateIndex = 0;
+        if (SG.pvpDeathFeedEl) SG.pvpDeathFeedEl.style.display = 'none';
+        SG.state.currentLane = 1;
+        SG.state.targetLane = 1;
+        SG.state.laneLerp = 1;
+        SG.state.isJumping = false;
+        SG.state.isRolling = false;
+        SG.state.jumpVelocity = 0;
+        SG.state.playerHeight = SG.PLAYER_Y;
+        SG.state.targetPlayerHeight = SG.PLAYER_Y;
+        SG.state.gameTime = 0;
+        if (SG.player) {
+            SG.player.position.set(SG.LANE_POSITIONS[1], SG.PLAYER_Y, 0);
+            SG.player.rotation.set(0, Math.PI, 0);
+            SG.player.visible = true;
+        }
+        if (SG.menuOverlay) SG.menuOverlay.style.display = 'none';
+        if (SG.pvpOverlay) SG.pvpOverlay.style.display = 'none';
+        if (SG.pauseOverlay) SG.pauseOverlay.style.display = 'none';
+        if (SG.pauseBtnEl) SG.pauseBtnEl.style.display = 'none';
+        var con = document.getElementById('con-btn');
+        if (con) con.style.display = 'none';
+        if (SG.pvpHudEl) SG.pvpHudEl.style.display = 'block';
+        if (SG.pvpExitBtnEl) SG.pvpExitBtnEl.style.display = 'block';
+        if (SG.clearGunSystem) SG.clearGunSystem();
+        SG.applyPvpScene(true);
+        SG.spawnInitialTrack();
+        SG.spawnBuildings();
+        SG.spawnObstacles();
+        SG.spawnPvpGhosts(room);
+        if (SG.updatePvpVisualStyle) SG.updatePvpVisualStyle();
+        SG.beginRunWithCountdown();
+    };
+
+    // ===== Toggle functions (on SG for cross-module access) =====
+    SG.countdownSequence = ['3', '2', '1', 'RUN!'];
+    SG.COUNTDOWN_STEP_MS = SG.COUNTDOWN_STEP_MS || 720;
+    SG.COUNTDOWN_RUN_MS = SG.COUNTDOWN_RUN_MS || 560;
+    SG.PVP_COUNTDOWN_STEP_MS = SG.PVP_COUNTDOWN_STEP_MS || 1100;
+    SG.PVP_COUNTDOWN_RUN_MS = SG.PVP_COUNTDOWN_RUN_MS || 650;
+
+    SG.getCountdownSequence = function() {
+        if (!SG.state.pvpMode) return SG.countdownSequence || ['3', '2', '1', 'RUN!'];
+        var seq = [];
+        for (var i = SG.state.pvpCountdownSeconds || 10; i >= 1; i--) seq.push(String(i));
+        seq.push('RUN!');
+        return seq;
+    };
+
+    SG.cancelStartCountdown = function() {
+        if (SG.countdownTimer) {
+            clearTimeout(SG.countdownTimer);
+            SG.countdownTimer = null;
+        }
+        if (SG.stopPvpCountdownVoice) SG.stopPvpCountdownVoice();
+        SG.state.countdownActive = false;
+        if (SG.countdownOverlay) SG.countdownOverlay.style.display = 'none';
+    };
+
+    SG.runStartCountdown = function(done) {
+        if (SG.skipCountdownForTests) {
+            SG.state.countdownActive = false;
+            if (SG.countdownOverlay) SG.countdownOverlay.style.display = 'none';
+            if (done) done();
+            return;
+        }
+        if (SG.state.countdownActive) return;
+        SG.state.countdownActive = true;
+        SG.state.started = false;
+        SG.state.paused = false;
+        var seq = SG.getCountdownSequence ? SG.getCountdownSequence() : (SG.countdownSequence || ['3', '2', '1', 'RUN!']);
+        if (SG.state.pvpMode && SG.playPvpCountdownVoice) SG.playPvpCountdownVoice();
+        var index = 0;
+        var overlay = SG.countdownOverlay || document.getElementById('start-countdown');
+        function showNext() {
+            if (!overlay) {
+                SG.state.countdownActive = false;
+                if (done) done();
+                return;
+            }
+            overlay.textContent = seq[index];
+            overlay.style.display = 'flex';
+            overlay.style.transform = 'translateY(-3vh) scale(1.08)';
+            overlay.style.opacity = '1';
+            requestAnimationFrame(function() {
+                overlay.style.transition = 'transform 180ms ease-out, opacity 180ms ease-out';
+                overlay.style.transform = 'translateY(-3vh) scale(1)';
+            });
+            index++;
+            var delay = seq[index - 1] === 'RUN!'
+                ? (SG.state.pvpMode ? SG.PVP_COUNTDOWN_RUN_MS : SG.COUNTDOWN_RUN_MS)
+                : (SG.state.pvpMode && SG.getPvpCountdownStepMs ? SG.getPvpCountdownStepMs() : (SG.state.pvpMode ? SG.PVP_COUNTDOWN_STEP_MS : SG.COUNTDOWN_STEP_MS));
+            SG.countdownTimer = setTimeout(function() {
+                if (index >= seq.length) {
+                    overlay.style.opacity = '0';
+                    SG.countdownTimer = setTimeout(function() {
+                        overlay.style.display = 'none';
+                        overlay.style.transition = '';
+                        SG.state.countdownActive = false;
+                        SG.countdownTimer = null;
+                        if (done) done();
+                    }, 140);
+                    return;
+                }
+                showNext();
+            }, delay);
+        }
+        showNext();
+    };
+
+    SG.beginRunWithCountdown = function() {
+        SG.state.started = false;
+        SG.state.paused = false;
+        if (SG.pauseBtnEl) SG.pauseBtnEl.style.display = 'none';
+        SG.runStartCountdown(function() {
+            SG.state.started = true;
+            SG.state.paused = false;
+            if (SG.pauseBtnEl && !SG.state.pvpMode) {
+                SG.pauseBtnEl.style.display = 'block';
+                SG.pauseBtnEl.textContent = '\u23F8';
+            }
+            var cb = document.getElementById('con-btn');
+            if (cb) cb.style.display = SG.state.pvpMode ? 'none' : 'block';
+            var f = document.getElementById('fpv-btn');
+            if (f) f.style.display = 'block';
+            if (SG.clock) SG.clock.getDelta();
+            SG.startBgMusic();
+        });
+    };
+
+    SG.startGameFromMenu = function() {
+        if (SG.state.started || SG.state.countdownActive) return;
+        SG.state.pvpMode = false;
         SG.menuOverlay.style.display = 'none';
-        SG.pauseBtnEl.style.display = 'block';
         var cb = document.getElementById('con-btn');
         if (cb) cb.style.display = 'block';
         var audioBtns = ['mute-btn'];
@@ -2280,31 +5336,41 @@
             if (el) el.style.display = 'flex';
         });
         if (!SG.audioCtx) SG.initAudio();
-        if (SG.clock) SG.clock.getDelta();
-        var f = document.getElementById('fpv-btn');
-        if (f) f.style.display = 'block';
-        SG.startBgMusic();
+        SG.beginRunWithCountdown();
+    };
+
+    SG.closeConsole = function() {
+        var con = document.getElementById('dev-console');
+        if (!con) return;
+        con.style.display = 'none';
+        SG.state.paused = false;
+        if (SG.updateGunCrosshair) SG.updateGunCrosshair();
+        if (SG.updateGunViewModel) SG.updateGunViewModel();
+        if (SG.playPendingHomelanderVoice) SG.playPendingHomelanderVoice();
     };
 
     SG.toggleConsole = function() {
+        if (SG.state.pvpMode) return;
         var con = document.getElementById('dev-console');
         if (!con) return;
         if (con.style.display === 'flex') {
-            con.style.display = 'none';
-            SG.state.paused = false;
-        } else {
-            con.style.display = 'flex';
-            SG.state.paused = true;
-            var ci = document.getElementById('console-input');
-            if (ci) {
-                ci.value = '';
-                ci.focus();
-                setTimeout(function() { ci.focus(); }, 100);
-            }
+            SG.closeConsole();
+            return;
+        }
+        con.style.display = 'flex';
+        SG.state.paused = true;
+        if (SG.updateGunCrosshair) SG.updateGunCrosshair();
+        if (SG.updateGunViewModel) SG.updateGunViewModel();
+        var ci = document.getElementById('console-input');
+        if (ci) {
+            ci.value = '';
+            ci.focus();
+            setTimeout(function() { ci.focus(); }, 100);
         }
     };
 
     SG.togglePause = function() {
+        if (SG.state.pvpMode) return;
         if (!SG.state.started || SG.state.gameOver) return;
         SG.state.paused = !SG.state.paused;
         if (SG.state.paused) {
@@ -2316,6 +5382,8 @@
             SG.pauseBtnEl.textContent = '\u23F8';
             if (SG.clock) SG.clock.getDelta();
         }
+        if (SG.updateGunCrosshair) SG.updateGunCrosshair();
+        if (SG.updateGunViewModel) SG.updateGunViewModel();
     };
 
     SG.toggleMute = function() {
@@ -2328,19 +5396,110 @@
             try { SG.audioCtx.suspend(); } catch(e) {}
             SG.stopBgMusic();
             SG.stopSiren();
+            if (SG.stopHomelanderAudio) SG.stopHomelanderAudio();
         } else if (!SG.state.muted && SG.audioCtx && SG.audioCtx.state === 'suspended') {
             try { SG.audioCtx.resume(); } catch(e) {}
             if (SG.state.started && !SG.state.gameOver) SG.startBgMusic();
+            if (SG.state.homelander && SG.startHomelanderTheme) SG.startHomelanderTheme();
         }
     };
 })();
-// ===== SUBWAY SURFER - Controls =====
+
+// ===== ENDLESS RUNNER - Controls =====
+// ===== ENDLESS RUNNER - Controls =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
     var THREE = window.THREE;
 
     SG.keys = {};
+    SG.defaultKeyBindings = SG.defaultKeyBindings || {
+        left: 'ArrowLeft',
+        right: 'ArrowRight',
+        up: 'ArrowUp',
+        down: 'ArrowDown'
+    };
+
+    SG.keyBindingLabels = SG.keyBindingLabels || {
+        left: 'Left',
+        right: 'Right',
+        up: 'Up',
+        down: 'Down'
+    };
+
+    SG.loadKeyBindings = function() {
+        var saved = null;
+        try { saved = JSON.parse(localStorage.getItem('subwayKeyBindings') || 'null'); } catch(e) {}
+        var bindings = {};
+        for (var action in SG.defaultKeyBindings) {
+            if (!Object.prototype.hasOwnProperty.call(SG.defaultKeyBindings, action)) continue;
+            bindings[action] = (saved && typeof saved[action] === 'string' && saved[action]) ?
+                saved[action] : SG.defaultKeyBindings[action];
+        }
+        SG.keyBindings = bindings;
+        return bindings;
+    };
+
+    SG.getKeyBindings = function() {
+        if (!SG.keyBindings) return SG.loadKeyBindings();
+        return SG.keyBindings;
+    };
+
+    SG.saveKeyBindings = function(bindings) {
+        SG.keyBindings = bindings || SG.getKeyBindings();
+        try { localStorage.setItem('subwayKeyBindings', JSON.stringify(SG.keyBindings)); } catch(e) {}
+    };
+
+    SG.setKeyBinding = function(action, key) {
+        if (!SG.defaultKeyBindings[action] || !key) return false;
+        var bindings = SG.getKeyBindings();
+        bindings[action] = key;
+        SG.saveKeyBindings(bindings);
+        return true;
+    };
+
+    SG.resetKeyBindings = function() {
+        SG.keyBindings = Object.assign({}, SG.defaultKeyBindings);
+        SG.saveKeyBindings(SG.keyBindings);
+    };
+
+    SG.formatKeyName = function(key) {
+        var names = {
+            ArrowLeft: 'Left',
+            ArrowRight: 'Right',
+            ArrowUp: 'Up',
+            ArrowDown: 'Down',
+            ' ': 'Space'
+        };
+        return names[key] || key;
+    };
+
+    SG.getInputActionForKey = function(key) {
+        var bindings = SG.getKeyBindings();
+        for (var action in bindings) {
+            if (Object.prototype.hasOwnProperty.call(bindings, action) && bindings[action] === key) return action;
+        }
+        return null;
+    };
+
+    SG.isActionHeld = function(action) {
+        var key = SG.getKeyBindings()[action];
+        return !!(key && SG.keys[key]);
+    };
+
+    SG.forceJetpackLanding = function() {
+        if (!(SG.state.equippedAbility === 2 && SG.state.canJetpack && SG.state.jetpackFuel > 0)) return false;
+        SG.state.jetpackFuel = 0;
+        SG.state.jetpackCooldown = SG.JETPACK_COOLDOWN_MAX;
+        SG.state.isJumping = false;
+        SG.state.hasDoubleJumped = false;
+        SG.state.jumpingFromRoof = false;
+        SG.state.jumpVelocity = 0;
+        SG.state.playerHeight = SG.PLAYER_Y;
+        SG.state.targetPlayerHeight = SG.PLAYER_Y;
+        if (SG.player) SG.player.position.y = SG.PLAYER_Y;
+        return true;
+    };
 
     SG.moveLeft = function() {
         if (SG.state.homelander && SG.homelanderGroup) {
@@ -2410,39 +5569,32 @@
     };
 
     SG.roll = function() {
+        var landedFromJetpack = SG.forceJetpackLanding();
         if (SG.state.isRolling) return;
         SG.state.isRolling = true;
         SG.state.targetPlayerHeight = SG.ROLL_HEIGHT;
-        SG.state.rollEndTime = Date.now() + 400;
+        SG.state.rollEndTime = Date.now() + (landedFromJetpack ? 520 : 400);
         SG.playRollSound();
     };
 
     SG.handleKeyInput = function(key) {
         if (SG.state.gameOver || !SG.state.started) return;
-        if (SG.state.homelander && (key === 'ArrowLeft' || key === 'ArrowRight' || key === 'ArrowUp' || key === 'ArrowDown')) return;
+        var action = SG.getInputActionForKey(key);
+        if (SG.state.homelander && action) return;
 
         if (!SG.audioCtx) SG.initAudio();
 
-        switch (key) {
-            case 'ArrowLeft':
-            case 'a':
-            case 'A':
+        switch (action) {
+            case 'left':
                 SG.moveLeft();
                 break;
-            case 'ArrowRight':
-            case 'd':
-            case 'D':
+            case 'right':
                 SG.moveRight();
                 break;
-            case 'ArrowUp':
-            case 'w':
-            case 'W':
-            case ' ':
+            case 'up':
                 SG.jump();
                 break;
-            case 'ArrowDown':
-            case 's':
-            case 'S':
+            case 'down':
                 SG.roll();
                 break;
         }
@@ -2453,16 +5605,34 @@
             SG.keys[e.key] = true;
             if (e.keyCode) { SG.keys['_kc_' + e.keyCode] = true; }
 
+            if (SG.state.pvpSpectating) {
+                var spectateAction = SG.getInputActionForKey ? SG.getInputActionForKey(e.key) : null;
+                if (spectateAction === 'left') {
+                    if (SG.cyclePvpSpectateTarget) SG.cyclePvpSpectateTarget(-1);
+                    e.preventDefault();
+                    return;
+                }
+                if (spectateAction === 'right') {
+                    if (SG.cyclePvpSpectateTarget) SG.cyclePvpSpectateTarget(1);
+                    e.preventDefault();
+                    return;
+                }
+            }
+
             if (SG.state.homelander && SG.homelanderGroup) {
                 var hlSpeed = 0.25;
-                var k = e.key, kc = e.keyCode || e.which;
-                if (k === 'ArrowLeft' || k === 'a' || k === 'A' || kc === 37 || kc === 65) { SG.homelanderGroup.position.x -= hlSpeed; e.preventDefault(); }
-                if (k === 'ArrowRight' || k === 'd' || k === 'D' || kc === 39 || kc === 68) { SG.homelanderGroup.position.x += hlSpeed; e.preventDefault(); }
-                if (k === 'ArrowUp' || k === 'w' || k === 'W' || kc === 38 || kc === 87) { SG.homelanderGroup.position.y = Math.min(20, SG.homelanderGroup.position.y + hlSpeed); e.preventDefault(); }
-                if (k === 'ArrowDown' || k === 's' || k === 'S' || kc === 40 || kc === 83) { SG.homelanderGroup.position.y = Math.max(1, SG.homelanderGroup.position.y - hlSpeed); e.preventDefault(); }
+                var hla = SG.getInputActionForKey(e.key);
+                if (hla === 'left') { SG.homelanderGroup.position.x -= hlSpeed; e.preventDefault(); }
+                if (hla === 'right') { SG.homelanderGroup.position.x += hlSpeed; e.preventDefault(); }
+                if (hla === 'up') { SG.homelanderGroup.position.y = Math.min(20, SG.homelanderGroup.position.y + hlSpeed); e.preventDefault(); }
+                if (hla === 'down') { SG.homelanderGroup.position.y = Math.max(1, SG.homelanderGroup.position.y - hlSpeed); e.preventDefault(); }
             }
 
             if (e.key === 'Escape') {
+                if (SG.state.pvpMode) {
+                    e.preventDefault();
+                    return;
+                }
                 var devCon = document.getElementById('dev-console');
                 if (devCon && devCon.style.display === 'flex') {
                     SG.toggleConsole();
@@ -2475,7 +5645,8 @@
             }
             if (e.key === '`' || e.key === '~') {
                 e.preventDefault();
-                if (SG.state.started) SG.toggleConsole();
+                if (SG.state.pvpMode) return;
+                SG.toggleConsole();
                 return;
             }
 
@@ -2484,7 +5655,18 @@
                 return;
             }
 
+            if ((e.key === 'f' || e.key === 'F') && SG.shootGun && SG.state.started) {
+                if (SG.shootGun()) {
+                    e.preventDefault();
+                    return;
+                }
+            }
+
             if ((e.key === 'm' || e.key === 'M') && SG.state.started) {
+                if (SG.state.pvpMode) {
+                    e.preventDefault();
+                    return;
+                }
                 if (!SG.state.gameOver) {
                     SG.togglePause();
                     setTimeout(SG.quitToMenu, 100);
@@ -2499,6 +5681,15 @@
 
         document.addEventListener('keyup', function(e) {
             SG.keys[e.key] = false;
+            if (e.keyCode) { SG.keys['_kc_' + e.keyCode] = false; }
+        });
+
+        document.addEventListener('mousedown', function(e) {
+            if (!SG.shootGun || e.button !== 0) return;
+            if (!SG.state.started || SG.state.paused || SG.state.gameOver) return;
+            var target = e.target;
+            if (target && target.closest && target.closest('#menu-overlay,#pause-overlay,#game-over-screen,#settings-overlay,#characters-overlay,#dev-console,button,input,textarea,select,.mobile-btn')) return;
+            if (SG.shootGun()) e.preventDefault();
         });
 
         // Touch controls
@@ -2549,7 +5740,9 @@
         }, { passive: false });
     };
 })();
-// ===== SUBWAY SURFER - Homelander Easter Egg =====
+
+// ===== ENDLESS RUNNER - Homelander =====
+// ===== ENDLESS RUNNER - Homelander Easter Egg =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
@@ -2560,6 +5753,65 @@
     SG.laserLeftBeam = null;
     SG.laserRightBeam = null;
     SG.homelanderCape = null;
+    SG.homelanderModelPath = SG.homelanderModelPath || 'models/homelander.glb';
+    SG.homelanderModelTuning = SG.homelanderModelTuning || {
+        targetHeight: 1.85,
+        modelRotationY: 0,
+        modelYOffset: -0.16,
+        eyeOffsetX: 0.055,
+        eyeOffsetY: 1.63,
+        eyeOffsetZ: -0.50
+    };
+
+    function normalizeHomelanderModel(model) {
+        var box = new THREE.Box3().setFromObject(model);
+        var size = new THREE.Vector3();
+        var center = new THREE.Vector3();
+        box.getSize(size);
+        box.getCenter(center);
+        var targetHeight = SG.homelanderModelTuning.targetHeight;
+        var scale = size.y > 0 ? targetHeight / size.y : 1;
+        model.scale.setScalar(scale);
+        model.updateMatrixWorld(true);
+        box.setFromObject(model);
+        box.getCenter(center);
+        model.position.set(-center.x, -box.min.y + SG.homelanderModelTuning.modelYOffset, -center.z);
+    }
+
+    SG.loadHomelanderModel = function(group, proceduralParts) {
+        if (!group || !THREE || !THREE.GLTFLoader) return;
+        var loader = new THREE.GLTFLoader();
+        loader.load(SG.homelanderModelPath, function(gltf) {
+            if (!SG.homelanderGroup || group !== SG.homelanderGroup) return;
+            var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+            if (!model) return;
+            model.name = 'HomelanderGLB';
+            normalizeHomelanderModel(model);
+            model.rotation.y = SG.homelanderModelTuning.modelRotationY;
+            model.traverse(function(node) {
+                if (node && node.isMesh) {
+                    node.castShadow = true;
+                    node.receiveShadow = true;
+                    if (node.material) {
+                        var mats = Array.isArray(node.material) ? node.material : [node.material];
+                        for (var mi = 0; mi < mats.length; mi++) {
+                            if (mats[mi]) {
+                                mats[mi].side = THREE.DoubleSide;
+                                mats[mi].needsUpdate = true;
+                            }
+                        }
+                    }
+                }
+            });
+            group.add(model);
+            SG.homelanderModel = model;
+            for (var i = 0; i < proceduralParts.length; i++) {
+                if (proceduralParts[i]) proceduralParts[i].visible = false;
+            }
+        }, undefined, function(err) {
+            SG.homelanderModelError = err;
+        });
+    };
 
     SG.activateHomelander = function() {
         SG.state.legitRun = false; // Homelander: exclude from leaderboard
@@ -2572,6 +5824,7 @@
 
         var suitMat = new THREE.MeshLambertMaterial({ color: 0x1A237E });
         var suitMatDark = new THREE.MeshLambertMaterial({ color: 0x15205A });
+        var jointMat = new THREE.MeshLambertMaterial({ color: 0x23358A });
 
         var neck = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.10, 8), suitMat);
         neck.position.set(0, 1.08, 0);
@@ -2724,6 +5977,12 @@
         var emblem = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.12, 0.02), emblemMat);
         emblem.position.set(0, 0.75, 0.18);
         SG.homelanderGroup.add(emblem);
+        var emblemGlow = new THREE.Mesh(
+            new THREE.CircleGeometry(0.16, 18),
+            new THREE.MeshBasicMaterial({ color: 0xFFD700, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending })
+        );
+        emblemGlow.position.set(0, 0.75, 0.191);
+        SG.homelanderGroup.add(emblemGlow);
         for (var side6 = -1; side6 <= 1; side6 += 2) {
             var wing = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.02), emblemMat);
             wing.position.set(side6 * 0.15, 0.78, 0.18);
@@ -2734,9 +5993,16 @@
         var armMat = new THREE.MeshLambertMaterial({ color: 0x1A237E });
         var gloveMat = new THREE.MeshLambertMaterial({ color: 0xCC0000 });
         for (var side7 = -1; side7 <= 1; side7 += 2) {
+            var shoulderJoint = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), jointMat);
+            shoulderJoint.position.set(side7 * 0.34, 0.92, 0);
+            shoulderJoint.scale.set(1.05, 0.9, 1);
+            SG.homelanderGroup.add(shoulderJoint);
             var upper = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.20, 0.10), armMat);
             upper.position.set(side7 * 0.34, 0.75, 0);
             SG.homelanderGroup.add(upper);
+            var elbow = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 8), jointMat);
+            elbow.position.set(side7 * 0.34, 0.61, 0);
+            SG.homelanderGroup.add(elbow);
             var fore = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.18, 0.08), armMat);
             fore.position.set(side7 * 0.34, 0.48, 0);
             SG.homelanderGroup.add(fore);
@@ -2747,16 +6013,26 @@
 
         var legMat = new THREE.MeshLambertMaterial({ color: 0x1A237E });
         var bootMat = new THREE.MeshLambertMaterial({ color: 0xCC0000 });
+        var soleMat = new THREE.MeshLambertMaterial({ color: 0x661111 });
         for (var side8 = -1; side8 <= 1; side8 += 2) {
+            var hip = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), suitMatDark);
+            hip.position.set(side8 * 0.14, 0.43, 0);
+            SG.homelanderGroup.add(hip);
             var thigh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.20, 0.14), legMat);
             thigh.position.set(side8 * 0.14, 0.32, 0);
             SG.homelanderGroup.add(thigh);
+            var knee = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 8), jointMat);
+            knee.position.set(side8 * 0.14, 0.23, 0);
+            SG.homelanderGroup.add(knee);
             var calf = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 0.12), legMat);
             calf.position.set(side8 * 0.14, 0.14, 0);
             SG.homelanderGroup.add(calf);
             var boot = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.10, 0.22), bootMat);
             boot.position.set(side8 * 0.14, 0.05, 0.03);
             SG.homelanderGroup.add(boot);
+            var sole = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.035, 0.25), soleMat);
+            sole.position.set(side8 * 0.14, -0.02, 0.045);
+            SG.homelanderGroup.add(sole);
         }
 
         var belt = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.05, 0.18), new THREE.MeshLambertMaterial({ color: 0x222222 }));
@@ -2766,11 +6042,26 @@
         buckle.position.set(0, 0.36, 0.22);
         SG.homelanderGroup.add(buckle);
 
+        SG.homelanderAura = new THREE.Mesh(
+            new THREE.RingGeometry(0.42, 0.7, 32),
+            new THREE.MeshBasicMaterial({ color: 0x88CCFF, transparent: true, opacity: 0.12, side: THREE.DoubleSide, blending: THREE.AdditiveBlending })
+        );
+        SG.homelanderAura.position.set(0, 0.75, -0.42);
+        SG.homelanderAura.rotation.x = Math.PI / 2;
+        SG.homelanderGroup.add(SG.homelanderAura);
+
+        SG.homelanderProceduralParts = SG.homelanderGroup.children.filter(function(child) {
+            return child !== SG.homelanderAura;
+        });
+        SG.loadHomelanderModel(SG.homelanderGroup, SG.homelanderProceduralParts);
+
         SG.scene.add(SG.homelanderGroup);
         if (window.__neoGame) window.__neoGame.homelanderGroup = SG.homelanderGroup;
 
         SG.state.isJumping = false;
         SG.state.isRolling = false;
+        if (SG.clearActiveGun) SG.clearActiveGun();
+        if (SG.startHomelanderTheme) SG.startHomelanderTheme();
     };
 
     SG.deactivateHomelander = function() {
@@ -2808,7 +6099,12 @@
         SG.laserRightBeam = null;
         SG.laserBeams = [];
         SG.homelanderCape = null;
+        SG.homelanderAura = null;
+        SG.homelanderModel = null;
+        SG.homelanderProceduralParts = [];
         if (SG.player) SG.player.visible = true;
+        if (SG.stopHomelanderAudio) SG.stopHomelanderAudio();
+        if (SG.state.started && !SG.state.gameOver && !SG.state.muted && SG.startBgMusic) SG.startBgMusic();
     };
 
     SG.updateHomelander = function(delta) {
@@ -2843,33 +6139,45 @@
                 }
             }
         }
+        if (SG.homelanderAura) {
+            var auraPulse = 1 + Math.sin(SG.state.gameTime * 4) * 0.08;
+            SG.homelanderAura.scale.set(auraPulse, auraPulse, auraPulse);
+            SG.homelanderAura.material.opacity = 0.10 + Math.sin(SG.state.gameTime * 5) * 0.04;
+        }
 
-        var laserLength = 12;
+        var laserBaseLength = 18;
+        var laserLength = SG.state.firstPerson ? 18 : 12;
         SG.laserBeams.length = 0;
-        var eyeY = SG.homelanderGroup.position.y + 1.35;
+        var eyeY = SG.homelanderGroup.position.y + SG.homelanderModelTuning.eyeOffsetY;
 
         for (var side9 = -1; side9 <= 1; side9 += 2) {
-            var bx = SG.homelanderGroup.position.x + side9 * 0.08;
+            var bx = SG.homelanderGroup.position.x + side9 * SG.homelanderModelTuning.eyeOffsetX;
             var by = eyeY;
-            var bz = SG.homelanderGroup.position.z + 0.2;
+            var bz = SG.homelanderGroup.position.z + SG.homelanderModelTuning.eyeOffsetZ;
 
             var dirZ = -1.0;
-            var dirY = -0.35;
+            var dirY = -0.28;
+            if (SG.state.firstPerson && SG.camera) {
+                bx = SG.camera.position.x + side9 * 0.035;
+                by = SG.camera.position.y - 0.08;
+                bz = SG.camera.position.z - 1.2;
+                dirY = -0.08;
+            }
             var len = Math.sqrt(dirZ * dirZ + dirY * dirY);
             var nz = dirZ / len;
             var ny = dirY / len;
 
             var beam = side9 === -1 ? SG.laserLeftBeam : SG.laserRightBeam;
             if (!beam) {
-                var laserGeo = new THREE.CylinderGeometry(0.025, 0.08, laserLength, 4);
+                var laserGeo = new THREE.CylinderGeometry(0.008, 0.012, laserBaseLength, 8);
                 var laserMat = new THREE.MeshBasicMaterial({
-                    color: 0xFF2200, transparent: true, opacity: 0.85,
+                    color: 0xFFF1A0, transparent: true, opacity: 1.0,
                     blending: THREE.AdditiveBlending
                 });
                 beam = new THREE.Mesh(laserGeo, laserMat);
-                var glowGeo = new THREE.CylinderGeometry(0.05, 0.15, laserLength, 4);
+                var glowGeo = new THREE.CylinderGeometry(0.026, 0.040, laserBaseLength, 8);
                 var glowMat = new THREE.MeshBasicMaterial({
-                    color: 0xFF0000, transparent: true, opacity: 0.2,
+                    color: 0xFF0000, transparent: true, opacity: 0.22,
                     blending: THREE.AdditiveBlending
                 });
                 var glow = new THREE.Mesh(glowGeo, glowMat);
@@ -2880,14 +6188,8 @@
                 else SG.laserRightBeam = beam;
             }
 
-            if (SG.state.firstPerson) {
-                beam.material.opacity = 0.50;
-                if (beam.userData.glow) beam.userData.glow.material.opacity = 0.20;
-            } else {
-                beam.material.opacity = 0.85;
-                if (beam.userData.glow) beam.userData.glow.material.opacity = 0.25;
-            }
             beam.scale.x = 1;
+            beam.scale.y = laserLength / laserBaseLength;
             beam.scale.z = 1;
             beam.visible = true;
             if (beam.userData.glow) beam.userData.glow.visible = true;
@@ -2906,11 +6208,12 @@
             if (beam.userData.glow) {
                 beam.userData.glow.position.copy(beam.position);
                 beam.userData.glow.rotation.copy(beam.rotation);
+                beam.userData.glow.scale.y = beam.scale.y;
             }
 
-            var pulse = 0.85 + Math.sin(SG.state.gameTime * 8 + side9) * 0.15;
-            beam.material.opacity = pulse;
-            if (beam.userData.glow) beam.userData.glow.material.opacity = pulse * 0.25;
+            var pulse = 0.86 + Math.sin(SG.state.gameTime * 12 + side9) * 0.14;
+            beam.material.opacity = SG.state.firstPerson ? pulse * 0.58 : pulse;
+            if (beam.userData.glow) beam.userData.glow.material.opacity = SG.state.firstPerson ? pulse * 0.05 : pulse * 0.20;
 
             for (var oi = SG.state.obstacles.length - 1; oi >= 0; oi--) {
                 var obs = SG.state.obstacles[oi];
@@ -2934,7 +6237,9 @@
         SG.state.gameOver = false;
     };
 })();
-// ===== SUBWAY SURFER - Police Chase System =====
+
+// ===== ENDLESS RUNNER - Police =====
+// ===== ENDLESS RUNNER - Police Chase System =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
@@ -3139,7 +6444,9 @@
         SG.state.policeDistance = Math.min(12, SG.state.policeDistance + 1.0);
     };
 })();
-// ===== SUBWAY SURFER - Main Game Loop & Init =====
+
+// ===== ENDLESS RUNNER - Main =====
+// ===== ENDLESS RUNNER - Main Game Loop & Init =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
@@ -3151,10 +6458,25 @@
     };
 
     // ===== CAMERA =====
+    SG.thirdPersonCameraViews = SG.thirdPersonCameraViews || {
+        far: { label: 'Farthest', y: 5.0, z: 7.0, lookY: -1.0, lookZ: -10.0 },
+        medium: { label: 'Medium', y: 4.1, z: 5.4, lookY: -0.65, lookZ: -8.0 },
+        near: { label: 'Closest', y: 3.0, z: 3.7, lookY: -0.25, lookZ: -6.2 }
+    };
+
+    SG.getThirdPersonCameraView = function() {
+        var key = SG.state.thirdPersonView || 'near';
+        return SG.thirdPersonCameraViews[key] || SG.thirdPersonCameraViews.near;
+    };
+
     SG.updateCamera = function() {
         if (!SG.camera) return;
 
         var camTarget = (SG.state.homelander && SG.homelanderGroup) ? SG.homelanderGroup.position : (SG.player ? SG.player.position : null);
+        if (SG.state.pvpSpectating && SG.getPvpSpectateTarget) {
+            var spectateTarget = SG.getPvpSpectateTarget();
+            if (spectateTarget && spectateTarget.position) camTarget = spectateTarget.position;
+        }
         if (!camTarget) return;
 
         if (isNaN(camTarget.x)) camTarget.x = 0;
@@ -3166,14 +6488,17 @@
             var eyeY = camTarget.y + 1.3 + rollDrop;
             var eyeZ = camTarget.z + 0.5;
             SG.camera.position.set(camTarget.x, eyeY, eyeZ);
-            SG.camera.lookAt(camTarget.x, camTarget.y + 0.3, camTarget.z - 30);
+            var pitchDeg = Math.max(-5, Math.min(5, typeof SG.state.firstPersonPitchDeg === 'number' ? SG.state.firstPersonPitchDeg : 1));
+            var pitchUp = Math.tan(pitchDeg * Math.PI / 180) * 30;
+            SG.camera.lookAt(camTarget.x, camTarget.y + 0.3 + pitchUp, camTarget.z - 30);
             if (SG.player) SG.player.visible = false;
             if (SG.homelanderGroup) SG.homelanderGroup.visible = false;
         } else {
             if (SG.homelanderGroup) SG.homelanderGroup.visible = true;
+            var view = SG.getThirdPersonCameraView();
             var targetX = camTarget.x;
-            var targetY = camTarget.y + 5;
-            var targetZ = camTarget.z + 7;
+            var targetY = camTarget.y + view.y;
+            var targetZ = camTarget.z + view.z;
             var shakeX = 0, shakeY = 0;
             if (SG.state.cameraShake > 0.01) {
                 shakeX = (Math.random() - 0.5) * SG.state.cameraShake * 0.3;
@@ -3182,8 +6507,8 @@
             SG.camera.position.x += (targetX + shakeX - SG.camera.position.x) * 0.1;
             SG.camera.position.y += (targetY + shakeY - SG.camera.position.y) * 0.1;
             SG.camera.position.z += (targetZ - SG.camera.position.z) * 0.1;
-            SG.camera.lookAt(camTarget.x, camTarget.y - 1, camTarget.z - 10);
-            if (SG.player && !SG.state.homelander) SG.player.visible = true;
+            SG.camera.lookAt(camTarget.x, camTarget.y + view.lookY, camTarget.z + view.lookZ);
+            if (SG.player && !SG.state.homelander) SG.player.visible = !SG.state.pvpSpectating;
         }
     };
 
@@ -3193,25 +6518,223 @@
         for (i = 0; i < SG.state.trackSegments.length; i++) { SG.scene.remove(SG.state.trackSegments[i]); SG.disposeObject(SG.state.trackSegments[i]); }
         for (i = 0; i < SG.state.obstacles.length; i++) { SG.scene.remove(SG.state.obstacles[i]); SG.disposeObject(SG.state.obstacles[i]); }
         for (i = 0; i < SG.state.coinObjects.length; i++) { SG.scene.remove(SG.state.coinObjects[i]); SG.disposeObject(SG.state.coinObjects[i]); }
+        for (i = 0; i < SG.state.gunPickups.length; i++) { SG.scene.remove(SG.state.gunPickups[i]); SG.disposeObject(SG.state.gunPickups[i]); }
         for (i = 0; i < SG.state.buildings.length; i++) { SG.scene.remove(SG.state.buildings[i]); SG.disposeObject(SG.state.buildings[i]); }
         for (i = 0; i < SG.state.particles.length; i++) { SG.scene.remove(SG.state.particles[i]); SG.disposeObject(SG.state.particles[i]); }
+        if (SG.state.pvpGhosts) {
+            for (i = 0; i < SG.state.pvpGhosts.length; i++) {
+                if (SG.state.pvpGhosts[i].group) {
+                    SG.scene.remove(SG.state.pvpGhosts[i].group);
+                    SG.disposeObject(SG.state.pvpGhosts[i].group);
+                }
+            }
+        }
         SG.state.trackSegments = [];
         SG.state.obstacles = [];
         SG.state.coinObjects = [];
+        SG.state.gunPickups = [];
         SG.state.coinObstacleMap = new Map();
         SG.state.buildings = [];
         SG.state.particles = [];
+        SG.state.pvpOpponents = [];
+        SG.state.pvpGhosts = [];
+        if (SG.clearActiveGun) SG.clearActiveGun();
+    };
+
+    SG.applyPvpScene = function(active) {
+        if (!SG.scene) return;
+        if (active) {
+            SG.state.cyberMode = true;
+            if (SG.scene.background) SG.scene.background.setHex(0x01040b);
+            if (SG.scene.fog) {
+                SG.scene.fog.color.setHex(0x020816);
+                SG.scene.fog.near = 24;
+                SG.scene.fog.far = 96;
+            }
+            if (SG.updateSkyDome) SG.updateSkyDome(0, 'cyber');
+            if (SG.updateLightRigForTheme) SG.updateLightRigForTheme(3);
+            if (SG.ambientLight) SG.ambientLight.intensity = 0.18;
+            if (SG.hemiLight) {
+                SG.hemiLight.color.setHex(0x65f5ff);
+                SG.hemiLight.groundColor.setHex(0x1d002e);
+                SG.hemiLight.intensity = 0.5;
+            }
+            if (SG.dirLight) {
+                SG.dirLight.color.setHex(0xb7f7ff);
+                SG.dirLight.intensity = 0.42;
+                SG.dirLight.position.set(-5, 13, 8);
+            }
+            if (SG.renderer) SG.renderer.toneMappingExposure = 1.18;
+            if (SG.ensurePvpLightRig) SG.ensurePvpLightRig();
+            return;
+        }
+        SG.resetCyberMode();
+    };
+
+    SG.ensurePvpLightRig = function() {
+        if (!THREE || !SG.scene || SG.pvpLightRig) return;
+        var rig = new THREE.Group();
+        rig.name = 'pvp-neon-light-rig';
+        var colors = [0xff149f, 0x8d35ff, 0x00eaff, 0xff2ccf];
+        for (var i = 0; i < 6; i++) {
+            var light = new THREE.PointLight(colors[i % colors.length], 1.65, 18, 2.2);
+            light.position.set((i % 2 ? 1 : -1) * (SG.GROUND_WIDTH / 2 + 2.2), 2.4 + (i % 3) * 1.3, -12 - i * 18);
+            rig.add(light);
+        }
+        SG.scene.add(rig);
+        SG.pvpLightRig = rig;
+    };
+
+    SG.applyPvpNeonStyleToObject = function(obj, kind, colorIndex) {
+        if (!obj || obj.userData.pvpNeonStyled) return;
+        var palettes = {
+            obstacle: [0x22e7ff, 0xff2ccf, 0x8d35ff, 0x00ffd5, 0xffd84d],
+            building: [0x06111f, 0x081729, 0x100821, 0x071b2e, 0x12051f],
+            player: [0xffffff, 0x9ffcff],
+            ghost: [0xff2ccf, 0x8d35ff, 0x22e7ff],
+            opponent: [0xff2ccf, 0x22e7ff, 0x8d35ff]
+        };
+        var emissivePalette = [0x22e7ff, 0xff2ccf, 0x8d35ff, 0x00ffd5];
+        var palette = palettes[kind] || palettes.obstacle;
+        var color = palette[Math.abs(colorIndex || 0) % palette.length];
+        var emissive = kind === 'building' ? emissivePalette[Math.abs(colorIndex || 0) % emissivePalette.length] : color;
+        var bloomTargets = [];
+        obj.traverse(function(child) {
+            if (!child.isMesh || !child.material) return;
+            if (child.name === 'pvp-obstacle-bloom-shell') return;
+            var mats = Array.isArray(child.material) ? child.material : [child.material];
+            var styled = mats.map(function(mat) {
+                if (!mat || !mat.clone) return mat;
+                var clone = mat.clone();
+                clone.userData = clone.userData || {};
+                if (clone.color) {
+                    if (kind === 'building') clone.color.setHex(color);
+                    else if (kind === 'obstacle') clone.color.lerp(new THREE.Color(color), 0.48);
+                }
+                if (clone.emissive) {
+                    clone.emissive.setHex(emissive);
+                    clone.emissiveIntensity = kind === 'building' ? 0.75 : (kind === 'obstacle' ? 1.35 : 0.62);
+                }
+                if (kind === 'ghost' || kind === 'opponent') {
+                    clone.transparent = true;
+                    clone.opacity = kind === 'opponent' ? 0.92 : 0.74;
+                    if (kind === 'ghost') {
+                        clone.depthWrite = false;
+                        clone.blending = THREE.AdditiveBlending;
+                    }
+                }
+                clone.needsUpdate = true;
+                return clone;
+            });
+            child.material = Array.isArray(child.material) ? styled : styled[0];
+            if (kind === 'obstacle' && !child.userData.pvpBloomShell && child.geometry) {
+                bloomTargets.push(child);
+            }
+            if (kind === 'ghost' || kind === 'opponent') child.renderOrder = 80;
+        });
+        for (var bi = 0; bi < bloomTargets.length; bi++) {
+            var target = bloomTargets[bi];
+            var glow = new THREE.Mesh(
+                target.geometry,
+                new THREE.MeshBasicMaterial({
+                    color: emissive,
+                    transparent: true,
+                    opacity: 0.22,
+                    depthWrite: false,
+                    blending: THREE.AdditiveBlending
+                })
+            );
+            glow.name = 'pvp-obstacle-bloom-shell';
+            glow.scale.set(1.11, 1.11, 1.11);
+            glow.renderOrder = 72;
+            target.add(glow);
+            target.userData.pvpBloomShell = true;
+        }
+        obj.userData.pvpNeonStyled = true;
+    };
+
+    SG.updatePvpVisualStyle = function() {
+        if (!SG.state.pvpMode) return;
+        var i;
+        for (i = 0; i < SG.state.obstacles.length; i++) SG.applyPvpNeonStyleToObject(SG.state.obstacles[i], 'obstacle', i);
+        for (i = 0; i < SG.state.buildings.length; i++) SG.applyPvpNeonStyleToObject(SG.state.buildings[i], 'building', i);
+        if (SG.updatePvpPlayerAura) SG.updatePvpPlayerAura();
+        for (i = 0; i < SG.state.pvpGhosts.length; i++) {
+            if (SG.state.pvpGhosts[i].group) SG.applyPvpNeonStyleToObject(SG.state.pvpGhosts[i].group, 'opponent', i);
+        }
+    };
+
+    SG.updatePvpPlayerAura = function() {
+        if (!SG.player || !THREE) return;
+        if (!SG.pvpPlayerAura) {
+            var aura = new THREE.Group();
+            aura.name = 'pvp-player-neon-aura';
+            aura.userData.pvpPlayerAura = true;
+            var ring = new THREE.Mesh(
+                new THREE.RingGeometry(0.58, 0.72, 36),
+                new THREE.MeshBasicMaterial({ color: 0x22e7ff, transparent: true, opacity: 0.72, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+            );
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = 0.03;
+            ring.renderOrder = 78;
+            aura.add(ring);
+            var spine = new THREE.Mesh(
+                new THREE.BoxGeometry(0.05, 1.55, 0.05),
+                new THREE.MeshBasicMaterial({ color: 0xff2ccf, transparent: true, opacity: 0.42, depthWrite: false, blending: THREE.AdditiveBlending })
+            );
+            spine.position.y = 0.95;
+            spine.position.z = -0.12;
+            spine.renderOrder = 78;
+            aura.add(spine);
+            SG.pvpPlayerAura = aura;
+            SG.player.add(aura);
+        }
+        SG.pvpPlayerAura.visible = !!SG.state.pvpMode && !SG.state.pvpLocalDead;
+    };
+
+    SG.resetCyberMode = function() {
+        if (SG.applyCyberColors) SG.applyCyberColors(false);
+        SG.state.cyberMode = false;
+        if (SG.scene) {
+            if (SG.pvpLightRig) {
+                SG.scene.remove(SG.pvpLightRig);
+                SG.disposeObject(SG.pvpLightRig);
+                SG.pvpLightRig = null;
+            }
+            if (SG.scene.background) SG.scene.background.setHex(0x87CEEB);
+            if (SG.updateSkyDome) SG.updateSkyDome(0, 'normal');
+            if (SG.scene.fog) {
+                SG.scene.fog.color.setHex(0x87CEEB);
+                SG.scene.fog.near = 60;
+                SG.scene.fog.far = 120;
+            }
+        }
+        if (SG.updateLightRigForTheme) SG.updateLightRigForTheme(SG.state.theme || 0);
     };
 
     // ===== QUIT TO MENU =====
     SG.quitToMenu = function() {
+        if (SG.cancelStartCountdown) SG.cancelStartCountdown();
         SG.stopPoliceChase();
+        SG.state.pvpMode = false;
+        SG.state.pvpRoom = null;
+        SG.state.pvpResult = null;
+        SG.state.pvpSpectating = false;
+        SG.state.pvpLocalDead = false;
+        SG.state.pvpSpectateIndex = 0;
+        if (SG.pvpPlayerAura) SG.pvpPlayerAura.visible = false;
+        if (SG.pvpHudEl) SG.pvpHudEl.style.display = 'none';
+        if (SG.pvpExitBtnEl) SG.pvpExitBtnEl.style.display = 'none';
+        var quitRanks = document.getElementById('pvp-results');
+        if (quitRanks) quitRanks.remove();
+        SG.resetCyberMode();
         SG.resetAllGameObjects();
         SG.state.score = 0;
         SG.state.coins = 0;
         SG.state.speed = SG.START_SPEED;
         SG.state.gameOver = false;
         SG.state.started = false;
+        SG.state.countdownActive = false;
         SG.state.paused = false;
         SG.state.currentLane = 1;
         SG.state.targetLane = 1;
@@ -3221,6 +6744,8 @@
         SG.state.jumpVelocity = 0;
         SG.state.playerHeight = SG.PLAYER_Y;
         SG.state.targetPlayerHeight = SG.PLAYER_Y;
+        SG.state.instantSpeedMps = 0;
+        SG.state._speedSample = null;
         SG.state.lastObstacleZ = 0;
         SG.state.gameTime = 0;
         SG.state.scoreTimer = 0;
@@ -3232,13 +6757,14 @@
         SG.state.jumpingFromRoof = false;
         SG.state.jetpackFuel = 0;
         SG.state.jetpackCooldown = 0;
+        SG.state.gunSpawnTimer = 6;
         SG.state.policeChasing = false;
         SG.state.policeDistance = 12.0;
         SG.state.policeCaught = false;
 
         if (SG.player) {
             SG.player.position.set(0, 0, 0);
-            SG.player.rotation.set(0, 0, 0);
+            SG.player.rotation.set(0, Math.PI, 0);
             SG.player.scale.set(1, 1, 1);
         }
         if (SG.camera) {
@@ -3273,14 +6799,25 @@
 
     // ===== RESTART GAME =====
     SG.restartGame = function() {
+        if (SG.cancelStartCountdown) SG.cancelStartCountdown();
+        if (SG.state.pvpMode && SG.exitPvpToLobby) {
+            SG.exitPvpToLobby();
+            return;
+        }
         SG.stopPoliceChase();
+        SG.state.pvpResult = null;
+        var restartRanks = document.getElementById('pvp-results');
+        if (restartRanks) restartRanks.remove();
+        if (SG.pvpExitBtnEl) SG.pvpExitBtnEl.style.display = 'none';
+        SG.resetCyberMode();
         SG.resetAllGameObjects();
 
         SG.state.score = 0;
         SG.state.coins = 0;
         SG.state.speed = SG.START_SPEED;
         SG.state.gameOver = false;
-        SG.state.started = true;
+        SG.state.started = false;
+        SG.state.countdownActive = false;
         SG.state.paused = false;
         SG.state.onRoof = false;
         SG.state.currentLane = 1;
@@ -3291,6 +6828,8 @@
         SG.state.jumpVelocity = 0;
         SG.state.playerHeight = SG.PLAYER_Y;
         SG.state.targetPlayerHeight = SG.PLAYER_Y;
+        SG.state.instantSpeedMps = 0;
+        SG.state._speedSample = null;
         SG.state.lastObstacleZ = 0;
         SG.state.gameTime = 0;
         SG.state.scoreTimer = 0;
@@ -3300,13 +6839,14 @@
         SG.state.jumpingFromRoof = false;
         SG.state.jetpackFuel = 0;
         SG.state.jetpackCooldown = 0;
+        SG.state.gunSpawnTimer = 6;
         SG.state.policeChasing = false;
         SG.state.policeDistance = 12.0;
         SG.state.policeCaught = false;
 
         if (SG.player) {
             SG.player.position.set(0, SG.PLAYER_Y, 0);
-            SG.player.rotation.set(0, 0, 0);
+            SG.player.rotation.set(0, Math.PI, 0);
             SG.player.scale.set(1, 1, 1);
         }
         if (SG.camera) {
@@ -3315,7 +6855,7 @@
         }
 
         if (SG.pauseBtnEl) {
-            SG.pauseBtnEl.style.display = 'block';
+            SG.pauseBtnEl.style.display = 'none';
             SG.pauseBtnEl.textContent = '\u23F8';
         }
         if (SG.gameOverEl) SG.gameOverEl.classList.remove('visible');
@@ -3334,10 +6874,16 @@
         SG.spawnInitialTrack();
         SG.spawnBuildings();
         SG.spawnObstacles();
+        if (SG.beginRunWithCountdown) SG.beginRunWithCountdown();
+        else SG.state.started = true;
     };
 
     // ===== GAME OVER =====
     SG.gameOver = function() {
+        if (SG.state.pvpMode && !SG.state.pvpLocalDead && SG.enterPvpSpectator) {
+            SG.enterPvpSpectator();
+            return;
+        }
         SG.state.gameOver = true;
         SG.state.cameraShake = 0.5;
         SG.createCrashParticles(SG.player.position.clone());
@@ -3362,13 +6908,35 @@
         }
         SG.finalScoreEl.textContent = score;
         SG.finalCoinsEl.textContent = SG.state.coins;
+        var title = SG.gameOverEl ? SG.gameOverEl.querySelector('h1') : null;
+        if (title) title.textContent = 'GAME OVER';
+
+        if (SG.state.pvpMode) {
+            SG.state.pvpResult = SG.buildPvpResult ? SG.buildPvpResult(score) : null;
+            if (title) title.textContent = 'PVP FINISHED';
+            var oldRanks = document.getElementById('pvp-results');
+            if (oldRanks) oldRanks.remove();
+            if (SG.state.pvpResult && SG.gameOverEl) {
+                var ranks = document.createElement('div');
+                ranks.id = 'pvp-results';
+                ranks.style.cssText = 'margin:12px auto 16px;max-width:320px;text-align:left;font:700 13px/1.5 Arial,sans-serif;color:#f7eaff;background:rgba(14,4,24,.55);border:1px solid rgba(255,44,207,.3);border-radius:8px;padding:10px 12px;';
+                ranks.innerHTML = SG.state.pvpResult.map(function(row, idx) {
+                    return '<div>' + (idx + 1) + '. ' + row.name + ' - ' + Math.floor(row.distance) + 'm</div>';
+                }).join('');
+                SG.gameOverEl.insertBefore(ranks, SG.restartBtnEl || null);
+            }
+        } else {
+            SG.state.pvpResult = null;
+            var staleRanks = document.getElementById('pvp-results');
+            if (staleRanks) staleRanks.remove();
+        }
 
         var multipliers = [1, 5, 10];
         var multiplier = multipliers[SG.state.difficulty] || 1;
         var earned = SG.state.coins * multiplier;
 
         // Homelander: don't save coins/credits or shop data
-        if (!SG.state.homelander) {
+        if (!SG.state.homelander && !SG.state.pvpMode) {
             SG.state.credits += earned;
             SG.state.totalCoins += SG.state.coins;
             try {
@@ -3377,7 +6945,7 @@
             } catch(e) {}
             SG.saveShopData();
         } else {
-            earned = 0; // Homelander: show 0 credits earned
+            earned = 0; // Homelander/PVP: show 0 credits earned
         }
 
         var oldCredits = document.getElementById('credits-earned');
@@ -3415,29 +6983,36 @@
 
         var delta = Math.min(SG.clock.getDelta(), 0.05);
         SG.state.gameTime += delta;
+        if (SG.updatePvpGhosts) SG.updatePvpGhosts(delta);
         if (SG.updatePlayerModelAnimation) SG.updatePlayerModelAnimation(delta);
 
+        var localPvpOut = !!(SG.state.pvpMode && SG.state.pvpLocalDead);
+
         // Speed increase
-        if (SG.state.speed < SG.MAX_SPEED) {
-            SG.state.speed += SG.SPEED_INCREMENT * delta * 60;
+        if (!localPvpOut && SG.state.speed < SG.MAX_SPEED) {
+            SG.state.speed += SG.getDifficultySpeedIncrement() * delta * 60;
             if (SG.state.speed > SG.MAX_SPEED) SG.state.speed = SG.MAX_SPEED;
         }
 
-        // Score
-        // Score (distance) scales with speed - faster = more distance/sec
-        SG.state.score += SG.state.speed * delta * 10;
+        // Distance is meters; faster speeds cover more meters per second.
+        if (!localPvpOut) {
+            SG.state.score += SG.getDistanceRate(SG.state.speed) * delta;
+        }
 
         SG.state.policeTotalDistance += delta * SG.state.speed * 60;
 
         // Update score display
         if (SG.scoreEl) SG.scoreEl.textContent = Math.floor(SG.state.score);
         if (SG.coinsEl) SG.coinsEl.textContent = SG.state.coins;
+        if (SG.updateAbilityVisuals) SG.updateAbilityVisuals();
+        if (SG.updateAbilityHUD) SG.updateAbilityHUD();
+        if (SG.updateSpeedHUD) SG.updateSpeedHUD();
 
         // Speed indicator
         var speedEl = document.getElementById('speed-indicator');
         if (speedEl) {
-            var speedLevel = Math.floor((SG.state.speed - SG.START_SPEED) / (SG.MAX_SPEED - SG.START_SPEED) * 49) + 1;
-            speedEl.textContent = 'SPD: ' + Math.min(speedLevel, 50) + 'x';
+            var speedLevel = SG.getSpeedLevel(SG.state.speed);
+            speedEl.textContent = 'SPD: ' + speedLevel + 'x';
             speedEl.style.color = speedLevel > 35 ? 'rgba(255,30,30,1)' : speedLevel > 15 ? 'rgba(255,100,50,0.9)' : 'rgba(255,255,255,0.5)';
         }
 
@@ -3499,9 +7074,12 @@
             coin.rotation.y += delta * 3;
             var children = coin.children;
             if (children.length > 0) {
-                children[0].position.y = 0.6 + Math.sin(SG.state.gameTime * 2 + coin.id) * 0.1;
-                if (children[1] && children[1].type === 'RingGeometry') {
-                    children[1].position.y = 0.6 + Math.sin(SG.state.gameTime * 2 + coin.id) * 0.1;
+                var coinBob = Math.sin(SG.state.gameTime * 2 + coin.id) * 0.1;
+                for (var cci = 0; cci < children.length; cci++) {
+                    var childBaseY = children[cci].userData && typeof children[cci].userData.baseY === 'number'
+                        ? children[cci].userData.baseY
+                        : (coin.userData.baseCoinY || 0.6);
+                    children[cci].position.y = childBaseY + coinBob;
                 }
             }
         }
@@ -3541,7 +7119,10 @@
         // Jetpack
         if (SG.state.isJumping && SG.state.equippedAbility === 2 && SG.state.canJetpack && SG.state.jetpackFuel > 0 && SG.state.jetpackCooldown <= 0) {
             SG.state.jumpVelocity = 0;
-            SG.state.playerHeight += SG.JETPACK_LIFT * delta * 60;
+            if (SG.state.playerHeight < SG.JETPACK_MAX_HEIGHT) {
+                SG.state.playerHeight += SG.JETPACK_LIFT * delta * 60;
+                if (SG.state.playerHeight > SG.JETPACK_MAX_HEIGHT) SG.state.playerHeight = SG.JETPACK_MAX_HEIGHT;
+            }
             SG.state.jetpackFuel -= delta;
             if (SG.state.jetpackFuel <= 0) {
                 SG.state.jetpackFuel = 0;
@@ -3597,9 +7178,10 @@
         // Roll release
         if (SG.state.isRolling && !SG.state.isJumping) {
             var now = Date.now();
-            var downHeld = SG.keys['ArrowDown'] || SG.keys['s'] || SG.keys['S'];
+            var rollReleaseDelay = Math.max(0, Math.min(1000, SG.state.rollReleaseDelay || 200));
+            var downHeld = SG.isActionHeld ? SG.isActionHeld('down') : SG.keys['ArrowDown'];
             if (downHeld) {
-                SG.state.rollEndTime = now + 200;
+                SG.state.rollEndTime = now + rollReleaseDelay;
                 SG.state.rolledLand = false;
             } else if (SG.state.rolledLand && now > SG.state.rolledLandTime + 400) {
                 SG.state.isRolling = false;
@@ -3635,6 +7217,23 @@
         if (!SG.state.isJumping && !SG.state.isRolling) {
             SG.player.position.y += Math.sin(runCycle) * 0.04;
         }
+
+        var forwardMps = SG.getDistanceRate ? SG.getDistanceRate(SG.state.speed) : ((SG.state.speed || 0) * 10);
+        var lateralMps = 0;
+        var verticalMps = 0;
+        if (SG.state._speedSample) {
+            lateralMps = (SG.player.position.x - SG.state._speedSample.x) / delta;
+            verticalMps = ((SG.state.playerHeight || 0) - SG.state._speedSample.height) / delta;
+        }
+        SG.state.instantSpeedMps = Math.sqrt(
+            forwardMps * forwardMps +
+            lateralMps * lateralMps +
+            verticalMps * verticalMps
+        );
+        SG.state._speedSample = {
+            x: SG.player.position.x,
+            height: SG.state.playerHeight || 0
+        };
 
         if (SG.playerLeftArm && SG.playerRightArm) {
             SG.playerLeftArm.rotation.x = Math.sin(runCycle) * 0.4;
@@ -3676,6 +7275,7 @@
         }
 
         // Spawn new objects
+        if (SG.updateGunSystem) SG.updateGunSystem(delta);
         SG.spawnObstacles();
         SG.spawnBuildings();
 
@@ -3683,22 +7283,32 @@
         if (SG.state.homelander) SG.state.gameOver = false;
 
         // Collision
-        if (SG.checkCollisions()) {
+        if (!SG.state.pvpLocalDead && SG.checkCollisions()) {
             SG.gameOver();
             SG.updateCamera();
             return;
         }
 
         // Theme change
-        SG.checkThemeChange();
+        if (!SG.state.pvpMode) SG.checkThemeChange();
 
         // Background color changes with speed
-        var speedLvl = Math.floor((SG.state.speed - SG.START_SPEED) / (SG.MAX_SPEED - SG.START_SPEED) * 49) + 1;
+        var speedLvl = SG.getSpeedLevel(SG.state.speed);
         var speedRatio = Math.min(SG.state.speed / SG.MAX_SPEED, 1.0);
         var inCyber = speedLvl >= 48;
+        if (SG.state.pvpMode) {
+            SG.applyPvpScene(true);
+            if (SG.updatePvpVisualStyle) SG.updatePvpVisualStyle();
+            SG.updateBgMusic(delta);
+            if (SG.updateAbilityHUD) SG.updateAbilityHUD();
+            SG.updateCamera();
+            if (SG.updateGunViewModel) SG.updateGunViewModel();
+            return;
+        }
         if (inCyber !== SG.state.cyberMode) {
             SG.state.cyberMode = inCyber;
             SG.applyCyberColors(inCyber);
+            if (SG.updateSkyDome) SG.updateSkyDome(SG.state.theme || 0, inCyber ? 'cyber' : 'normal');
         }
         if (inCyber) {
             SG.scene.background.setHex(0x000000);
@@ -3742,7 +7352,93 @@
 
         if (SG.state.homelander) SG.updateHomelander(delta);
         SG.updateBgMusic(delta);
+        if (SG.updateAbilityHUD) SG.updateAbilityHUD();
         SG.updateCamera();
+        if (SG.updateGunViewModel) SG.updateGunViewModel();
+    };
+
+    SG.updateAbilityHUD = function() {
+        var skillEl = document.getElementById('skill-indicator');
+        var jetEl = document.getElementById('jetpack-timer');
+        if (!skillEl || !jetEl) return;
+
+        if (!SG.state.started || SG.state.gameOver || SG.state.paused) {
+            skillEl.style.display = 'none';
+            jetEl.style.display = 'none';
+            return;
+        }
+
+        var abilityNames = ['None', 'Double Jump', 'Jetpack', 'Roof Walk'];
+        var abilityIcons = ['-', 'DJ', 'JET', 'ROOF'];
+        var ability = SG.state.equippedAbility || 0;
+        skillEl.style.display = 'block';
+        skillEl.textContent = 'SKILL: ' + (abilityIcons[ability] || '-') + ' ' + (abilityNames[ability] || 'None');
+
+        if (ability === 2 && SG.state.canJetpack) {
+            jetEl.style.display = 'block';
+            if (SG.state.jetpackFuel > 0) {
+                var fuel = Math.max(0, SG.state.jetpackFuel);
+                var capped = SG.state.playerHeight >= SG.JETPACK_MAX_HEIGHT - 0.01;
+                jetEl.textContent = 'JETPACK: ' + fuel.toFixed(1) + 's' + (capped ? ' | MAX ALT' : '');
+                jetEl.style.borderColor = 'rgba(100,200,255,0.45)';
+            } else if (SG.state.jetpackCooldown > 0) {
+                jetEl.textContent = 'JETPACK CD: ' + SG.state.jetpackCooldown.toFixed(1) + 's';
+                jetEl.style.borderColor = 'rgba(255,120,80,0.45)';
+            } else {
+                jetEl.textContent = 'JETPACK READY';
+                jetEl.style.borderColor = 'rgba(80,255,160,0.45)';
+            }
+        } else {
+            jetEl.style.display = 'none';
+        }
+    };
+
+    SG.updateAbilityVisuals = function() {
+        var showDJ = SG.state.equippedAbility === 1 && SG.state.canDoubleJump;
+        var showJetpack = SG.state.equippedAbility === 2 && SG.state.canJetpack;
+        var showRW = SG.state.equippedAbility === 3 && SG.state.canRoofWalk;
+
+        if (SG.shoesLeft) SG.shoesLeft.visible = false;
+        if (SG.shoesRight) SG.shoesRight.visible = false;
+        var showNeoShoeOverlay = (SG.state.selectedCharacter || 'runner') === 'runner';
+        if (SG.shoesDJLeft) SG.shoesDJLeft.visible = showDJ && showNeoShoeOverlay;
+        if (SG.shoesDJRight) SG.shoesDJRight.visible = showDJ && showNeoShoeOverlay;
+        if (SG.shoesRWLeft) SG.shoesRWLeft.visible = showRW && showNeoShoeOverlay;
+        if (SG.shoesRWRight) SG.shoesRWRight.visible = showRW && showNeoShoeOverlay;
+
+        if (showRW && SG.shoesRWLeft && SG.shoesRWRight) {
+            var pulse = 0.45 + Math.sin(SG.state.gameTime * 8) * 0.25;
+            SG.shoesRWLeft.material.emissiveIntensity = pulse;
+            SG.shoesRWRight.material.emissiveIntensity = pulse;
+        }
+
+        if (SG.jetpackPack) {
+            SG.jetpackPack.visible = showJetpack;
+            SG.jetpackPack.position.set(0, 0.72, -0.24);
+        }
+
+        var flameOn = showJetpack && SG.state.jetpackFuel > 0 && SG.state.jetpackCooldown <= 0;
+        if (SG.jetpackFlameGroups && SG.jetpackFlameGroups.length) {
+            for (var jf = 0; jf < SG.jetpackFlameGroups.length; jf++) {
+                var flameGroup = SG.jetpackFlameGroups[jf];
+                flameGroup.visible = flameOn;
+                if (flameOn) {
+                    var pulse = 0.85 + Math.sin(SG.state.gameTime * (18 + jf * 3)) * 0.15;
+                    flameGroup.scale.set(pulse, 0.95 + Math.sin(SG.state.gameTime * 22 + jf) * 0.12, pulse);
+                } else {
+                    flameGroup.scale.set(1, 1, 1);
+                }
+            }
+            return;
+        }
+        if (SG.jetpackFlame) {
+            SG.jetpackFlame.visible = flameOn;
+            SG.jetpackFlame.scale.setScalar(flameOn ? 0.85 + Math.sin(SG.state.gameTime * 18) * 0.15 : 1);
+        }
+        if (SG.jetpackFlameInner) {
+            SG.jetpackFlameInner.visible = flameOn;
+            SG.jetpackFlameInner.scale.setScalar(flameOn ? 0.9 + Math.sin(SG.state.gameTime * 22) * 0.12 : 1);
+        }
     };
 
     // ===== RENDER LOOP =====
@@ -3750,6 +7446,8 @@
         requestAnimationFrame(SG.animate);
         try {
             SG.update();
+            if (SG.updateSpeedHUD) SG.updateSpeedHUD();
+            if (SG.updateGunCrosshair) SG.updateGunCrosshair();
             if (SG.camera && !isNaN(SG.camera.position.x)) {
                 SG.renderer.render(SG.scene, SG.camera);
             }
@@ -3768,6 +7466,9 @@
         }
 
         SG.initScene();
+        if (SG.loadVehicleModels) SG.loadVehicleModels();
+        if (SG.loadSceneryModels) SG.loadSceneryModels();
+        if (SG.loadGunModels) SG.loadGunModels();
         SG.loadShopData();
         if (typeof SG.setupUI !== 'function') { SG.setupUI = function() { console.warn('setupUI missing - ui.js may not have loaded'); }; }
         SG.setupUI();
@@ -3797,11 +7498,15 @@
 
     // Init triggered by account.js after override
 })();
-// ===== SUBWAY SURFER - Account System v2 =====
+
+// ===== ENDLESS RUNNER - Account =====
+// ===== ENDLESS RUNNER - Account System v2 =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
-    var API = 'http://' + (window.location.hostname || '35.212.200.85') + ':3000';
+    var API = (window.__ENDLESS_RUNNER_CONFIG__ && window.__ENDLESS_RUNNER_CONFIG__.API_BASE_URL) ||
+        (window.__SUBWAY_CONFIG__ && window.__SUBWAY_CONFIG__.API_BASE_URL) ||
+        'http://' + (window.location.hostname || '35.212.200.85') + ':3000';
 
     SG.account = {
         token: localStorage.getItem('subwayToken') || null,
@@ -3820,7 +7525,7 @@
             overlay.style.zIndex = '100';
 
             var html = '<div class="menu-content" style="max-width:360px;">';
-            html += '<h1 class="menu-title" style="font-size:28px;">SUBWAY SURFER</h1>';
+            html += '<h1 class="menu-title" style="font-size:28px;">ENDLESS RUNNER</h1>';
             html += '<div style="color:#888;font-size:13px;margin:-15px 0 15px;">Sign in to play</div>';
             html += '<input id="login-name" placeholder="Username" style="width:90%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;display:none;">';
             html += '<input id="login-email" placeholder="Email (qq/163/gmail)" style="width:90%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;">';
@@ -3866,8 +7571,8 @@
     SG.applyGameData = function(g) {
         if (!g) return;
         var best = Math.max(g.maxDistance || 0, g.highScore || 0, g.maxEasy || 0, g.maxMedium || 0, g.maxHard || 0);
-        SG.state.bestScore = Math.max(SG.state.bestScore || 0, best);
-        SG.state.maxLegitDistance = Math.max(SG.state.maxLegitDistance || 0, best);
+        SG.state.bestScore = best;
+        SG.state.maxLegitDistance = best;
         SG.state.credits = g.credits || 0;
         SG.state.totalCoins = Math.max(g.totalCoins || 0, g.coins || 0);
         SG.state.equippedAbility = g.equippedAbility || 0;
@@ -3882,9 +7587,18 @@
         SG.state.canDoubleJump = owned.indexOf(1) >= 0;
         SG.state.canJetpack = owned.indexOf(2) >= 0;
         SG.state.canRoofWalk = owned.indexOf(3) >= 0;
+        var ownedCharacters = Array.isArray(g.ownedCharacters) && g.ownedCharacters.length ? g.ownedCharacters.slice() : ['runner'];
+        if (ownedCharacters.indexOf('runner') < 0) ownedCharacters.unshift('runner');
+        SG.state.ownedCharacters = ownedCharacters;
+        localStorage.setItem('subwayOwnedCharacters', JSON.stringify(ownedCharacters));
+        var selectedCharacter = g.selectedCharacter && ownedCharacters.indexOf(g.selectedCharacter) >= 0 ? g.selectedCharacter : 'runner';
+        SG.state.selectedCharacter = selectedCharacter;
+        localStorage.setItem('subwaySelectedCharacter', selectedCharacter);
+        if (SG.selectCharacter) SG.selectCharacter(selectedCharacter);
         localStorage.setItem('subwayCredits', String(SG.state.credits));
         localStorage.setItem('subwayTotalCoins', String(SG.state.totalCoins));
         localStorage.setItem('subwayBest', String(SG.state.bestScore || 0));
+        if (SG.saveShopData) SG.saveShopData();
         if (SG.updateMenuCredits) SG.updateMenuCredits();
     };
 
@@ -3955,12 +7669,48 @@
     SG.accountLogout = function() {
         SG.account.token = null;
         SG.account.email = null;
+        SG.account.username = null;
         SG.account.loggedIn = false;
         localStorage.removeItem('subwayToken');
         localStorage.removeItem('subwayEmail');
+        localStorage.removeItem('subwayUsername');
         localStorage.removeItem('subwayRemember');
-        window.location.href = 'http://' + window.location.hostname + ':3000/';
+        localStorage.removeItem('subwayCredits');
+        localStorage.removeItem('subwayTotalCoins');
+        localStorage.removeItem('subwayOwnedCharacters');
+        localStorage.removeItem('subwaySelectedCharacter');
+        localStorage.removeItem('subwayShop');
+        var resetData = defaultLogoutData();
+        SG.applyGameData(resetData);
+        if (window.desktopAPI && window.desktopAPI.save && window.desktopAPI.save.setLocal) {
+            try { window.desktopAPI.save.setLocal(resetData); } catch(e) {}
+        }
+        if (SG.menuOverlay) SG.menuOverlay.style.display = 'none';
+        if (SG.pvpOverlay) SG.pvpOverlay.style.display = 'none';
+        if (SG.disconnectPvp) SG.disconnectPvp();
+        if (SG.showLogin) SG.showLogin(true);
     };
+
+    function defaultLogoutData() {
+        return {
+            coins: 0,
+            credits: 0,
+            totalCoins: 0,
+            equippedAbility: 0,
+            ownedAbilities: [0],
+            maxDistance: 0,
+            maxEasy: 0,
+            maxMedium: 0,
+            maxHard: 0,
+            maxEasyAbility: 0,
+            maxMediumAbility: 0,
+            maxHardAbility: 0,
+            runCount: 0,
+            highScore: 0,
+            ownedCharacters: ['runner'],
+            selectedCharacter: 'runner'
+        };
+    }
 
     SG.accountSave = function() {
         if (!SG.account.loggedIn || !SG.account.token) return;
@@ -3990,7 +7740,9 @@
                     maxHardAbility: SG.state.maxHardAbility || 0,
                     runCount: (SG.state.runCount || 0),
                     highScore: SG.state.bestScore || 0,
-                    totalCoins: SG.state.totalCoins || SG.state.coins || 0
+                    totalCoins: SG.state.totalCoins || SG.state.coins || 0,
+                    ownedCharacters: SG.getOwnedCharacters ? SG.getOwnedCharacters() : (SG.state.ownedCharacters || ['runner']),
+                    selectedCharacter: SG.state.selectedCharacter || 'runner'
                 }
             })
         }).catch(function() {});
@@ -4205,4 +7957,313 @@
         }
     };
     SG.init();
+})();
+
+// ===== ENDLESS RUNNER - Pvp-client =====
+// ===== ENDLESS RUNNER - PVP Client (WebSocket bridge) =====
+(function() {
+    'use strict';
+    var SG = window.__SG = window.__SG || {};
+    var ws = null;
+    var roomId = null;
+    var snapTimer = null;
+    var active = false;
+    var authenticated = false;
+    var pending = [];
+
+    SG.pvpRooms = [];
+
+    function apiBase() {
+        return SG.apiBaseUrl ||
+            (window.__ENDLESS_RUNNER_CONFIG__ && window.__ENDLESS_RUNNER_CONFIG__.API_BASE_URL) ||
+            (window.__SUBWAY_CONFIG__ && window.__SUBWAY_CONFIG__.API_BASE_URL) ||
+            'http://35.212.200.85:3000';
+    }
+
+    function wsUrl() {
+        var base = apiBase();
+        var host = base.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
+        return base.indexOf('https://') === 0 ? 'wss://' + host + '/pvp' : 'ws://' + host + ':3001/pvp';
+    }
+
+    function setStatus(state) {
+        if (SG.updatePvpStatusBar) SG.updatePvpStatusBar(state);
+    }
+
+    function send(data) {
+        if (ws && ws.readyState === WebSocket.OPEN && authenticated) {
+            ws.send(JSON.stringify(data));
+        } else {
+            pending.push(data);
+        }
+    }
+
+    function sendNow(data) {
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
+    }
+
+    function flushPending() {
+        var items = pending.splice(0);
+        for (var i = 0; i < items.length; i++) send(items[i]);
+    }
+
+    function stopSnapshots() {
+        active = false;
+        if (snapTimer) {
+            clearInterval(snapTimer);
+            snapTimer = null;
+        }
+    }
+
+    function startSnapshots() {
+        stopSnapshots();
+        active = true;
+        snapTimer = setInterval(function() {
+            if (!roomId || !ws || ws.readyState !== WebSocket.OPEN) {
+                active = false;
+                return;
+            }
+            var snapshot = SG.getLocalPvpSnapshot ? SG.getLocalPvpSnapshot() : null;
+            if (snapshot) send({ type: 'match:snapshot', roomId: roomId, snapshot: snapshot });
+        }, 50);
+    }
+
+    SG.getLocalPvpSnapshot = function() {
+        if (!SG.state || (!SG.state.started && !SG.state.pvpMode) || (!active && !SG.state.pvpMode)) return null;
+        return {
+            lane: typeof SG.state.currentLane === 'number' ? SG.state.currentLane : 1,
+            distance: Math.floor(SG.state.score || 0),
+            isJumping: !!SG.state.isJumping,
+            isRolling: !!SG.state.isRolling,
+            alive: !SG.state.gameOver && !SG.state.pvpLocalDead,
+            spectating: !!SG.state.pvpSpectating,
+            characterId: SG.state.selectedCharacter || 'runner',
+            timestamp: Date.now()
+        };
+    };
+
+    SG.connectPvp = function() {
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+        if (!SG.account || !SG.account.token) {
+            setStatus('offline');
+            return;
+        }
+        try {
+            ws = new WebSocket(wsUrl());
+        } catch(e) {
+            setStatus('reconnecting');
+            setTimeout(SG.connectPvp, 3000);
+            return;
+        }
+        setStatus('reconnecting');
+        ws.onopen = function() {
+            sendNow({ type: 'hello', token: SG.account.token });
+        };
+        ws.onmessage = function(evt) {
+            try { handleMessage(JSON.parse(evt.data)); } catch(e) {}
+        };
+        ws.onclose = function(evt) {
+            ws = null;
+            authenticated = false;
+            stopSnapshots();
+            if (evt.code !== 4001 && evt.code !== 1000) {
+                setStatus('reconnecting');
+                setTimeout(SG.connectPvp, 3000);
+            } else {
+                setStatus('offline');
+            }
+        };
+    };
+
+    SG.disconnectPvp = function() {
+        stopSnapshots();
+        active = false;
+        authenticated = false;
+        pending = [];
+        roomId = null;
+        SG.pvpRooms = [];
+        if (SG.state) SG.state.pvpRoom = null;
+        if (ws) {
+            ws.close(1000);
+            ws = null;
+        }
+        setStatus('offline');
+    };
+
+    SG.leavePvpRoom = function() {
+        if (roomId) send({ type: 'room:leave', roomId: roomId });
+        roomId = null;
+        pending = [];
+        stopSnapshots();
+        if (SG.state) {
+            SG.state.pvpRoom = null;
+            SG.state.pvpResult = null;
+        }
+        if (SG.setPvpRoomsFromServer) SG.setPvpRoomsFromServer([]);
+        if (SG.renderPvpLobby) SG.renderPvpLobby();
+        send({ type: 'room:list' });
+    };
+
+    function markLocalPlayer(room) {
+        if (!room || !SG.account) return room;
+        SG.state.pvpLocalPlayerId = SG.account.email;
+        for (var i = 0; i < (room.players || []).length; i++) {
+            if (room.players[i].id === SG.account.email) room.players[i].local = true;
+        }
+        return room;
+    }
+
+    function handleMessage(msg) {
+        switch (msg.type) {
+            case 'hello:ok':
+                authenticated = true;
+                setStatus('online');
+                SG.state.pvpLocalPlayerId = msg.userId;
+                flushPending();
+                send({ type: 'room:list' });
+                break;
+            case 'error':
+                console.log('[PVP]', msg.error);
+                break;
+            case 'room:list':
+                if (SG.setPvpRoomsFromServer) SG.setPvpRoomsFromServer(msg.rooms || []);
+                break;
+            case 'room:update':
+                markLocalPlayer(msg.room);
+                if (msg.room && SG.account && (msg.room.players || []).some(function(p) { return p.id === SG.account.email; })) {
+                    roomId = msg.room.id;
+                }
+                if (SG.setPvpRoomFromServer) SG.setPvpRoomFromServer(msg.room);
+                break;
+            case 'room:left':
+                roomId = null;
+                if (SG.state) SG.state.pvpRoom = null;
+                if (SG.renderPvpLobby) SG.renderPvpLobby();
+                send({ type: 'room:list' });
+                break;
+            case 'match:start':
+                roomId = (msg.room && msg.room.id) || msg.roomId || roomId;
+                markLocalPlayer(msg.room);
+                SG.state.pvpSeed = msg.seed || '';
+                if (SG.setPvpRoomFromServer) SG.setPvpRoomFromServer(msg.room || msg);
+                if (SG.state.pvpRoom) SG.state.pvpRoom.localHost = true;
+                stopSnapshots();
+                startSnapshots();
+                if (typeof SG._originalStartPvpRace === 'function') SG._originalStartPvpRace();
+                break;
+            case 'match:snapshot':
+                if (msg.players && Array.isArray(msg.players)) {
+                    for (var i = 0; i < msg.players.length; i++) upsertOpponent(msg.players[i]);
+                } else {
+                    upsertOpponent(msg);
+                }
+                break;
+            case 'match:dead':
+                applyDead(msg);
+                break;
+            case 'match:finish':
+                stopSnapshots();
+                active = false;
+                SG.state.pvpRoom = null;
+                SG.state.pvpResult = msg.ranking || [];
+                showServerRanking(msg.ranking || []);
+                break;
+        }
+    }
+
+    function upsertOpponent(data) {
+        if (!data || (!data.id && !data.playerId)) return;
+        var id = data.id || data.playerId;
+        var list = SG.state.pvpOpponents || [];
+        for (var i = 0; i < list.length; i++) {
+            var o = list[i];
+            if (o.id === id || o.name === data.name) {
+                o.distance = data.distance || 0;
+                o.lane = typeof data.lane === 'number' ? data.lane : o.lane;
+                o.isJumping = !!data.isJumping;
+                o.isRolling = !!data.isRolling;
+                o.alive = data.alive !== false;
+                o.characterId = data.characterId || o.characterId || 'runner';
+                return;
+            }
+        }
+    }
+
+    function applyDead(msg) {
+        var list = SG.state.pvpOpponents || [];
+        for (var i = 0; i < list.length; i++) {
+            if (list[i].id === msg.playerId || list[i].name === msg.name) list[i].alive = false;
+        }
+        if (SG.showPvpDeathFeed) SG.showPvpDeathFeed((msg.name || 'Player') + ' is out');
+    }
+
+    function showServerRanking(ranking) {
+        if (!SG.gameOverEl) return;
+        SG.state.gameOver = true;
+        if (SG.finalScoreEl) SG.finalScoreEl.textContent = Math.floor(SG.state.score || 0);
+        var old = SG.gameOverEl.querySelector('.pvp-ranks');
+        if (old) old.remove();
+        var html = '';
+        for (var i = 0; i < ranking.length; i++) {
+            html += '<div style="color:#fff;font-size:14px;margin:4px 0">' + (i + 1) + '. ' + ranking[i].name + ' - ' + ranking[i].distance + 'm</div>';
+        }
+        var div = document.createElement('div');
+        div.className = 'pvp-ranks';
+        div.innerHTML = html;
+        SG.gameOverEl.appendChild(div);
+        SG.gameOverEl.classList.add('visible');
+    }
+
+    setTimeout(function() {
+        var originalShow = SG.showPvpLobby;
+        var originalToggleReady = SG.togglePvpReady;
+        var originalGameOver = SG.gameOver;
+        SG._originalStartPvpRace = SG.startPvpRace;
+
+        SG.showPvpLobby = function() {
+            SG.connectPvp();
+            if (originalShow) originalShow.apply(this, arguments);
+            setTimeout(function() { send({ type: 'room:list' }); }, 250);
+        };
+
+        SG.createLocalPvpRoom = function() {
+            SG.connectPvp();
+            send({ type: 'room:create', name: 'Cyber Sprint', characterId: SG.state.selectedCharacter || 'runner' });
+        };
+
+        SG.joinLocalPvpRoom = function(id) {
+            SG.connectPvp();
+            send({ type: 'room:join', roomId: id, characterId: SG.state.selectedCharacter || 'runner' });
+        };
+
+        SG.togglePvpReady = function() {
+            if (roomId && SG.state.pvpRoom) {
+                var mine = null;
+                for (var i = 0; i < SG.state.pvpRoom.players.length; i++) {
+                    if (SG.state.pvpRoom.players[i].local) mine = SG.state.pvpRoom.players[i];
+                }
+                var ready = mine ? !mine.ready : true;
+                send({ type: 'room:ready', roomId: roomId, ready: ready });
+                if (mine) mine.ready = ready;
+                if (SG.renderPvpLobby) SG.renderPvpLobby();
+                return;
+            }
+            if (originalToggleReady) originalToggleReady.apply(this, arguments);
+        };
+
+        SG.startPvpRace = function() {
+            if (roomId) {
+                send({ type: 'room:start', roomId: roomId });
+                return;
+            }
+            if (SG._originalStartPvpRace) SG._originalStartPvpRace.apply(this, arguments);
+        };
+
+        SG.gameOver = function() {
+            if (active && roomId) send({ type: 'match:dead', roomId: roomId, distance: Math.floor(SG.state.score || 0) });
+            if (originalGameOver) originalGameOver.apply(this, arguments);
+        };
+
+        if (SG.renderPvpLobby && SG.pvpOverlay && SG.pvpOverlay.style.display !== 'none') SG.renderPvpLobby();
+    }, 0);
 })();

@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Collision Detection =====
+// ===== ENDLESS RUNNER - Collision Detection =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -28,8 +28,8 @@
 
             var obsY, obsH;
             if (od.type === 'roll_under') {
-                obsY = 1.65;
-                obsH = 0.5;
+                obsY = od.yOffset || 1.28;
+                obsH = od.height || 0.38;
             } else if (od.type === 'low_flying') {
                 obsY = 1.0;
                 obsH = 0.8;
@@ -55,13 +55,28 @@
             }
 
             if (od.type === 'full_barrier') {
+                if (Array.isArray(od.blockedLanes)) {
+                    var playerLane = state.currentLane;
+                    var nearestDist = Infinity;
+                    for (var li = 0; li < SG.LANE_POSITIONS.length; li++) {
+                        var laneDist = Math.abs(playerPos.x - SG.LANE_POSITIONS[li]);
+                        if (laneDist < nearestDist) {
+                            nearestDist = laneDist;
+                            playerLane = li;
+                        }
+                    }
+                    if (od.blockedLanes.indexOf(playerLane) < 0) continue;
+                    obsBox.x = SG.LANE_POSITIONS[playerLane];
+                    obsBox.w = od.width || 1.6;
+                }
                 if (state.isJumping && state.playerHeight > 0.9) continue;
             }
 
             if (od.type === 'train' && od.hasRamp && !state.onRoof) {
                 var trainBack = obs.position.z + (od.depth || 5.5) / 2;
+                var rampReach = (od.rampWidth || 2.0) / 2 + playerHitbox.w / 2;
                 if (playerPos.z >= trainBack - 1.5 && playerPos.z <= trainBack + 3.5 &&
-                    Math.abs(playerPos.x - obsBox.x) < 1.5) {
+                    Math.abs(playerPos.x - obsBox.x) < rampReach) {
                     state.onRoof = true;
                     continue;
                 }
@@ -114,16 +129,23 @@
                 if (!mat.color) continue;
                 var hex = mat.color.getHex();
                 if (on) {
-                    if (child.userData._origColor === undefined) {
-                        child.userData._origColor = hex;
+                    mat.userData = mat.userData || {};
+                    if (mat.userData._origColor === undefined) {
+                        mat.userData._origColor = hex;
                     }
                     var g = gray(hex);
                     mat.color.setHex(g);
-                } else if (child.userData._origColor !== undefined) {
-                    mat.color.setHex(child.userData._origColor);
-                    delete child.userData._origColor;
+                } else {
+                    mat.userData = mat.userData || {};
+                    if (mat.userData._origColor !== undefined) {
+                        mat.color.setHex(mat.userData._origColor);
+                        delete mat.userData._origColor;
+                    } else if (child.userData._origColor !== undefined) {
+                        mat.color.setHex(child.userData._origColor);
+                    }
                 }
             }
+            if (!on && child.userData._origColor !== undefined) delete child.userData._origColor;
         });
 
         if (SG.ambientLight) {

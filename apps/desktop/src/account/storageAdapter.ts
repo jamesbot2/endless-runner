@@ -1,4 +1,4 @@
-// ===== Subway Surfer - Storage Adapter =====
+// ===== Endless Runner - Storage Adapter =====
 // Dual-mode persistence: Electron desktopAPI → localStorage fallback.
 // Local saves are kept separate from cloud saves (server-side).
 
@@ -16,6 +16,8 @@ export interface GameSave {
   runCount: number
   ownedAbilities: number[]
   equippedAbility: number
+  ownedCharacters?: string[]
+  selectedCharacter?: string
   updatedAt: string // ISO 8601
 }
 
@@ -23,6 +25,9 @@ export interface AppSettings {
   musicVolume: number
   sfxVolume: number
   theme: number
+  rollReleaseDelay?: number
+  thirdPersonView?: string
+  keyBindings?: Record<string, string>
   [key: string]: unknown
 }
 
@@ -46,6 +51,8 @@ function defaultSave(): GameSave {
     runCount: 0,
     ownedAbilities: [0],
     equippedAbility: 0,
+    ownedCharacters: ['runner'],
+    selectedCharacter: 'runner',
     updatedAt: nowISO(),
   }
 }
@@ -55,6 +62,14 @@ function defaultSettings(): AppSettings {
     musicVolume: 0.5,
     sfxVolume: 0.8,
     theme: 0,
+    rollReleaseDelay: 200,
+    thirdPersonView: 'near',
+    keyBindings: {
+      left: 'ArrowLeft',
+      right: 'ArrowRight',
+      up: 'ArrowUp',
+      down: 'ArrowDown',
+    },
   }
 }
 

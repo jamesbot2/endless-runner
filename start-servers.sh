@@ -1,6 +1,6 @@
 #!/bin/bash
 # Start both servers using Node.js (more reliable than Python http.server)
-cd /home/ejimm363/.openclaw/workspace/subway-surfer
+cd /home/ejimm363/.openclaw/workspace/endless-runner
 
 # Kill any existing servers
 kill $(pgrep -f "static-server") 2>/dev/null

@@ -1,4 +1,4 @@
-// ===== Subway Surfer - Desktop Auth UI =====
+// ===== Endless Runner - Desktop Auth UI =====
 // Local login/register UI that calls the GCP account server via fetch.
 // Overrides legacy game.js SG.showLogin / SG.doLogin / SG.doRegister
 // without modifying game.js.
@@ -45,7 +45,7 @@ export function initDesktopAuth(
     overlay.innerHTML = `
       <div class="dc-panel">
         <div class="dc-logo">🏃</div>
-        <div class="dc-sub">Subway Surfer — Sign in to play</div>
+        <div class="dc-sub">Endless Runner — Sign in to play</div>
 
         <!-- Tabs -->
         <div class="dc-tabs">
@@ -187,6 +187,9 @@ export function initDesktopAuth(
       setMsg('dc-reg-msg', '', false)
       btn.disabled = false; btn.textContent = 'REGISTER'
       switchTab('verify')
+      if (data.emailSent === false) {
+        setMsg('dc-verify-msg', 'Email delivery failed. Open /verify-codes in admin to get the code.', true)
+      }
     } catch {
       setMsg('dc-reg-msg', 'Cannot reach server. Try again.', true)
       btn.disabled = false; btn.textContent = 'REGISTER'

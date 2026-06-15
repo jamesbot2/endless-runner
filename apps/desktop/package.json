@@ -1,7 +1,7 @@
 {
-  "name": "subway-surfer-desktop",
+  "name": "endless-runner-desktop",
   "version": "1.0.0",
-  "description": "Subway Surfer - Desktop Edition (Electron)",
+  "description": "Endless Runner - Desktop Edition (Electron)",
   "private": true,
   "main": "dist/electron/main.js",
   "scripts": {
@@ -34,8 +34,8 @@
     "wait-on": "^8.0.3"
   },
   "build": {
-    "appId": "com.neo.subway-surfer",
-    "productName": "Subway Surfer",
+    "appId": "com.neo.endless-runner",
+    "productName": "Endless Runner",
     "directories": {
       "output": "release"
     },

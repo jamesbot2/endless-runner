@@ -1,9 +1,9 @@
-// ===== Subway Surfer - Desktop API Type Declarations =====
+// ===== Endless Runner - Desktop API Type Declarations =====
 // Exposed via contextBridge in preload.ts. All methods use ipcRenderer.invoke.
 // Renderer NEVER has direct access to ipcRenderer, fs, or Node.js APIs.
 
 /** Runtime config exposed by Electron preload before any page scripts run. */
-interface SubwayConfig {
+interface EndlessRunnerConfig {
   API_BASE_URL: string
 }
 
@@ -36,7 +36,9 @@ interface DesktopAPI {
 declare global {
   interface Window {
     /** Set by preload.ts via contextBridge — available before game.js loads. */
-    __SUBWAY_CONFIG__?: SubwayConfig
+    __ENDLESS_RUNNER_CONFIG__?: EndlessRunnerConfig
+    /** Legacy alias kept so existing builds and scripts keep working. */
+    __SUBWAY_CONFIG__?: EndlessRunnerConfig
     /** Set by preload.ts via contextBridge — all methods use ipcRenderer.invoke. */
     desktopAPI?: DesktopAPI
   }

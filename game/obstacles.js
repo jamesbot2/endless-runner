@@ -1,78 +1,246 @@
-// ===== SUBWAY SURFER - Obstacles =====
+// ===== ENDLESS RUNNER - Obstacles =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
     const THREE = window.THREE;
 
+    SG.vehicleModels = SG.vehicleModels || {};
+    SG.vehicleModelPaths = SG.vehicleModelPaths || {
+        train: 'models/vehicles/train.glb',
+        bus: 'models/vehicles/bus.glb'
+    };
+
+    SG.loadVehicleModels = function() {
+        if (!THREE || !THREE.GLTFLoader || SG.vehicleModelsLoading) return;
+        SG.vehicleModelsLoading = true;
+        var loader = new THREE.GLTFLoader();
+        Object.keys(SG.vehicleModelPaths).forEach(function(key) {
+            loader.load(SG.vehicleModelPaths[key], function(gltf) {
+                var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+                if (!model) return;
+                model.name = key + '-vehicle-model';
+                model.traverse(function(node) {
+                    if (node && node.isMesh) {
+                        node.castShadow = true;
+                        node.receiveShadow = true;
+                    }
+                });
+                SG.vehicleModels[key] = model;
+            }, undefined, function(err) {
+                SG.vehicleModelError = err;
+            });
+        });
+    };
+
+    SG.cloneVehicleModel = function(key) {
+        var source = SG.vehicleModels && SG.vehicleModels[key];
+        if (!source) return null;
+        var clone = source.clone(true);
+        clone.name = key + '-vehicle-obstacle';
+        return clone;
+    };
+
+    SG.getObstacleLanes = function(obstacle) {
+        if (!obstacle || !obstacle.userData) return [];
+        if (Array.isArray(obstacle.userData.blockedLanes)) return obstacle.userData.blockedLanes.slice();
+        if (obstacle.userData.type === 'full_barrier' || obstacle.userData.moving) return [0, 1, 2];
+        if (typeof obstacle.userData.lane === 'number') return [obstacle.userData.lane];
+        return [0, 1, 2];
+    };
+
+    SG.getObstacleDepth = function(obstacle) {
+        if (!obstacle || !obstacle.userData) return 2;
+        var depth = obstacle.userData.visualDepth || obstacle.userData.depth || 2;
+        if (obstacle.userData.hasRamp) depth = Math.max(depth, 9.5);
+        if (obstacle.userData.moving) depth += 1.5;
+        return depth;
+    };
+
+    SG.obstacleLanesOverlap = function(a, b) {
+        for (var i = 0; i < a.length; i++) {
+            if (b.indexOf(a[i]) >= 0) return true;
+        }
+        return false;
+    };
+
+    SG.canPlaceObstacle = function(obstacle, z) {
+        var lanes = SG.getObstacleLanes(obstacle);
+        var depth = SG.getObstacleDepth(obstacle);
+        for (var i = 0; i < SG.state.obstacles.length; i++) {
+            var other = SG.state.obstacles[i];
+            if (!other || !other.userData) continue;
+            if (!SG.obstacleLanesOverlap(lanes, SG.getObstacleLanes(other))) continue;
+            var minGap = (depth + SG.getObstacleDepth(other)) * 0.5 + 2.0;
+            if (Math.abs(other.position.z - z) < minGap) return false;
+        }
+        return true;
+    };
+
+    SG.trackObstacle = function(obstacle, lane, z) {
+        if (!obstacle) return false;
+        if (!SG.canPlaceObstacle(obstacle, z)) {
+            SG.disposeObject(obstacle);
+            return false;
+        }
+        SG.scene.add(obstacle);
+        SG.state.obstacles.push(obstacle);
+        SG.state.coinObstacleMap.set(obstacle.uuid, []);
+        SG.spawnCoinsNearObstacle(obstacle, lane, z);
+        return true;
+    };
+
+    SG.canPlaceCoinAt = function(lane, z, ignoreObstacle) {
+        for (var i = 0; i < SG.state.obstacles.length; i++) {
+            var obstacle = SG.state.obstacles[i];
+            if (!obstacle || obstacle === ignoreObstacle) continue;
+            var lanes = SG.getObstacleLanes(obstacle);
+            if (lanes.indexOf(lane) < 0) continue;
+            var minGap = SG.getObstacleDepth(obstacle) * 0.5 + 1.1;
+            if (Math.abs(obstacle.position.z - z) < minGap) return false;
+        }
+        if (ignoreObstacle) {
+            var ignoreLanes = SG.getObstacleLanes(ignoreObstacle);
+            if (ignoreLanes.indexOf(lane) >= 0) {
+                var ignoreGap = SG.getObstacleDepth(ignoreObstacle) * 0.5 + 1.1;
+                if (Math.abs(ignoreObstacle.position.z - z) < ignoreGap) return false;
+            }
+        }
+        return true;
+    };
+
+    SG.findSafeCoinLane = function(preferred, z, ignoreObstacle) {
+        var lanes = [preferred, (preferred + 1) % 3, (preferred + 2) % 3];
+        for (var i = 0; i < lanes.length; i++) {
+            if (SG.canPlaceCoinAt(lanes[i], z, ignoreObstacle)) return lanes[i];
+        }
+        return -1;
+    };
+
+    SG.addSafeCoin = function(lane, z, yOffset, ignoreObstacle, mapEntry) {
+        var safeLane = SG.findSafeCoinLane(lane, z, ignoreObstacle);
+        if (safeLane < 0) return null;
+        var coin = SG.createCoin(safeLane, z, yOffset);
+        SG.scene.add(coin);
+        SG.state.coinObjects.push(coin);
+        if (mapEntry) mapEntry.push(coin);
+        return coin;
+    };
+
+    SG.vehicleColorPalette = SG.vehicleColorPalette || [
+        0xE53935, 0x1E88E5, 0x43A047, 0xFB8C00,
+        0x8E24AA, 0x00ACC1, 0xFDD835, 0x6D4C41
+    ];
+
+    SG.pickVehicleColor = function() {
+        var palette = SG.vehicleColorPalette || [0xE53935];
+        SG.vehicleColorIndex = (SG.vehicleColorIndex || 0) + 1;
+        return palette[(SG.vehicleColorIndex - 1) % palette.length];
+    };
+
+    SG.tintVehicleModel = function(model, color) {
+        if (!model || !model.traverse || !THREE || !THREE.Color) return;
+        var tint = new THREE.Color(color);
+        model.traverse(function(node) {
+            if (!node || !node.isMesh || !node.material) return;
+            var mats = Array.isArray(node.material) ? node.material : [node.material];
+            var tinted = mats.map(function(mat) {
+                if (!mat || !mat.clone) return mat;
+                var clone = mat.clone();
+                if (clone.color) {
+                    var base = clone.color.clone();
+                    var brightness = (base.r + base.g + base.b) / 3;
+                    if (brightness > 0.16) {
+                        clone.color.copy(base.lerp(tint, 0.58));
+                    }
+                }
+                clone.needsUpdate = true;
+                return clone;
+            });
+            node.material = Array.isArray(node.material) ? tinted : tinted[0];
+        });
+    };
+
     SG.createTrain = function(lane, zPos, isMoving) {
         var group = new THREE.Group();
         var laneX = SG.LANE_POSITIONS[lane];
         var moving = (isMoving !== false) && Math.random() < 0.18;
-        var colors = [0xE53935, 0x1E88E5, 0x43A047, 0xFB8C00, 0x8E24AA];
-        var mainColor = colors[Math.floor(Math.random() * colors.length)];
+        var mainColor = SG.pickVehicleColor();
+        var model = SG.cloneVehicleModel('train');
 
-        var body = new THREE.Mesh(
-            new THREE.BoxGeometry(2.4, 1.8, 6),
-            new THREE.MeshLambertMaterial({ color: mainColor })
-        );
-        body.position.set(0, 0.9, 0);
-        group.add(body);
+        if (model) {
+            model.rotation.y = Math.PI;
+            SG.tintVehicleModel(model, mainColor);
+            group.add(model);
+            group.userData.assetModel = 'train.glb';
+            group.userData.vehicleColor = mainColor;
+        } else {
+            if (SG.vehicleModelPaths.train) return null;
+            var body = new THREE.Mesh(
+                new THREE.BoxGeometry(2.4, 1.8, 6),
+                new THREE.MeshLambertMaterial({ color: mainColor })
+            );
+            group.userData.vehicleColor = mainColor;
+            body.position.set(0, 0.9, 0);
+            group.add(body);
 
-        var winMat = new THREE.MeshBasicMaterial({ color: 0x88CCFF, transparent: true, opacity: 0.7 });
-        for (var i = -1; i <= 1; i++) {
-            for (var side = -1; side <= 1; side += 2) {
-                var win = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.05), winMat);
-                win.position.set(side * 1.21, 1.0, i * 1.5);
-                group.add(win);
+            var winMat = new THREE.MeshBasicMaterial({ color: 0x88CCFF, transparent: true, opacity: 0.7 });
+            for (var i = -1; i <= 1; i++) {
+                for (var side = -1; side <= 1; side += 2) {
+                    var win = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.05), winMat);
+                    win.position.set(side * 1.21, 1.0, i * 1.5);
+                    group.add(win);
+                }
             }
-        }
 
-        var roof = new THREE.Mesh(
-            new THREE.BoxGeometry(2.0, 0.1, 5.6),
-            new THREE.MeshLambertMaterial({ color: 0xDDDDDD })
-        );
-        roof.position.set(0, 1.85, 0);
-        group.add(roof);
+            var roof = new THREE.Mesh(
+                new THREE.BoxGeometry(2.0, 0.1, 5.6),
+                new THREE.MeshLambertMaterial({ color: 0xDDDDDD })
+            );
+            roof.position.set(0, 1.85, 0);
+            group.add(roof);
 
-        var doorMat = new THREE.MeshBasicMaterial({ color: 0xCCCCCC });
-        var door = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.9, 0.6), doorMat);
-        door.position.set(0, 0.8, 0);
-        group.add(door);
+            var doorMat = new THREE.MeshBasicMaterial({ color: 0xCCCCCC });
+            var door = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.9, 0.6), doorMat);
+            door.position.set(0, 0.8, 0);
+            group.add(door);
 
-        var lightMat = new THREE.MeshBasicMaterial({ color: 0xFFFFAA });
-        for (var side2 = -1; side2 <= 1; side2 += 2) {
-            var l = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.15, 0.05), lightMat);
-            l.position.set(side2 * 0.6, 0.5, 3.05);
-            group.add(l);
+            var lightMat = new THREE.MeshBasicMaterial({ color: 0xFFFFAA });
+            for (var side2 = -1; side2 <= 1; side2 += 2) {
+                var l = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.15, 0.05), lightMat);
+                l.position.set(side2 * 0.6, 0.5, 3.05);
+                group.add(l);
+            }
         }
 
         var hasRamp = Math.random() < 0.3;
         if (hasRamp) {
-            var rampMat = new THREE.MeshLambertMaterial({ color: 0xFF6600 });
-            var ramp = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.08, 3.0), rampMat);
+            var rampMat = SG.createWarningPanelMaterial ? SG.createWarningPanelMaterial() : new THREE.MeshLambertMaterial({ color: 0xFF6600 });
+            var ramp = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.07, 2.35), rampMat);
             ramp.position.set(0, 0.9, 4.5);
             ramp.rotation.x = 0.65;
+            ramp.userData.rampSurface = true;
             group.add(ramp);
-            var railMat = new THREE.MeshLambertMaterial({ color: 0xDD4400 });
+            var railMat = SG.createDarkMetalMaterial ? SG.createDarkMetalMaterial() : new THREE.MeshLambertMaterial({ color: 0xDD4400 });
             for (var side3 = -1; side3 <= 1; side3 += 2) {
-                var r = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 3.0), railMat);
-                r.position.set(side3 * 1.2, 1.2, 4.5);
+                var r = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.36, 2.35), railMat);
+                r.position.set(side3 * 0.78, 1.12, 4.5);
                 r.rotation.x = 0.65;
                 group.add(r);
             }
             var warnMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
             for (var i2 = -2; i2 <= 2; i2++) {
                 if (i2 === 0) continue;
-                var s = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.02, 0.06), warnMat);
+                var s = new THREE.Mesh(new THREE.BoxGeometry(1.22, 0.02, 0.045), warnMat);
                 s.position.set(0, 0.03, 4.5 + i2 * 0.5);
                 group.add(s);
             }
             var tipMat = new THREE.MeshBasicMaterial({ color: 0xFFFF00 });
-            var tip = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.15, 0.05), tipMat);
+            var tip = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.10, 0.045), tipMat);
             tip.position.set(0, 0.05, 5.8);
             group.add(tip);
 
             group.userData.hasRamp = true;
+            group.userData.rampWidth = 1.55;
         }
 
         group.position.set(laneX, 0, zPos);
@@ -81,6 +249,7 @@
         group.userData.width = 2.0;
         group.userData.height = 1.8;
         group.userData.depth = 5.5;
+        group.userData.visualDepth = hasRamp ? 9.5 : 5.8;
         group.userData.hasRamp = hasRamp;
         group.userData.moving = moving;
         if (moving) {
@@ -107,7 +276,7 @@
 
         var barrier = new THREE.Mesh(
             new THREE.BoxGeometry(1.6, 0.6, 1.0),
-            new THREE.MeshLambertMaterial({ color: 0xFF6600 })
+            SG.createWarningPanelMaterial ? SG.createWarningPanelMaterial() : new THREE.MeshLambertMaterial({ color: 0xFF6600 })
         );
         barrier.position.set(0, 0.3, 0);
         group.add(barrier);
@@ -134,43 +303,60 @@
         group.add(cap);
 
         group.position.set(laneX, 0, zPos);
-        group.userData = { type: 'barrier', lane: lane, width: 1.6, height: 0.6, depth: 1.0 };
+        group.userData = { type: 'barrier', lane: lane, width: 1.6, height: 0.6, depth: 1.0, visualDepth: 1.4 };
         return group;
     };
 
-    SG.createFullLaneBarrier = function(zPos) {
+    SG.createFullLaneBarrier = function(zPos, openLane) {
         var group = new THREE.Group();
+        openLane = (typeof openLane === 'number' && openLane >= 0 && openLane <= 2) ? openLane : Math.floor(Math.random() * 3);
+        var blockedLanes = [0, 1, 2].filter(function(lane) { return lane !== openLane; });
 
-        var beamMat = new THREE.MeshLambertMaterial({ color: 0xFF4444 });
-        var beam = new THREE.Mesh(new THREE.BoxGeometry(SG.GROUND_WIDTH + 1.5, 0.5, 1.2), beamMat);
-        beam.position.set(0, 0.25, 0);
-        group.add(beam);
+        var beamMat = SG.createWarningPanelMaterial ? SG.createWarningPanelMaterial() : new THREE.MeshLambertMaterial({ color: 0xFF4444 });
+        var stripeMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+        var laneBeamWidth = Math.min(SG.LANE_WIDTH * 0.78, 1.7);
+        for (var bi = 0; bi < blockedLanes.length; bi++) {
+            var lane = blockedLanes[bi];
+            var laneX = SG.LANE_POSITIONS[lane];
+            var beam = new THREE.Mesh(new THREE.BoxGeometry(laneBeamWidth, 0.5, 1.2), beamMat);
+            beam.position.set(laneX, 0.25, 0);
+            group.add(beam);
 
-        var stripe = new THREE.Mesh(
-            new THREE.BoxGeometry(SG.GROUND_WIDTH + 1.0, 0.05, 0.05),
-            new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
-        );
-        stripe.position.set(0, 0.5, 0.6);
-        group.add(stripe);
-        var stripe2 = stripe.clone();
-        stripe2.position.z = -0.6;
-        group.add(stripe2);
+            var stripe = new THREE.Mesh(new THREE.BoxGeometry(laneBeamWidth * 0.9, 0.05, 0.05), stripeMat);
+            stripe.position.set(laneX, 0.5, 0.6);
+            group.add(stripe);
+            var stripe2 = stripe.clone();
+            stripe2.position.z = -0.6;
+            group.add(stripe2);
+        }
 
-        var postMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
-        for (var side = -1; side <= 1; side += 2) {
+        var postMat = SG.createDarkMetalMaterial ? SG.createDarkMetalMaterial() : new THREE.MeshLambertMaterial({ color: 0x888888 });
+        var postXs = [
+            SG.LANE_POSITIONS[0] - laneBeamWidth / 2 - 0.12,
+            SG.LANE_POSITIONS[2] + laneBeamWidth / 2 + 0.12
+        ];
+        for (var side = 0; side < postXs.length; side++) {
             var post = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.7, 0.15), postMat);
-            post.position.set(side * (SG.GROUND_WIDTH / 2 + 0.8), 0.35, 0);
+            post.position.set(postXs[side], 0.35, 0);
             group.add(post);
             var light = new THREE.Mesh(
                 new THREE.SphereGeometry(0.08, 4, 4),
                 new THREE.MeshBasicMaterial({ color: 0xFF0000 })
             );
-            light.position.set(side * (SG.GROUND_WIDTH / 2 + 0.8), 0.75, 0);
+            light.position.set(postXs[side], 0.75, 0);
             group.add(light);
         }
 
         group.position.set(0, 0, zPos);
-        group.userData = { type: 'full_barrier', width: SG.GROUND_WIDTH + 1.5, height: 0.5, depth: 1.2 };
+        group.userData = {
+            type: 'full_barrier',
+            openLane: openLane,
+            blockedLanes: blockedLanes,
+            width: laneBeamWidth,
+            height: 0.5,
+            depth: 1.2,
+            visualDepth: 1.6
+        };
         return group;
     };
 
@@ -178,7 +364,7 @@
         var group = new THREE.Group();
         var laneX = SG.LANE_POSITIONS[lane];
 
-        var bodyMat = new THREE.MeshLambertMaterial({ color: 0xFF3300 });
+        var bodyMat = SG.createWarningPanelMaterial ? SG.createWarningPanelMaterial() : new THREE.MeshLambertMaterial({ color: 0xFF3300 });
         var body = new THREE.Mesh(
             new THREE.BoxGeometry(1.2, 0.25, 1.0),
             bodyMat
@@ -186,7 +372,7 @@
         body.position.set(0, 0.9, 0);
         group.add(body);
 
-        var armMat = new THREE.MeshLambertMaterial({ color: 0xDD8800 });
+        var armMat = SG.createDarkMetalMaterial ? SG.createDarkMetalMaterial() : new THREE.MeshLambertMaterial({ color: 0xDD8800 });
         for (var i = -1; i <= 1; i += 2) {
             var arm = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 0.04), armMat);
             arm.position.set(i * 0.3, 1.05, 0);
@@ -217,7 +403,7 @@
         }
 
         group.position.set(laneX, 0, zPos);
-        group.userData = { type: 'low_flying', lane: lane, width: 1.0, height: 0.8, depth: 0.8, yOffset: 0.8 };
+        group.userData = { type: 'low_flying', lane: lane, width: 1.0, height: 0.8, depth: 0.8, visualDepth: 1.2, yOffset: 0.8 };
         return group;
     };
 
@@ -226,23 +412,23 @@
         var laneX = SG.LANE_POSITIONS[lane];
 
         var top = new THREE.Mesh(
-            new THREE.BoxGeometry(2.6, 0.5, 5.0),
-            new THREE.MeshLambertMaterial({ color: 0xFF6600 })
+            new THREE.BoxGeometry(1.42, 0.28, 3.75),
+            SG.createWarningPanelMaterial ? SG.createWarningPanelMaterial() : new THREE.MeshLambertMaterial({ color: 0xFF6600 })
         );
-        top.position.set(0, 1.4, 0);
+        top.position.set(0, 1.18, 0);
         group.add(top);
 
         var stripe = new THREE.Mesh(
-            new THREE.BoxGeometry(2.4, 0.05, 4.8),
+            new THREE.BoxGeometry(1.24, 0.035, 3.45),
             new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
         );
-        stripe.position.set(0, 1.15, 0);
+        stripe.position.set(0, 0.98, 0);
         group.add(stripe);
 
-        var supMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
+        var supMat = SG.createDarkMetalMaterial ? SG.createDarkMetalMaterial() : new THREE.MeshLambertMaterial({ color: 0x555555 });
         for (var side = -1; side <= 1; side += 2) {
-            var sup = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.8, 0.15), supMat);
-            sup.position.set(side * 1.2, 0.9, 0);
+            var sup = new THREE.Mesh(new THREE.BoxGeometry(0.10, 1.34, 0.10), supMat);
+            sup.position.set(side * 0.66, 0.67, 0);
             group.add(sup);
         }
 
@@ -250,7 +436,7 @@
         for (var side2 = -1; side2 <= 1; side2 += 2) {
             for (var end = -1; end <= 1; end += 2) {
                 var w = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.25, 0.08), warnMat);
-                w.position.set(side2 * 1.25, 1.2, end * 2.4);
+                w.position.set(side2 * 0.72, 0.96, end * 1.78);
                 group.add(w);
             }
         }
@@ -259,13 +445,13 @@
         for (var side3 = -1; side3 <= 1; side3 += 2) {
             for (var end2 = -1; end2 <= 1; end2 += 2) {
                 var m = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.12, 0.05), markerMat);
-                m.position.set(side3 * 1.0, 0.1, end2 * 2.8);
+                m.position.set(side3 * 0.60, 0.1, end2 * 2.12);
                 group.add(m);
             }
         }
 
         group.position.set(laneX, 0, zPos);
-        group.userData = { type: 'roll_under', lane: lane, width: 2.0, height: 0.5, depth: 5.0 };
+        group.userData = { type: 'roll_under', lane: lane, width: 1.35, height: 0.28, depth: 3.75, visualDepth: 4.1, yOffset: 1.18 };
         return group;
     };
 
@@ -296,10 +482,7 @@
                         if (t < 0.55) obs = SG.createTrain(lane, z, false);
                         else if (t < 0.80) obs = SG.createLowFlyingObstacle(lane, z);
                         else obs = SG.createRollUnderTrain(lane, z);
-                        SG.scene.add(obs);
-                        SG.state.obstacles.push(obs);
-                        SG.state.coinObstacleMap.set(obs.uuid, []);
-                        SG.spawnCoinsNearObstacle(obs, lane, z);
+                        SG.trackObstacle(obs, lane, z);
                     }
                 } else {
                     var lane2 = pi % 3;
@@ -316,10 +499,7 @@
                     else if (type < 0.60) obs2 = SG.createLowFlyingObstacle(lane2, z);
                     else if (type < 0.75) obs2 = SG.createFullLaneBarrier(z);
                     else obs2 = SG.createRollUnderTrain(lane2, z);
-                    SG.scene.add(obs2);
-                    SG.state.obstacles.push(obs2);
-                    SG.state.coinObstacleMap.set(obs2.uuid, []);
-                    SG.spawnCoinsNearObstacle(obs2, lane2, z);
+                    SG.trackObstacle(obs2, lane2, z);
                 }
             }
             for (var zc = -5; zc > -28; zc -= 5) {
@@ -340,9 +520,8 @@
 
         if (ahead.length < targetCount) {
             var z2 = spawnZ;
-            var zBlocked = SG.state.obstacles.some(function(o) {
-                return Math.abs(o.position.z - z2) < 4;
-            });
+            var rowProbe = { position: { z: z2 }, userData: { type: 'row_probe', lane: 1, depth: 1.0, visualDepth: 1.0 } };
+            var zBlocked = !SG.canPlaceObstacle(rowProbe, z2);
             if (!zBlocked) {
                 if (Math.random() < 0.10) {
                     var openLane2 = Math.floor(Math.random() * 3);
@@ -354,10 +533,7 @@
                         if (t2 < 0.55) obs3 = SG.createTrain(lane3, z2, true);
                         else if (t2 < 0.80) obs3 = SG.createLowFlyingObstacle(lane3, z2);
                         else obs3 = SG.createRollUnderTrain(lane3, z2);
-                        SG.scene.add(obs3);
-                        SG.state.obstacles.push(obs3);
-                        SG.state.coinObstacleMap.set(obs3.uuid, []);
-                        SG.spawnCoinsNearObstacle(obs3, lane3, z2);
+                        SG.trackObstacle(obs3, lane3, z2);
                     }
                 } else {
                     var busy = new Set();
@@ -391,10 +567,7 @@
                     else if (type2 < 0.60) obs4 = SG.createLowFlyingObstacle(lane4, z2);
                     else if (type2 < 0.75) obs4 = SG.createFullLaneBarrier(z2);
                     else obs4 = SG.createRollUnderTrain(lane4, z2);
-                    SG.scene.add(obs4);
-                    SG.state.obstacles.push(obs4);
-                    SG.state.coinObstacleMap.set(obs4.uuid, []);
-                    SG.spawnCoinsNearObstacle(obs4, lane4, z2);
+                    SG.trackObstacle(obs4, lane4, z2);
                 }
             }
         }
@@ -402,16 +575,15 @@
 
     SG.spawnCoinsNearObstacle = function(obstacle, lane, z) {
         var coinChance = Math.random();
+        var depth = SG.getObstacleDepth(obstacle);
+        var safeStartZ = z - depth * 0.5 - 2.4;
+        var mapEntry = SG.state.coinObstacleMap.get(obstacle.uuid);
         if (coinChance < 0.5) {
             var coinLane = Math.floor(Math.random() * 3);
             while (coinLane === lane && Math.random() > 0.3) {
                 coinLane = (coinLane + 1) % 3;
             }
-            var coin = SG.createCoin(coinLane, z - 3 - Math.random() * 5, 0.3);
-            SG.scene.add(coin);
-            SG.state.coinObjects.push(coin);
-            var mapEntry = SG.state.coinObstacleMap.get(obstacle.uuid);
-            if (mapEntry) mapEntry.push(coin);
+            SG.addSafeCoin(coinLane, safeStartZ - Math.random() * 4, 0.3, obstacle, mapEntry);
         } else if (coinChance < 0.7) {
             var coinLane2 = Math.floor(Math.random() * 3);
             while (coinLane2 === lane && Math.random() > 0.4) {
@@ -419,12 +591,18 @@
             }
             var patterns = ['line', 'arc', 'double', 'zigzag', 'arc', 'zigzag'];
             var pattern = patterns[Math.floor(Math.random() * patterns.length)];
-            var coins = SG.createCoinPattern(coinLane2, z - 4, pattern);
+            var coins = SG.createCoinPattern(coinLane2, safeStartZ - 1.0, pattern);
+            var mapEntry2 = SG.state.coinObstacleMap.get(obstacle.uuid);
             for (var ci = 0; ci < coins.length; ci++) {
-                SG.scene.add(coins[ci]);
-                SG.state.coinObjects.push(coins[ci]);
-                var mapEntry2 = SG.state.coinObstacleMap.get(obstacle.uuid);
-                if (mapEntry2) mapEntry2.push(coins[ci]);
+                var coin = coins[ci];
+                var coinLane = Math.round((coin.position.x + SG.LANE_WIDTH) / SG.LANE_WIDTH);
+                if (coinLane < 0 || coinLane > 2 || !SG.canPlaceCoinAt(coinLane, coin.position.z, obstacle)) {
+                    SG.disposeObject(coin);
+                    continue;
+                }
+                SG.scene.add(coin);
+                SG.state.coinObjects.push(coin);
+                if (mapEntry2) mapEntry2.push(coin);
             }
         }
     };

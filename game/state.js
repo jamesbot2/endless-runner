@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Game State =====
+// ===== ENDLESS RUNNER - Game State =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -17,12 +17,15 @@
         running: true,
         playerHeight: SG.PLAYER_Y || 0.15,
         targetPlayerHeight: SG.PLAYER_Y || 0.15,
+        instantSpeedMps: 0,
+        _speedSample: null,
         lastObstacleZ: 0,
         minObstacleGap: 30,
         obstacleTimer: 0,
         trackSegments: [],
         obstacles: [],
         coinObjects: [],
+        gunPickups: [],
         coinObstacleMap: new Map(),
         buildings: [],
         particles: [],
@@ -32,6 +35,7 @@
         instructionTimer: 8,
         hasStartedTouch: false,
         started: false,
+        countdownActive: false,
         paused: false,
         startLaneX: 0,
         bestScore: parseInt(localStorage.getItem('subwayBest') || '0'),
@@ -45,6 +49,18 @@
         muted: false,
         musicVolume: parseFloat(localStorage.getItem('subwayMusicVol') || '0.5'),
         sfxVolume: parseFloat(localStorage.getItem('subwaySfxVol') || '0.8'),
+        rollReleaseDelay: parseInt(localStorage.getItem('subwayRollReleaseDelay') || '200'),
+        thirdPersonView: localStorage.getItem('subwayThirdPersonView') || 'near',
+        firstPersonPitchDeg: Math.max(-5, Math.min(5, parseFloat(localStorage.getItem('subwayFirstPersonPitchDeg') || '1'))),
+        pvpMode: false,
+        pvpRoom: null,
+        pvpCountdownSeconds: 10,
+        pvpGhosts: [],
+        pvpOpponents: [],
+        pvpSpectating: false,
+        pvpSpectateIndex: 0,
+        pvpLocalDead: false,
+        pvpResult: null,
         lastPlayedCoin: 0,
         credits: parseInt(localStorage.getItem('subwayCredits') || '0'),
         totalCoins: parseInt(localStorage.getItem('subwayTotalCoins') || '0'),
@@ -54,6 +70,10 @@
         canJetpack: false,
         jetpackFuel: 0,
         jetpackCooldown: 0,
+        activeGun: null,
+        gunTimer: 0,
+        gunShotCooldown: 0,
+        gunSpawnTimer: 6,
         canRoofWalk: false,
         theme: 0,
         jumpingFromRoof: false,
@@ -72,6 +92,8 @@
         maxMediumAbility: 0,
         maxHardAbility: 0,
         legitRun: true,
-        runCount: 0
+        runCount: 0,
+        selectedCharacter: localStorage.getItem('subwaySelectedCharacter') || 'runner',
+        ownedCharacters: ['runner']
     };
 })();

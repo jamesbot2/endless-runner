@@ -1,8 +1,10 @@
-// ===== SUBWAY SURFER - Account System v2 =====
+// ===== ENDLESS RUNNER - Account System v2 =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
-    var API = 'http://' + (window.location.hostname || '35.212.200.85') + ':3000';
+    var API = (window.__ENDLESS_RUNNER_CONFIG__ && window.__ENDLESS_RUNNER_CONFIG__.API_BASE_URL) ||
+        (window.__SUBWAY_CONFIG__ && window.__SUBWAY_CONFIG__.API_BASE_URL) ||
+        'http://' + (window.location.hostname || '35.212.200.85') + ':3000';
 
     SG.account = {
         token: localStorage.getItem('subwayToken') || null,
@@ -21,7 +23,7 @@
             overlay.style.zIndex = '100';
 
             var html = '<div class="menu-content" style="max-width:360px;">';
-            html += '<h1 class="menu-title" style="font-size:28px;">SUBWAY SURFER</h1>';
+            html += '<h1 class="menu-title" style="font-size:28px;">ENDLESS RUNNER</h1>';
             html += '<div style="color:#888;font-size:13px;margin:-15px 0 15px;">Sign in to play</div>';
             html += '<input id="login-name" placeholder="Username" style="width:90%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;display:none;">';
             html += '<input id="login-email" placeholder="Email (qq/163/gmail)" style="width:90%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.4);color:#fff;font-size:14px;">';
@@ -67,8 +69,8 @@
     SG.applyGameData = function(g) {
         if (!g) return;
         var best = Math.max(g.maxDistance || 0, g.highScore || 0, g.maxEasy || 0, g.maxMedium || 0, g.maxHard || 0);
-        SG.state.bestScore = Math.max(SG.state.bestScore || 0, best);
-        SG.state.maxLegitDistance = Math.max(SG.state.maxLegitDistance || 0, best);
+        SG.state.bestScore = best;
+        SG.state.maxLegitDistance = best;
         SG.state.credits = g.credits || 0;
         SG.state.totalCoins = Math.max(g.totalCoins || 0, g.coins || 0);
         SG.state.equippedAbility = g.equippedAbility || 0;
@@ -83,9 +85,18 @@
         SG.state.canDoubleJump = owned.indexOf(1) >= 0;
         SG.state.canJetpack = owned.indexOf(2) >= 0;
         SG.state.canRoofWalk = owned.indexOf(3) >= 0;
+        var ownedCharacters = Array.isArray(g.ownedCharacters) && g.ownedCharacters.length ? g.ownedCharacters.slice() : ['runner'];
+        if (ownedCharacters.indexOf('runner') < 0) ownedCharacters.unshift('runner');
+        SG.state.ownedCharacters = ownedCharacters;
+        localStorage.setItem('subwayOwnedCharacters', JSON.stringify(ownedCharacters));
+        var selectedCharacter = g.selectedCharacter && ownedCharacters.indexOf(g.selectedCharacter) >= 0 ? g.selectedCharacter : 'runner';
+        SG.state.selectedCharacter = selectedCharacter;
+        localStorage.setItem('subwaySelectedCharacter', selectedCharacter);
+        if (SG.selectCharacter) SG.selectCharacter(selectedCharacter);
         localStorage.setItem('subwayCredits', String(SG.state.credits));
         localStorage.setItem('subwayTotalCoins', String(SG.state.totalCoins));
         localStorage.setItem('subwayBest', String(SG.state.bestScore || 0));
+        if (SG.saveShopData) SG.saveShopData();
         if (SG.updateMenuCredits) SG.updateMenuCredits();
     };
 
@@ -156,12 +167,48 @@
     SG.accountLogout = function() {
         SG.account.token = null;
         SG.account.email = null;
+        SG.account.username = null;
         SG.account.loggedIn = false;
         localStorage.removeItem('subwayToken');
         localStorage.removeItem('subwayEmail');
+        localStorage.removeItem('subwayUsername');
         localStorage.removeItem('subwayRemember');
-        window.location.href = 'http://' + window.location.hostname + ':3000/';
+        localStorage.removeItem('subwayCredits');
+        localStorage.removeItem('subwayTotalCoins');
+        localStorage.removeItem('subwayOwnedCharacters');
+        localStorage.removeItem('subwaySelectedCharacter');
+        localStorage.removeItem('subwayShop');
+        var resetData = defaultLogoutData();
+        SG.applyGameData(resetData);
+        if (window.desktopAPI && window.desktopAPI.save && window.desktopAPI.save.setLocal) {
+            try { window.desktopAPI.save.setLocal(resetData); } catch(e) {}
+        }
+        if (SG.menuOverlay) SG.menuOverlay.style.display = 'none';
+        if (SG.pvpOverlay) SG.pvpOverlay.style.display = 'none';
+        if (SG.disconnectPvp) SG.disconnectPvp();
+        if (SG.showLogin) SG.showLogin(true);
     };
+
+    function defaultLogoutData() {
+        return {
+            coins: 0,
+            credits: 0,
+            totalCoins: 0,
+            equippedAbility: 0,
+            ownedAbilities: [0],
+            maxDistance: 0,
+            maxEasy: 0,
+            maxMedium: 0,
+            maxHard: 0,
+            maxEasyAbility: 0,
+            maxMediumAbility: 0,
+            maxHardAbility: 0,
+            runCount: 0,
+            highScore: 0,
+            ownedCharacters: ['runner'],
+            selectedCharacter: 'runner'
+        };
+    }
 
     SG.accountSave = function() {
         if (!SG.account.loggedIn || !SG.account.token) return;
@@ -191,7 +238,9 @@
                     maxHardAbility: SG.state.maxHardAbility || 0,
                     runCount: (SG.state.runCount || 0),
                     highScore: SG.state.bestScore || 0,
-                    totalCoins: SG.state.totalCoins || SG.state.coins || 0
+                    totalCoins: SG.state.totalCoins || SG.state.coins || 0,
+                    ownedCharacters: SG.getOwnedCharacters ? SG.getOwnedCharacters() : (SG.state.ownedCharacters || ['runner']),
+                    selectedCharacter: SG.state.selectedCharacter || 'runner'
                 }
             })
         }).catch(function() {});

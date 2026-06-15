@@ -1,8 +1,168 @@
-// ===== SUBWAY SURFER - Buildings & Scenery =====
+// ===== ENDLESS RUNNER - Buildings & Scenery =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
     const THREE = window.THREE;
+
+    SG.sceneryModelPaths = SG.sceneryModelPaths || {
+        buildings: [
+            'models/scenery/buildings/building1_small.glb',
+            'models/scenery/buildings/building2_small.glb',
+            'models/scenery/buildings/building3_small.glb',
+            'models/scenery/buildings/building4.glb',
+            'models/scenery/buildings/house2.glb'
+        ],
+        trees: [
+            'models/scenery/trees/tree_1.glb',
+            'models/scenery/trees/tree_4.glb',
+            'models/scenery/trees/tree_7.glb',
+            'models/scenery/trees/pine_1.glb',
+            'models/scenery/trees/birch_2.glb'
+        ]
+    };
+    SG.sceneryModels = SG.sceneryModels || { buildings: [], trees: [] };
+
+    function tintSceneryModel(type, model) {
+        if (type !== 'trees') return;
+        model.traverse(function(node) {
+            if (!node || !node.isMesh || !node.material) return;
+            var mats = Array.isArray(node.material) ? node.material : [node.material];
+            var name = ((node.name || '') + ' ' + (node.material.name || '')).toLowerCase();
+            var isWood = name.indexOf('trunk') >= 0 || name.indexOf('bark') >= 0 || name.indexOf('wood') >= 0 || name.indexOf('stem') >= 0;
+            for (var mi = 0; mi < mats.length; mi++) {
+                var mat = mats[mi];
+                if (!mat || !mat.color) continue;
+                mat.color.setHex(isWood ? 0x6B4A2D : 0x2E7D32);
+                mat.needsUpdate = true;
+            }
+        });
+    }
+
+    SG.loadSceneryModels = function() {
+        if (!THREE || !THREE.GLTFLoader || SG.sceneryModelsLoading) return;
+        SG.sceneryModelsLoading = true;
+        var loader = new THREE.GLTFLoader();
+        ['buildings', 'trees'].forEach(function(type) {
+            SG.sceneryModelPaths[type].forEach(function(url) {
+                loader.load(url, function(gltf) {
+                    var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+                    if (!model) return;
+                    model.name = type + '-scenery-model';
+                    model.traverse(function(node) {
+                        if (node && node.isMesh) {
+                            node.castShadow = true;
+                            node.receiveShadow = true;
+                        }
+                    });
+                    tintSceneryModel(type, model);
+                    SG.sceneryModels[type].push(model);
+                }, undefined, function(err) {
+                    SG.sceneryModelError = err;
+                });
+            });
+        });
+    };
+
+    SG.cloneSceneryModel = function(type) {
+        var list = SG.sceneryModels && SG.sceneryModels[type];
+        if (!list || !list.length) return null;
+        var source = list[Math.floor(Math.random() * list.length)];
+        return source.clone(true);
+    };
+
+    function createAssetScenery(type, x, z) {
+        var model = SG.cloneSceneryModel(type);
+        if (!model) return null;
+        var group = new THREE.Group();
+        group.position.set(x, 0, z);
+        var scale = type === 'buildings' ? 1.28 + Math.random() * 0.16 : 0.86 + Math.random() * 0.34;
+        model.scale.multiplyScalar(scale);
+        model.rotation.y = type === 'buildings'
+            ? (Math.random() < 0.5 ? 0 : Math.PI / 2)
+            : Math.random() * Math.PI * 2;
+        group.add(model);
+        group.userData.sceneryType = type;
+        group.userData.depth = type === 'buildings' ? 4.8 * scale : 2.2 * scale;
+        SG.scene.add(group);
+        return group;
+    }
+
+    function createPvpCyberScenery(x, z) {
+        var group = new THREE.Group();
+        group.position.set(x, 0, z);
+        var side = x < 0 ? -1 : 1;
+        var neonColors = [0x22e7ff, 0xff2ccf, 0x8d35ff, 0x00ffd5];
+        var accent = neonColors[Math.floor(Math.random() * neonColors.length)];
+        var accent2 = neonColors[(neonColors.indexOf(accent) + 1 + Math.floor(Math.random() * 2)) % neonColors.length];
+        var towerCount = Math.random() > 0.62 ? 2 : 1;
+        var maxDepth = 0;
+
+        for (var t = 0; t < towerCount; t++) {
+            var w = 1.35 + Math.random() * 0.95;
+            var d = 1.55 + Math.random() * 1.15;
+            var h = 8.5 + Math.random() * 13.5;
+            var tx = t === 0 ? 0 : side * (1.5 + Math.random() * 0.9);
+            var tz = t === 0 ? 0 : (Math.random() - 0.5) * 2.8;
+            var tower = new THREE.Mesh(
+                new THREE.BoxGeometry(w, h, d),
+                new THREE.MeshPhongMaterial({
+                    color: 0x07111e,
+                    emissive: 0x031326,
+                    specular: 0x3be9ff,
+                    shininess: 76
+                })
+            );
+            tower.position.set(tx, h / 2, tz);
+            tower.castShadow = true;
+            tower.receiveShadow = true;
+            group.add(tower);
+            maxDepth = Math.max(maxDepth, d + Math.abs(tz));
+
+            var stripMatA = new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.78, blending: THREE.AdditiveBlending });
+            var stripMatB = new THREE.MeshBasicMaterial({ color: accent2, transparent: true, opacity: 0.58, blending: THREE.AdditiveBlending });
+            for (var s = -1; s <= 1; s += 2) {
+                var strip = new THREE.Mesh(new THREE.BoxGeometry(0.035, h * 0.82, 0.035), stripMatA);
+                strip.position.set(tx + s * (w / 2 + 0.02), h * 0.52, tz + d / 2 + 0.03);
+                group.add(strip);
+            }
+            for (var y = 1.5; y < h - 0.8; y += 1.4) {
+                var win = new THREE.Mesh(new THREE.BoxGeometry(w * 0.64, 0.045, 0.04), stripMatB);
+                win.position.set(tx, y, tz + d / 2 + 0.04);
+                group.add(win);
+            }
+        }
+
+        if (Math.random() > 0.22) {
+            var adW = 1.55 + Math.random() * 0.85;
+            var adH = 0.58 + Math.random() * 0.38;
+            var adMat = new THREE.MeshBasicMaterial({
+                color: accent2,
+                transparent: true,
+                opacity: 0.64,
+                side: THREE.DoubleSide,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            var ad = new THREE.Mesh(new THREE.PlaneGeometry(adW, adH), adMat);
+            ad.position.set(-side * 0.08, 4.2 + Math.random() * 4.6, -0.9 + Math.random() * 1.8);
+            ad.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+            ad.renderOrder = 70;
+            group.add(ad);
+
+            var frameMat = new THREE.MeshBasicMaterial({ color: 0xff2ccf, transparent: true, opacity: 0.62, blending: THREE.AdditiveBlending });
+            var frame = new THREE.Mesh(new THREE.BoxGeometry(0.05, adH + 0.18, adW + 0.18), frameMat);
+            frame.position.copy(ad.position);
+            frame.rotation.y = ad.rotation.y;
+            frame.renderOrder = 69;
+            group.add(frame);
+        }
+
+        group.userData.sceneryType = 'pvpCyber';
+        group.userData.depth = Math.max(5.0, maxDepth + 1.8);
+        group.userData.pvpNeonStyled = true;
+        SG.scene.add(group);
+        return group;
+    }
 
     SG.THEME_COLORS = [
         { // 0: City
@@ -23,16 +183,26 @@
         }
     ];
 
+    SG.THEME_DISTANCE_THRESHOLDS = {
+        forest: 260,
+        desert: 760,
+        arctic: 1350
+    };
+
     SG.createScenery = function(x, z) {
+        if (SG.state && SG.state.pvpMode) return createPvpCyberScenery(x, z);
         var group = new THREE.Group();
         group.position.set(x, 0, z);
         var theme = SG.state.theme || 0;
 
         if (theme === 0) {
+            var cityAsset = createAssetScenery('buildings', x, z);
+            if (cityAsset) return cityAsset;
+            if (SG.sceneryModelPaths.buildings && SG.sceneryModelPaths.buildings.length) return null;
             var colors = [0x8B7355, 0x6B8E8B, 0x9B8B6B, 0x7B6B5B, 0x5B7B6B, 0x8B7B5B];
-            var h = 3 + Math.random() * 6;
-            var w = 1.5 + Math.random();
-            var d = 1.5 + Math.random();
+            var h = 5 + Math.random() * 7;
+            var w = 2.2 + Math.random() * 1.2;
+            var d = 2.2 + Math.random() * 1.2;
             var mesh = new THREE.Mesh(
                 new THREE.BoxGeometry(w, h, d),
                 new THREE.MeshLambertMaterial({ color: colors[Math.floor(Math.random() * colors.length)] })
@@ -40,6 +210,9 @@
             mesh.position.y = h / 2;
             group.add(mesh);
         } else if (theme === 1) {
+            var treeAsset = createAssetScenery('trees', x, z);
+            if (treeAsset) return treeAsset;
+            if (SG.sceneryModelPaths.trees && SG.sceneryModelPaths.trees.length) return null;
             var trunkH = 2 + Math.random() * 3;
             var trunk = new THREE.Mesh(
                 new THREE.CylinderGeometry(0.15, 0.2, trunkH, 6),
@@ -115,6 +288,58 @@
         return group;
     };
 
+    SG.getScenerySpacing = function(theme) {
+        if (SG.state && SG.state.pvpMode) return 9.4;
+        if (theme === 0) return 10.8;
+        if (theme === 1) return 5.2;
+        return 6.5;
+    };
+
+    SG.getSceneryRowCount = function(theme) {
+        if (SG.state && SG.state.pvpMode) return Math.random() > 0.58 ? 2 : 1;
+        if (theme === 0) return 1;
+        if (theme === 1 && Math.random() > 0.45) return 2;
+        return 1;
+    };
+
+    SG.spawnSceneryRow = function(z, side, row) {
+        var theme = SG.state.theme || 0;
+        var isPvp = !!(SG.state && SG.state.pvpMode);
+        var base = SG.GROUND_WIDTH / 2 + (isPvp ? 2.45 : (theme === 0 ? 2.25 : 1.7));
+        var laneOffset = isPvp ? row * 3.8 : (theme === 0 ? row * 3.9 : row * 2.25);
+        var jitter = theme === 0 && !isPvp ? 0 : (Math.random() - 0.5) * (isPvp ? 0.45 : 0.7);
+        var x = side * (base + laneOffset + jitter);
+        var zJitter = theme === 0 && !isPvp ? 0 : (Math.random() - 0.5) * (isPvp ? 1.4 : 0.9);
+        return SG.createScenery(x, z + zJitter);
+    };
+
+    SG.canPlaceScenery = function(x, z, depth) {
+        var minDepth = depth || 6;
+        for (var i = 0; i < SG.state.buildings.length; i++) {
+            var other = SG.state.buildings[i];
+            if (!other || !other.position) continue;
+            if (Math.abs(other.position.x - x) > 1.2) continue;
+            var otherDepth = other.userData && other.userData.depth ? other.userData.depth : minDepth;
+            var minGap = (minDepth + otherDepth) * 0.5 + 1.2;
+            if (Math.abs(other.position.z - z) < minGap) return false;
+        }
+        return true;
+    };
+
+    SG.addSceneryRow = function(z, side, row) {
+        var theme = SG.state.theme || 0;
+        var isPvp = !!(SG.state && SG.state.pvpMode);
+        var base = SG.GROUND_WIDTH / 2 + (isPvp ? 2.45 : (theme === 0 ? 2.25 : 1.7));
+        var laneOffset = isPvp ? row * 3.8 : (theme === 0 ? row * 3.9 : row * 2.25);
+        var x = side * (base + laneOffset);
+        var expectedDepth = isPvp ? 6.0 : (theme === 0 ? 7.0 : 3.5);
+        if (!SG.canPlaceScenery(x, z, expectedDepth)) return null;
+        var scenery = SG.spawnSceneryRow(z, side, row);
+        if (!scenery) return null;
+        SG.state.buildings.push(scenery);
+        return scenery;
+    };
+
     SG.spawnBuildings = function() {
         for (var i = SG.state.buildings.length - 1; i >= 0; i--) {
             if (SG.state.buildings[i].position.z > SG.DESPAWN_BEHIND) {
@@ -128,13 +353,15 @@
             ? Math.min.apply(null, SG.state.buildings.map(function(b) { return b.position.z; }))
             : 0;
 
-        for (var z = farthestZ; z > -SG.SPAWN_AHEAD; z -= 6 + Math.random() * 8) {
-            if (z > farthestZ) continue;
+        var theme = SG.state.theme || 0;
+        var spacing = SG.getScenerySpacing(theme);
+        var startZ = SG.state.buildings.length > 0 ? farthestZ - spacing : 0;
+        for (var z = startZ; z > -SG.SPAWN_AHEAD; z -= spacing) {
             for (var side = -1; side <= 1; side += 2) {
-                if (Math.random() > 0.3) {
-                    var x = side * (SG.GROUND_WIDTH / 2 + 2 + Math.random() * 3);
-                    var scenery = SG.createScenery(x, z);
-                    SG.state.buildings.push(scenery);
+                var rows = SG.getSceneryRowCount(theme);
+                for (var row = 0; row < rows; row++) {
+                    if (theme !== 0 && Math.random() < 0.18) continue;
+                    SG.addSceneryRow(z - row * spacing * 0.5, side, row);
                 }
             }
         }
@@ -150,6 +377,8 @@
         SG.scene.fog.color.setHex(theme.fog);
         SG.scene.fog.near = themeIndex >= 2 ? 40 : 60;
         SG.scene.fog.far = themeIndex >= 2 ? 90 : 120;
+        if (SG.updateSkyDome) SG.updateSkyDome(themeIndex, 'normal');
+        if (SG.updateLightRigForTheme) SG.updateLightRigForTheme(themeIndex);
 
         for (var si = 0; si < SG.state.trackSegments.length; si++) {
             var seg = SG.state.trackSegments[si];
@@ -174,12 +403,13 @@
         }
         SG.state.buildings = [];
         var spawnAhead = SG.state.started ? SG.SPAWN_AHEAD : 200;
-        for (var z = 0; z > -spawnAhead; z -= 6 + Math.random() * 8) {
+        var spacing = SG.getScenerySpacing(themeIndex);
+        for (var z = 0; z > -spawnAhead; z -= spacing) {
             for (var side = -1; side <= 1; side += 2) {
-                if (Math.random() > 0.3) {
-                    var x = side * (SG.GROUND_WIDTH / 2 + 2 + Math.random() * 3);
-                    var sc = SG.createScenery(x, z);
-                    SG.state.buildings.push(sc);
+                var rows = SG.getSceneryRowCount(themeIndex);
+                for (var row = 0; row < rows; row++) {
+                    if (themeIndex !== 0 && Math.random() < 0.18) continue;
+                    SG.addSceneryRow(z - row * spacing * 0.5, side, row);
                 }
             }
         }
@@ -203,9 +433,9 @@
     SG.checkThemeChange = function() {
         var score = Math.floor(SG.state.score);
         var newTheme = 0;
-        if (score >= 3000) newTheme = 3;
-        else if (score >= 1500) newTheme = 2;
-        else if (score >= 500) newTheme = 1;
+        if (score >= SG.THEME_DISTANCE_THRESHOLDS.arctic) newTheme = 3;
+        else if (score >= SG.THEME_DISTANCE_THRESHOLDS.desert) newTheme = 2;
+        else if (score >= SG.THEME_DISTANCE_THRESHOLDS.forest) newTheme = 1;
         if (newTheme !== SG.state.theme) {
             SG.switchTheme(newTheme);
         }

@@ -1,4 +1,4 @@
-// ===== Subway Surfer - Electron Main Process =====
+// ===== Endless Runner - Electron Main Process =====
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { join, normalize } from 'path'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
@@ -85,11 +85,12 @@ function writeJSON(filePath: string, data: unknown): void {
 
 function createWindow(): void {
   // ── API base URL ───────────────────────────────────
-  // Priority: SUBWAY_API_BASE_URL env → dev default → production server
+  // Priority: ENDLESS_RUNNER_API_BASE_URL env -> legacy SUBWAY_API_BASE_URL env -> dev default -> production server
   // Dev default: http://localhost:3000
   // Production (packaged app, CI, release) default: http://35.212.200.85:3000
-  // Override by setting SUBWAY_API_BASE_URL at build/launch time.
-  const apiBaseUrl = process.env.SUBWAY_API_BASE_URL
+  // Override by setting ENDLESS_RUNNER_API_BASE_URL at build/launch time.
+  const apiBaseUrl = process.env.ENDLESS_RUNNER_API_BASE_URL
+    || process.env.SUBWAY_API_BASE_URL
     || (isDev ? 'http://localhost:3000' : 'http://35.212.200.85:3000')
 
   mainWindow = new BrowserWindow({
@@ -97,7 +98,7 @@ function createWindow(): void {
     height: 720,
     minWidth: 960,
     minHeight: 540,
-    title: 'Subway Surfer',
+    title: 'Endless Runner',
     show: false,
     webPreferences: {
       preload: join(__dirname, 'preload.js'),

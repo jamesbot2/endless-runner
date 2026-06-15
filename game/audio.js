@@ -1,10 +1,23 @@
-// ===== SUBWAY SURFER - Audio System =====
+// ===== ENDLESS RUNNER - Audio System =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
     const THREE = window.THREE;
 
     SG.audioCtx = null;
+    SG.homelanderAudioPaths = SG.homelanderAudioPaths || {
+        theme: 'audio/homelander-theme.mp3',
+        voice: 'audio/im-better-homelander.mp3'
+    };
+    SG.homelanderThemeAudio = null;
+    SG.homelanderVoiceAudio = null;
+    SG.homelanderVoiceSource = null;
+    SG.homelanderVoiceGain = null;
+    SG.HOMELANDER_VOICE_GAIN = 4.4;
+    SG.pendingHomelanderVoice = false;
+    SG.pvpCountdownAudioPath = SG.pvpCountdownAudioPath || 'audio/countdown-from-10.mp3';
+    SG.pvpCountdownAudio = null;
+    SG.PVP_COUNTDOWN_AUDIO_OFFSET = SG.PVP_COUNTDOWN_AUDIO_OFFSET || 0;
 
     SG.initAudio = function() {
         try {
@@ -159,6 +172,15 @@
         currentOscs: []
     };
 
+    SG.rhythmMusicProfile = {
+        baseBpm: 108,
+        maxBpm: 218,
+        hasBackbeatSnare: true,
+        hasSyncopatedHats: true,
+        hasBassline: true,
+        hasLeadArp: true
+    };
+
     SG.startBgMusic = function() {
         if (SG.state.muted || !SG.audioCtx || SG.bgMusicState.running) return;
         SG.bgMusicState.running = true;
@@ -174,13 +196,196 @@
         SG.bgMusicState.currentOscs = [];
     };
 
+    function rememberMusicNode(node, ttlMs) {
+        SG.bgMusicState.currentOscs.push(node);
+        setTimeout(function() {
+            var idx = SG.bgMusicState.currentOscs.indexOf(node);
+            if (idx >= 0) SG.bgMusicState.currentOscs.splice(idx, 1);
+        }, ttlMs || 500);
+    }
+
+    function musicVolume(scale) {
+        var v = typeof SG.state.musicVolume === 'number' ? SG.state.musicVolume : 0.5;
+        return Math.max(0, Math.min(1, v)) * scale;
+    }
+
+    function playOscHit(type, freqA, freqB, gainValue, start, duration) {
+        var ctx = SG.audioCtx;
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = type;
+        osc.frequency.setValueAtTime(freqA, start);
+        if (freqB) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqB), start + duration * 0.72);
+        gain.gain.setValueAtTime(musicVolume(gainValue), start);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+        osc.start(start);
+        osc.stop(start + duration + 0.02);
+        rememberMusicNode(osc, (duration + 0.1) * 1000);
+    }
+
+    function playNoiseHit(start, duration, gainValue, filterFreq, filterType) {
+        var ctx = SG.audioCtx;
+        var bufferSize = Math.max(1, Math.floor(ctx.sampleRate * duration));
+        var buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        var data = buffer.getChannelData(0);
+        for (var i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2.1);
+        }
+        var src = ctx.createBufferSource();
+        var filter = ctx.createBiquadFilter();
+        var gain = ctx.createGain();
+        filter.type = filterType || 'highpass';
+        filter.frequency.setValueAtTime(filterFreq || 2800, start);
+        src.buffer = buffer;
+        src.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+        gain.gain.setValueAtTime(musicVolume(gainValue), start);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+        src.start(start);
+        src.stop(start + duration + 0.01);
+        rememberMusicNode(src, (duration + 0.1) * 1000);
+    }
+
+    SG.ensureHomelanderAudio = function() {
+        if (!SG.homelanderThemeAudio && typeof Audio !== 'undefined') {
+            SG.homelanderThemeAudio = new Audio(SG.homelanderAudioPaths.theme);
+            SG.homelanderThemeAudio.loop = true;
+            SG.homelanderThemeAudio.preload = 'auto';
+        }
+        if (!SG.homelanderVoiceAudio && typeof Audio !== 'undefined') {
+            SG.homelanderVoiceAudio = new Audio(SG.homelanderAudioPaths.voice);
+            SG.homelanderVoiceAudio.loop = false;
+            SG.homelanderVoiceAudio.preload = 'auto';
+        }
+        if (SG.audioCtx && SG.homelanderVoiceAudio && !SG.homelanderVoiceSource) {
+            try {
+                SG.homelanderVoiceSource = SG.audioCtx.createMediaElementSource(SG.homelanderVoiceAudio);
+                SG.homelanderVoiceGain = SG.audioCtx.createGain();
+                SG.homelanderVoiceSource.connect(SG.homelanderVoiceGain);
+                SG.homelanderVoiceGain.connect(SG.audioCtx.destination);
+            } catch(e) {
+                SG.homelanderVoiceSource = null;
+                SG.homelanderVoiceGain = null;
+            }
+        }
+    };
+
+    SG.updateHomelanderAudioVolume = function() {
+        var music = typeof SG.state.musicVolume === 'number' ? SG.state.musicVolume : 0.5;
+        var sfx = typeof SG.state.sfxVolume === 'number' ? SG.state.sfxVolume : 0.8;
+        if (SG.homelanderThemeAudio) {
+            SG.homelanderThemeAudio.volume = SG.state.muted ? 0 : Math.min(1, Math.max(0, music * 0.65));
+        }
+        if (SG.homelanderVoiceAudio) {
+            SG.homelanderVoiceAudio.volume = SG.state.muted ? 0 : 1;
+        }
+        if (SG.homelanderVoiceGain) {
+            SG.homelanderVoiceGain.gain.value = SG.state.muted ? 0 : Math.min(5.0, Math.max(2.8, sfx * SG.HOMELANDER_VOICE_GAIN));
+        }
+    };
+
+    SG.startHomelanderTheme = function() {
+        SG.ensureHomelanderAudio();
+        SG.updateHomelanderAudioVolume();
+        if (SG.stopBgMusic) SG.stopBgMusic();
+        if (!SG.homelanderThemeAudio || SG.state.muted) return;
+        try {
+            SG.homelanderThemeAudio.currentTime = 0;
+            var p = SG.homelanderThemeAudio.play();
+            if (p && p.catch) p.catch(function() {});
+        } catch(e) {}
+    };
+
+    SG.stopHomelanderTheme = function() {
+        if (!SG.homelanderThemeAudio) return;
+        try {
+            SG.homelanderThemeAudio.pause();
+            SG.homelanderThemeAudio.currentTime = 0;
+        } catch(e) {}
+    };
+
+    SG.playPendingHomelanderVoice = function() {
+        if (!SG.pendingHomelanderVoice) return;
+        SG.pendingHomelanderVoice = false;
+        if (!SG.audioCtx && SG.initAudio) SG.initAudio();
+        if (SG.audioCtx && SG.audioCtx.state === 'suspended') SG.audioCtx.resume().catch(function() {});
+        SG.ensureHomelanderAudio();
+        SG.updateHomelanderAudioVolume();
+        if (!SG.homelanderVoiceAudio || SG.state.muted) return;
+        try {
+            SG.homelanderVoiceAudio.pause();
+            SG.homelanderVoiceAudio.currentTime = 0;
+            var p = SG.homelanderVoiceAudio.play();
+            if (p && p.catch) p.catch(function() {});
+        } catch(e) {}
+    };
+
+    SG.stopHomelanderAudio = function() {
+        SG.pendingHomelanderVoice = false;
+        SG.stopHomelanderTheme();
+        if (SG.homelanderVoiceAudio) {
+            try {
+                SG.homelanderVoiceAudio.pause();
+                SG.homelanderVoiceAudio.currentTime = 0;
+            } catch(e) {}
+        }
+    };
+
+    SG.ensurePvpCountdownAudio = function() {
+        if (SG.pvpCountdownAudio || typeof Audio === 'undefined') return;
+        SG.pvpCountdownAudio = new Audio(SG.pvpCountdownAudioPath);
+        SG.pvpCountdownAudio.loop = false;
+        SG.pvpCountdownAudio.preload = 'auto';
+    };
+
+    SG.updatePvpCountdownAudioVolume = function() {
+        if (!SG.pvpCountdownAudio) return;
+        var sfx = typeof SG.state.sfxVolume === 'number' ? SG.state.sfxVolume : 0.8;
+        SG.pvpCountdownAudio.volume = SG.state.muted ? 0 : Math.min(1, Math.max(0.22, sfx * 1.25));
+    };
+
+    SG.getPvpCountdownStepMs = function() {
+        SG.ensurePvpCountdownAudio();
+        var seconds = SG.state && SG.state.pvpCountdownSeconds ? SG.state.pvpCountdownSeconds : 10;
+        var duration = SG.pvpCountdownAudio && Number.isFinite(SG.pvpCountdownAudio.duration) ? SG.pvpCountdownAudio.duration : 0;
+        if (duration > 0) {
+            return Math.max(900, Math.min(1300, Math.round(duration * 1000 / seconds)));
+        }
+        return SG.PVP_COUNTDOWN_STEP_MS || 1100;
+    };
+
+    SG.playPvpCountdownVoice = function() {
+        SG.ensurePvpCountdownAudio();
+        SG.updatePvpCountdownAudioVolume();
+        if (!SG.pvpCountdownAudio || SG.state.muted) return;
+        try {
+            SG.pvpCountdownAudio.pause();
+            SG.pvpCountdownAudio.currentTime = SG.PVP_COUNTDOWN_AUDIO_OFFSET || 0;
+            var p = SG.pvpCountdownAudio.play();
+            if (p && p.catch) p.catch(function() {});
+        } catch(e) {}
+    };
+
+    SG.stopPvpCountdownVoice = function() {
+        if (!SG.pvpCountdownAudio) return;
+        try {
+            SG.pvpCountdownAudio.pause();
+            SG.pvpCountdownAudio.currentTime = 0;
+        } catch(e) {}
+    };
+
     SG.updateBgMusic = function(delta) {
         if (!SG.bgMusicState.running || !SG.audioCtx || SG.state.muted) return;
         if (SG.state.paused || !SG.state.started) return;
 
         var speedLevel = Math.floor((SG.state.speed - SG.START_SPEED) / (SG.MAX_SPEED - SG.START_SPEED) * 49) + 1;
-        var targetBpm = 100 + Math.min(speedLevel, 50) * 2;
-        SG.bgMusicState.tempo += (targetBpm - SG.bgMusicState.tempo) * 0.01;
+        speedLevel = Math.max(1, Math.min(speedLevel, 50));
+        var speedT = (speedLevel - 1) / 49;
+        var targetBpm = SG.rhythmMusicProfile.baseBpm + speedT * (SG.rhythmMusicProfile.maxBpm - SG.rhythmMusicProfile.baseBpm);
+        SG.bgMusicState.tempo += (targetBpm - SG.bgMusicState.tempo) * 0.05;
 
         var beatInterval = 60 / SG.bgMusicState.tempo;
         var now = SG.audioCtx.currentTime;
@@ -191,61 +396,33 @@
             var beat = SG.bgMusicState.beatCount;
 
             try {
-                if (beat % 2 === 0 || beat % 4 === 1) {
-                    var kick = SG.audioCtx.createOscillator();
-                    var kickGain = SG.audioCtx.createGain();
-                    kick.connect(kickGain);
-                    kickGain.connect(SG.audioCtx.destination);
-                    kick.type = 'sine';
-                    kick.frequency.setValueAtTime(150, now);
-                    kick.frequency.linearRampToValueAtTime(40, now + 0.1);
-                    kickGain.gain.setValueAtTime(0.35, now);
-                    kickGain.gain.linearRampToValueAtTime(0, now + 0.2);
-                    kick.start(now);
-                    kick.stop(now + 0.2);
-                    SG.bgMusicState.currentOscs.push(kick);
-                    setTimeout(function() {
-                        var idx = SG.bgMusicState.currentOscs.indexOf(kick);
-                        if (idx >= 0) SG.bgMusicState.currentOscs.splice(idx, 1);
-                    }, 300);
+                var step = beat % 8;
+                var sixteenth = beatInterval * 0.5;
+                var notes = [98, 123.47, 110, 146.83, 98, 130.81, 110, 164.81];
+                var bassNote = notes[beat % notes.length];
+
+                if (step === 1 || step === 5 || step === 0 || (speedLevel > 28 && step === 3)) {
+                    playOscHit('sine', 165, 42, 0.54, now, 0.18);
                 }
 
-                if (SG.state.speed > SG.START_SPEED * 2 || beat % 2 === 0) {
-                    var hatGain = SG.audioCtx.createGain();
-                    hatGain.connect(SG.audioCtx.destination);
-                    var hat = SG.audioCtx.createOscillator();
-                    hat.connect(hatGain);
-                    hat.type = 'square';
-                    hat.frequency.setValueAtTime(5000, now);
-                    hatGain.gain.setValueAtTime(0.12, now);
-                    hatGain.gain.linearRampToValueAtTime(0, now + 0.04);
-                    hat.start(now);
-                    hat.stop(now + 0.04);
-                    SG.bgMusicState.currentOscs.push(hat);
-                    setTimeout(function() {
-                        var idx = SG.bgMusicState.currentOscs.indexOf(hat);
-                        if (idx >= 0) SG.bgMusicState.currentOscs.splice(idx, 1);
-                    }, 100);
+                if (step === 3 || step === 7) {
+                    playNoiseHit(now, 0.12, 0.25, 1600, 'bandpass');
+                    playOscHit('triangle', 220, 165, 0.08, now, 0.1);
                 }
 
-                if (beat % 4 === 0) {
-                    var bass = SG.audioCtx.createOscillator();
-                    var bassGain = SG.audioCtx.createGain();
-                    bass.connect(bassGain);
-                    bassGain.connect(SG.audioCtx.destination);
-                    bass.type = 'sawtooth';
-                    var notes = [110, 130.8, 110, 146.8];
-                    var note = notes[Math.floor(beat / 4) % 4];
-                    bass.frequency.setValueAtTime(note, now);
-                    bassGain.gain.setValueAtTime(0.15, now);
-                    bassGain.gain.linearRampToValueAtTime(0, now + 0.3);
-                    bass.start(now);
-                    bass.stop(now + 0.3);
-                    SG.bgMusicState.currentOscs.push(bass);
-                    setTimeout(function() {
-                        var idx = SG.bgMusicState.currentOscs.indexOf(bass);
-                        if (idx >= 0) SG.bgMusicState.currentOscs.splice(idx, 1);
-                    }, 400);
+                playNoiseHit(now, 0.035, speedLevel > 20 ? 0.11 : 0.075, 5200, 'highpass');
+                if (SG.rhythmMusicProfile.hasSyncopatedHats && (speedLevel > 10 || beat % 2 === 0)) {
+                    playNoiseHit(now + sixteenth, 0.026, speedLevel > 32 ? 0.085 : 0.05, 7200, 'highpass');
+                }
+
+                if (SG.rhythmMusicProfile.hasBassline) {
+                    playOscHit('sawtooth', bassNote, bassNote * 0.995, 0.16, now, beatInterval * 0.82);
+                }
+
+                if (SG.rhythmMusicProfile.hasLeadArp && speedLevel > 14 && beat % 2 === 0) {
+                    var leadNotes = [392, 493.88, 587.33, 659.25, 783.99, 659.25, 587.33, 493.88];
+                    var lead = leadNotes[Math.floor(beat / 2) % leadNotes.length];
+                    playOscHit('square', lead, lead * 1.01, speedLevel > 34 ? 0.045 : 0.025, now + beatInterval * 0.25, 0.08);
                 }
             } catch(e) {}
         }

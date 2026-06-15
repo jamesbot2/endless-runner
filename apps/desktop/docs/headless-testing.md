@@ -30,7 +30,7 @@ ELECTRON_HEADLESS_CI=1 xvfb-run -a npm run test:smoke
 ```
 
 Verifies: body loaded, `window.__SG` (149 keys), `window.THREE` (r128),
-`desktopAPI` bridge, `__SUBWAY_CONFIG__`, F11 handler, no Node.js leaks.
+`desktopAPI` bridge, `__ENDLESS_RUNNER_CONFIG__`, F11 handler, no Node.js leaks.
 
 ### Dev session (interactive, with Vite hot-reload)
 
@@ -49,8 +49,8 @@ ELECTRON_HEADLESS_CI=1 xvfb-run -a npm run dev:headless
 ELECTRON_HEADLESS_CI=1 xvfb-run -a npm run dev:headless &
 EPID=$!
 sleep 12
-import -window root /tmp/subway-surfer.png
-identify /tmp/subway-surfer.png
+import -window root /tmp/endless-runner.png
+identify /tmp/endless-runner.png
 kill $EPID 2>/dev/null
 ```
 

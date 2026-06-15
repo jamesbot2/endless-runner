@@ -1,4 +1,4 @@
-// ===== Subway Surfer - Renderer Entry =====
+// ===== Endless Runner - Renderer Entry =====
 // Loaded as an ES module after the legacy game.js bundle.
 // Bridges Electron APIs to the game without modifying game logic.
 
@@ -16,6 +16,7 @@ const SG = (): any => (window as any).__SG
 
 function getApiBaseUrl(): string {
   return (
+    window.__ENDLESS_RUNNER_CONFIG__?.API_BASE_URL ||
     window.__SUBWAY_CONFIG__?.API_BASE_URL ||
     API_BASE_URL ||
     'http://localhost:3000'
@@ -25,10 +26,10 @@ function getApiBaseUrl(): string {
 // ── Environment Detection ────────────────────────────────
 
 if (window.desktopAPI) {
-  console.log('[Subway Surfer] Running in Electron desktop shell')
+  console.log('[Endless Runner] Running in Electron desktop shell')
 
   const apiUrl = getApiBaseUrl()
-  console.log('[Subway Surfer] API_BASE_URL:', apiUrl)
+  console.log('[Endless Runner] API_BASE_URL:', apiUrl)
 
   // ── Expose config to SG namespace ────────────────────────
   const s = SG()
@@ -53,18 +54,18 @@ if (window.desktopAPI) {
       })
       online = resp.ok
       if (s2) {
-        s2.serverOnline = resp.ok
-        s2.offlineMode = false
+        s2.serverOnline = online
+        s2.offlineMode = !online
       }
-      console.log('[Subway Surfer] Server online:', resp.ok)
-      document.title = `Subway Surfer [${apiUrl}] ✓`
+      console.log('[Endless Runner] Server online:', online)
+      document.title = online ? `Endless Runner [online]` : `Endless Runner [offline]`
     } catch {
       if (s2) {
         s2.serverOnline = false
         s2.offlineMode = true
       }
-      console.warn('[Subway Surfer] Server unreachable — offline mode')
-      document.title = `Subway Surfer [offline]`
+      console.warn('[Endless Runner] Server unreachable — offline mode')
+      document.title = `Endless Runner [offline]`
     }
 
     // Update status bar
@@ -101,16 +102,18 @@ if (window.desktopAPI) {
           runCount: state.runCount || 0,
           ownedAbilities: owned,
           equippedAbility: state.equippedAbility || 0,
+          ownedCharacters: Array.isArray(state.ownedCharacters) ? state.ownedCharacters : ['runner'],
+          selectedCharacter: state.selectedCharacter || 'runner',
           updatedAt: new Date().toISOString(),
         }
         saveLocalGame(save).catch((e: Error) =>
-          console.warn('[Subway Surfer] Local save failed:', e)
+          console.warn('[Endless Runner] Local save failed:', e)
         )
       }
       return result
     }
 
-    console.log('[Subway Surfer] Storage adapter wired to SG.accountSave')
+    console.log('[Endless Runner] Storage adapter wired to SG.accountSave')
 
     // ── Create status bar ────────────────────────────────
     createStatusBar(apiUrl)
@@ -137,13 +140,28 @@ if (window.desktopAPI) {
             st.canJetpack = local.ownedAbilities.indexOf(2) >= 0
             st.canRoofWalk = local.ownedAbilities.indexOf(3) >= 0
           }
+          if (Array.isArray(local.ownedCharacters) && local.ownedCharacters.length > 0) {
+            st.ownedCharacters = local.ownedCharacters
+            localStorage.setItem('subwayOwnedCharacters', JSON.stringify(local.ownedCharacters))
+          }
+          if (local.selectedCharacter && typeof local.selectedCharacter === 'string') {
+            st.selectedCharacter = local.selectedCharacter
+            localStorage.setItem('subwaySelectedCharacter', local.selectedCharacter)
+            if (
+              typeof s3.selectCharacter === 'function' &&
+              typeof s3.characterIsOwned === 'function' &&
+              s3.characterIsOwned(local.selectedCharacter)
+            ) {
+              s3.selectCharacter(local.selectedCharacter)
+            }
+          }
           localStorage.setItem('subwayCredits', String(st.credits))
           localStorage.setItem('subwayTotalCoins', String(st.totalCoins))
           localStorage.setItem('subwayBest', String(st.bestScore || 0))
-          console.log('[Subway Surfer] Local save restored')
+          console.log('[Endless Runner] Local save restored')
         }
       } catch (e) {
-        console.warn('[Subway Surfer] Local save restore failed:', e)
+        console.warn('[Endless Runner] Local save restore failed:', e)
       }
     }
 
@@ -157,8 +175,25 @@ if (window.desktopAPI) {
         localStorage.setItem('subwayToken', data.token)
         localStorage.setItem('subwayEmail', data.email)
 
-        if (data.gameData && typeof s3.applyGameData === 'function') {
-          s3.applyGameData(data.gameData)
+        if (typeof s3.applyGameData === 'function') {
+          s3.applyGameData(data.gameData || {
+            coins: 0,
+            credits: 0,
+            totalCoins: 0,
+            equippedAbility: 0,
+            ownedAbilities: [0],
+            maxDistance: 0,
+            maxEasy: 0,
+            maxMedium: 0,
+            maxHard: 0,
+            maxEasyAbility: 0,
+            maxMediumAbility: 0,
+            maxHardAbility: 0,
+            runCount: 0,
+            highScore: 0,
+            ownedCharacters: ['runner'],
+            selectedCharacter: 'runner',
+          })
         }
 
         s3.account.username = data.username || data.email.split('@')[0]
@@ -172,7 +207,7 @@ if (window.desktopAPI) {
         if (s3.menuOverlay) s3.menuOverlay.style.display = 'flex'
       },
       onOfflinePlay: () => {
-        console.log('[Subway Surfer] Playing offline (local saves only)')
+        console.log('[Endless Runner] Playing offline (local saves only)')
         s3.account.loggedIn = false
         // Show main menu directly
         if (s3.menuOverlay) s3.menuOverlay.style.display = 'flex'
@@ -193,7 +228,7 @@ if (window.desktopAPI) {
         s3.showLogin(true)
       }
     }
-    console.log('[Subway Surfer] Desktop auth UI initialized')
+    console.log('[Endless Runner] Desktop auth UI initialized')
   })()
 
   // ── Settings sync ───────────────────────────────────────
@@ -202,6 +237,21 @@ if (window.desktopAPI) {
       const settings = await loadSettings()
       localStorage.setItem('subwayMusicVol', String(settings.musicVolume))
       localStorage.setItem('subwaySfxVol', String(settings.sfxVolume))
+      if (typeof settings.rollReleaseDelay === 'number') {
+        localStorage.setItem('subwayRollReleaseDelay', String(settings.rollReleaseDelay))
+        const s4 = SG()
+        if (s4?.state) s4.state.rollReleaseDelay = settings.rollReleaseDelay
+      }
+      if (typeof settings.thirdPersonView === 'string') {
+        localStorage.setItem('subwayThirdPersonView', settings.thirdPersonView)
+        const sView = SG()
+        if (sView?.state) sView.state.thirdPersonView = settings.thirdPersonView
+      }
+      if (settings.keyBindings && typeof settings.keyBindings === 'object') {
+        localStorage.setItem('subwayKeyBindings', JSON.stringify(settings.keyBindings))
+        const s5 = SG()
+        if (s5 && typeof s5.loadKeyBindings === 'function') s5.loadKeyBindings()
+      }
     } catch {
       // defaults are fine
     }
@@ -217,15 +267,28 @@ if (window.desktopAPI) {
         [key === 'subwayMusicVol' ? 'musicVolume' : 'sfxVolume']: parseFloat(value),
       }).catch(() => {})
     }
+    if (key === 'subwayRollReleaseDelay') {
+      saveSettings({ rollReleaseDelay: parseInt(value, 10) }).catch(() => {})
+    }
+    if (key === 'subwayThirdPersonView') {
+      saveSettings({ thirdPersonView: value }).catch(() => {})
+    }
+    if (key === 'subwayKeyBindings') {
+      try {
+        saveSettings({ keyBindings: JSON.parse(value) }).catch(() => {})
+      } catch {
+        // ignore malformed transient values
+      }
+    }
   }
 } else {
-  console.log('[Subway Surfer] Running in browser')
-  console.log('[Subway Surfer] API_BASE_URL (Vite build):', API_BASE_URL)
+  console.log('[Endless Runner] Running in browser')
+  console.log('[Endless Runner] API_BASE_URL (Vite build):', API_BASE_URL)
 }
 
 // ── Status Bar ──────────────────────────────────────────
 
-function createStatusBar(apiUrl: string): void {
+function createStatusBar(_apiUrl: string): void {
   const bar = document.createElement('div')
   bar.id = 'electron-status-bar'
   bar.style.cssText = [
@@ -250,7 +313,7 @@ function createStatusBar(apiUrl: string): void {
   bar.innerHTML = [
     '<span id="es-status-icon">⏳</span>',
     '<span id="es-status-text">Checking server…</span>',
-    '<span id="es-url" style="color:rgba(255,255,255,0.35)">' + apiUrl + '</span>',
+    '<span id="es-pvp-status" style="display:none;color:rgba(255,255,255,0.5)">PVP offline</span>',
     '<span id="es-save-status" style="color:rgba(255,255,255,0.35)">local save ✓</span>',
   ].join('')
 
@@ -270,6 +333,25 @@ function updateStatusBar(el: HTMLElement, online: boolean | undefined, _apiUrl: 
       icon.setAttribute('style', 'color:#FF9800')
       text.textContent = 'offline — local save only'
     }
+  }
+}
+
+const pvpStatusOwner = SG()
+if (pvpStatusOwner) {
+  pvpStatusOwner.updatePvpStatusBar = function (state: string) {
+    const el = document.getElementById('es-pvp-status')
+    if (!el) return
+    if (state === 'online') {
+      el.textContent = 'PVP online'
+      el.style.color = '#4CAF50'
+    } else if (state === 'reconnecting') {
+      el.textContent = 'reconnecting'
+      el.style.color = '#FFA500'
+    } else {
+      el.textContent = 'PVP offline'
+      el.style.color = 'rgba(255,255,255,0.5)'
+    }
+    el.style.display = 'inline'
   }
 }
 

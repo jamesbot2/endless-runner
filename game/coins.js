@@ -1,4 +1,4 @@
-// ===== SUBWAY SURFER - Coins =====
+// ===== ENDLESS RUNNER - Coins =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
@@ -8,32 +8,71 @@
         var group = new THREE.Group();
         var laneX = SG.LANE_POSITIONS[lane];
 
+        var coinY = 0.6 + (yOffset || 0);
+        var goldMat = new THREE.MeshLambertMaterial({ color: 0xFFD34D, emissive: 0x5a3200, emissiveIntensity: 0.18 });
+        var rimMat = new THREE.MeshLambertMaterial({ color: 0xFFAA00, emissive: 0x6c3900, emissiveIntensity: 0.25 });
+        var darkDetailMat = new THREE.MeshBasicMaterial({ color: 0x7A3B00 });
+        var brightMat = new THREE.MeshBasicMaterial({ color: 0xFFF4B8, transparent: true, opacity: 0.9 });
+
         var coin = new THREE.Mesh(
-            new THREE.CylinderGeometry(SG.COIN_RADIUS, SG.COIN_RADIUS, 0.08, 10),
-            new THREE.MeshBasicMaterial({ color: 0xFFD700 })
+            new THREE.CylinderGeometry(SG.COIN_RADIUS, SG.COIN_RADIUS, 0.1, 16),
+            goldMat
         );
         coin.rotation.x = Math.PI / 2;
-        coin.position.set(0, 0.6 + (yOffset || 0), 0);
+        coin.position.set(0, coinY, 0);
         group.add(coin);
 
+        var outerRim = new THREE.Mesh(
+            new THREE.TorusGeometry(SG.COIN_RADIUS * 0.92, 0.035, 6, 24),
+            rimMat
+        );
+        outerRim.position.set(0, coinY, 0.06);
+        group.add(outerRim);
+
+        var innerRim = new THREE.Mesh(
+            new THREE.TorusGeometry(SG.COIN_RADIUS * 0.48, 0.018, 6, 20),
+            darkDetailMat
+        );
+        innerRim.position.set(0, coinY, 0.065);
+        group.add(innerRim);
+
         var glow = new THREE.Mesh(
-            new THREE.RingGeometry(SG.COIN_RADIUS * 0.5, SG.COIN_RADIUS * 1.1, 10),
+            new THREE.RingGeometry(SG.COIN_RADIUS * 0.55, SG.COIN_RADIUS * 1.22, 18),
             new THREE.MeshBasicMaterial({ color: 0xFFD700, transparent: true, opacity: 0.25 })
         );
         glow.rotation.x = Math.PI / 2;
-        glow.position.set(0, 0.6 + (yOffset || 0), 0);
+        glow.position.set(0, coinY, 0);
         group.add(glow);
 
-        var dot = new THREE.Mesh(
-            new THREE.CircleGeometry(SG.COIN_RADIUS * 0.3, 6),
-            new THREE.MeshBasicMaterial({ color: 0xFFA500 })
+        var star = new THREE.Shape();
+        for (var si = 0; si < 10; si++) {
+            var radius = si % 2 === 0 ? SG.COIN_RADIUS * 0.28 : SG.COIN_RADIUS * 0.12;
+            var angle = -Math.PI / 2 + si * Math.PI / 5;
+            var sx = Math.cos(angle) * radius;
+            var sy = Math.sin(angle) * radius;
+            if (si === 0) star.moveTo(sx, sy);
+            else star.lineTo(sx, sy);
+        }
+        star.closePath();
+        var emblem = new THREE.Mesh(
+            new THREE.ShapeGeometry(star),
+            darkDetailMat
         );
-        dot.rotation.x = Math.PI / 2;
-        dot.position.set(0, 0.6 + (yOffset || 0), 0.01);
-        group.add(dot);
+        emblem.position.set(0, coinY, 0.071);
+        group.add(emblem);
+
+        var highlight = new THREE.Mesh(
+            new THREE.CircleGeometry(SG.COIN_RADIUS * 0.08, 12),
+            brightMat
+        );
+        highlight.position.set(0, coinY, 0.076);
+        group.add(highlight);
 
         group.position.set(laneX, 0, zPos);
-        group.userData = { lane: lane, collected: false };
+        for (var ci = 0; ci < group.children.length; ci++) {
+            group.children[ci].userData.baseY = group.children[ci].position.y;
+        }
+        group.userData = { lane: lane, collected: false, baseCoinY: coinY, coinDetail: 'high-contrast-centered-detail' };
         return group;
     };
 

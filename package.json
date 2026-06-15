@@ -1,7 +1,14 @@
 {
+  "name": "endless-runner",
+  "version": "1.0.0",
+  "description": "Desktop-first Three.js endless runner with Electron, accounts, and PVP.",
+  "private": true,
   "scripts": {
+    "build:game": "node game/build.js",
     "server:account": "node server/account-server.js",
     "server:static": "node server/static-server.js",
+    "server:pvp": "node server/pvp-server.js",
+    "pvp:smoke": "node server/pvp-smoke.js",
     "desktop:dev": "npm --prefix apps/desktop run dev",
     "desktop:build": "npm --prefix apps/desktop run build",
     "desktop:pack": "npm --prefix apps/desktop run pack",
@@ -11,6 +18,7 @@
     "desktop:dev:headless": "ELECTRON_HEADLESS_CI=1 xvfb-run -a npm --prefix apps/desktop run dev:headless"
   },
   "dependencies": {
-    "nodemailer": "^8.0.10"
+    "nodemailer": "^8.0.10",
+    "ws": "^8.21.0"
   }
 }

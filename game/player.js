@@ -1,10 +1,92 @@
-// ===== SUBWAY SURFER - Player =====
+// ===== ENDLESS RUNNER - Player =====
 (function() {
     'use strict';
     const SG = window.__SG = window.__SG || {};
     const THREE = window.THREE;
 
     SG.playerModelPath = SG.playerModelPath || 'models/player.glb';
+    SG.jetpackModelPath = SG.jetpackModelPath || 'models/jetpack.glb';
+    SG.jetpackModelTuning = SG.jetpackModelTuning || {
+        targetHeight: 0.58,
+        rotationY: Math.PI,
+        yOffset: 0,
+        zOffset: 0
+    };
+    SG.characterCatalog = SG.characterCatalog || [
+        { id: 'runner', name: 'Neo Runner', path: 'models/player.glb', desc: 'Original endless runner' },
+        { id: 'adventurer', name: 'Adventurer', path: 'models/characters/Adventurer.gltf', desc: 'Backpack and field gear' },
+        { id: 'beach', name: 'Beach', path: 'models/characters/Beach.gltf', desc: 'Light summer outfit' },
+        { id: 'casual2', name: 'Casual 2', path: 'models/characters/Casual_2.gltf', desc: 'Street casual outfit' },
+        { id: 'hoodie', name: 'Hoodie', path: 'models/characters/Casual_Hoodie.gltf', desc: 'Casual hoodie outfit' },
+        { id: 'farmer', name: 'Farmer', path: 'models/characters/Farmer.gltf', desc: 'Workwear runner' },
+        { id: 'king', name: 'King', path: 'models/characters/King.gltf', desc: 'Royal outfit' },
+        { id: 'punk', name: 'Punk', path: 'models/characters/Punk.gltf', desc: 'High contrast punk outfit' },
+        { id: 'spacesuit', name: 'Spacesuit', path: 'models/characters/Spacesuit.gltf', desc: 'Space explorer suit' },
+        { id: 'suit', name: 'Suit', path: 'models/characters/Suit.gltf', desc: 'Formal runner' },
+        { id: 'swat', name: 'SWAT', path: 'models/characters/Swat.gltf', desc: 'Tactical outfit' },
+        { id: 'worker', name: 'Worker', path: 'models/characters/Worker.gltf', desc: 'Construction outfit' }
+    ];
+
+    function parseOwnedCharacters() {
+        try {
+            var saved = JSON.parse(localStorage.getItem('subwayOwnedCharacters') || '["runner"]');
+            if (Array.isArray(saved) && saved.length) return saved.indexOf('runner') >= 0 ? saved : ['runner'].concat(saved);
+        } catch(e) {}
+        return ['runner'];
+    }
+
+    function saveOwnedCharacters(owned) {
+        try { localStorage.setItem('subwayOwnedCharacters', JSON.stringify(owned)); } catch(e) {}
+    }
+
+    SG.getCharacterById = function(id) {
+        for (var i = 0; i < SG.characterCatalog.length; i++) {
+            if (SG.characterCatalog[i].id === id) return SG.characterCatalog[i];
+        }
+        return SG.characterCatalog[0];
+    };
+
+    SG.getOwnedCharacters = function() {
+        if (!Array.isArray(SG.state.ownedCharacters) || !SG.state.ownedCharacters.length) {
+            SG.state.ownedCharacters = parseOwnedCharacters();
+        }
+        return SG.state.ownedCharacters;
+    };
+
+    SG.characterIsOwned = function(id) {
+        return SG.getOwnedCharacters().indexOf(id) >= 0;
+    };
+
+    SG.getNextCharacterPrice = function() {
+        return Math.max(0, SG.getOwnedCharacters().length - 1) * 10000;
+    };
+
+    SG.selectCharacter = function(id) {
+        var character = SG.getCharacterById(id);
+        if (!character || !SG.characterIsOwned(character.id)) return false;
+        SG.state.selectedCharacter = character.id;
+        SG.playerModelPath = character.path;
+        try { localStorage.setItem('subwaySelectedCharacter', character.id); } catch(e) {}
+        if (SG.player) SG.reloadPlayerModel();
+        return true;
+    };
+
+    SG.buyCharacter = function(id) {
+        var character = SG.getCharacterById(id);
+        if (!character || SG.characterIsOwned(character.id)) return SG.selectCharacter(id);
+        var price = SG.getNextCharacterPrice();
+        if ((SG.state.credits || 0) < price) return false;
+        SG.state.credits -= price;
+        var owned = SG.getOwnedCharacters().slice();
+        owned.push(character.id);
+        SG.state.ownedCharacters = owned;
+        saveOwnedCharacters(owned);
+        SG.selectCharacter(character.id);
+        if (SG.updateMenuCredits) SG.updateMenuCredits();
+        if (SG.saveShopData) SG.saveShopData();
+        if (SG.accountSave) SG.accountSave();
+        return true;
+    };
 
     function rememberLegacyPart(part) {
         SG.playerLegacyParts = SG.playerLegacyParts || [];
@@ -16,6 +98,13 @@
         var parts = SG.playerLegacyParts || [];
         for (var i = 0; i < parts.length; i++) {
             if (parts[i]) parts[i].visible = false;
+        }
+    }
+
+    function showLegacyBodyParts() {
+        var parts = SG.playerLegacyParts || [];
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i]) parts[i].visible = true;
         }
     }
 
@@ -34,6 +123,7 @@
         box.getCenter(center);
         model.position.set(-center.x, -box.min.y, -center.z);
     }
+    SG.normalizePlayerModel = normalizeModel;
 
     function indexAnimationActions(gltf, model) {
         SG.playerMixer = null;
@@ -87,6 +177,11 @@
     SG.loadPlayerModel = function() {
         if (SG.playerModelRequested || !SG.player || !THREE || !THREE.GLTFLoader) return;
         SG.playerModelRequested = true;
+        var selected = SG.state.selectedCharacter || localStorage.getItem('subwaySelectedCharacter') || 'runner';
+        if (!SG.characterIsOwned(selected)) selected = 'runner';
+        var character = SG.getCharacterById(selected);
+        SG.state.selectedCharacter = character.id;
+        SG.playerModelPath = character.path;
 
         var loader = new THREE.GLTFLoader();
         loader.load(SG.playerModelPath, function(gltf) {
@@ -95,7 +190,7 @@
             var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
             if (!model) return;
 
-            model.name = 'PlayerGLB';
+            model.name = 'PlayerGLB-' + character.id;
             normalizeModel(model);
             model.traverse(function(node) {
                 if (node && node.isMesh) {
@@ -117,6 +212,68 @@
         }, undefined, function(err) {
             SG.playerModelError = err;
             SG.playerModelLoaded = false;
+            showLegacyBodyParts();
+        });
+    };
+
+    SG.reloadPlayerModel = function() {
+        if (!SG.player || !THREE) return;
+        if (SG.playerModel && SG.playerModel.parent) {
+            SG.playerModel.parent.remove(SG.playerModel);
+            if (SG.disposeObject) SG.disposeObject(SG.playerModel);
+        }
+        SG.playerModel = null;
+        SG.playerModelLoaded = false;
+        SG.playerModelRequested = false;
+        SG.playerMixer = null;
+        SG.playerActions = {};
+        SG.playerAction = null;
+        showLegacyBodyParts();
+        SG.loadPlayerModel();
+    };
+
+    SG.normalizeJetpackModel = function(model) {
+        if (!model || !THREE) return;
+        model.updateMatrixWorld(true);
+        var box = new THREE.Box3().setFromObject(model);
+        var size = new THREE.Vector3();
+        var center = new THREE.Vector3();
+        box.getSize(size);
+        box.getCenter(center);
+        var maxDim = Math.max(size.x, size.y, size.z) || 1;
+        var scale = (SG.jetpackModelTuning.targetHeight || 0.72) / maxDim;
+        model.scale.setScalar(scale);
+        model.rotation.y = SG.jetpackModelTuning.rotationY || 0;
+        model.position.set(
+            -center.x * scale,
+            -center.y * scale + (SG.jetpackModelTuning.yOffset || 0),
+            -center.z * scale + (SG.jetpackModelTuning.zOffset || 0)
+        );
+        model.updateMatrixWorld(true);
+    };
+
+    SG.loadJetpackModel = function() {
+        if (!SG.jetpackPack || SG.jetpackModelRequested || !THREE || !THREE.GLTFLoader) return;
+        SG.jetpackModelRequested = true;
+        var loader = new THREE.GLTFLoader();
+        loader.load(SG.jetpackModelPath, function(gltf) {
+            if (!SG.jetpackPack) return;
+            var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+            if (!model) return;
+            model.name = 'JetpackGLB';
+            model.traverse(function(node) {
+                if (node && node.isMesh) {
+                    node.castShadow = true;
+                    node.receiveShadow = true;
+                }
+            });
+            SG.normalizeJetpackModel(model);
+            SG.jetpackModel = model;
+            SG.jetpackModelLoaded = true;
+            SG.jetpackPack.add(model);
+        }, undefined, function(err) {
+            SG.jetpackModelError = err;
+            SG.jetpackModelLoaded = false;
         });
     };
 
@@ -128,6 +285,10 @@
         SG.playerModel = null;
         SG.playerModelLoaded = false;
         SG.playerModelRequested = false;
+        SG.state.ownedCharacters = parseOwnedCharacters();
+        SG.state.selectedCharacter = localStorage.getItem('subwaySelectedCharacter') || SG.state.selectedCharacter || 'runner';
+        if (!SG.characterIsOwned(SG.state.selectedCharacter)) SG.state.selectedCharacter = 'runner';
+        SG.playerModelPath = SG.getCharacterById(SG.state.selectedCharacter).path;
 
         var bodyMat = new THREE.MeshLambertMaterial({ color: 0x2255aa });
         SG.playerBody = rememberLegacyPart(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.4), bodyMat));
@@ -193,42 +354,44 @@
         SG.shoesRWRight.visible = false;
         SG.player.add(SG.shoesRWRight);
 
-        // Jetpack pack (backpack)
+        // Jetpack pack: GLB model plus two flame emitters.
         SG.jetpackPack = new THREE.Group();
-        var packBox = new THREE.Mesh(
-            new THREE.BoxGeometry(0.4, 0.45, 0.2),
-            new THREE.MeshLambertMaterial({ color: 0xcc6622 })
-        );
-        packBox.position.set(0, 0, 0);
-        SG.jetpackPack.add(packBox);
+        SG.jetpackPack.name = 'JetpackPack';
+        SG.jetpackFlameGroups = [];
+        function createJetpackFlame(side) {
+            var flameGroup = new THREE.Group();
+            flameGroup.name = side < 0 ? 'JetpackFlameLeft' : 'JetpackFlameRight';
+            flameGroup.position.set(side * 0.14, -0.32, 0.01);
+            flameGroup.visible = false;
 
-        // Jetpack thruster nozzle (cone pointing down)
-        var nozzleMat = new THREE.MeshLambertMaterial({ color: 0x884422 });
-        var nozzle = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.12, 6), nozzleMat);
-        nozzle.rotation.x = Math.PI;
-        nozzle.position.set(0, -0.25, 0);
-        SG.jetpackPack.add(nozzle);
+            var outer = new THREE.Mesh(
+                new THREE.ConeGeometry(0.075, 0.36, 10),
+                new THREE.MeshBasicMaterial({ color: 0xff5a00, transparent: true, opacity: 0.88 })
+            );
+            outer.position.y = -0.06;
+            flameGroup.add(outer);
 
-        // Jetpack flame (initially invisible, shown during jetpack use)
-        SG.jetpackFlame = new THREE.Mesh(
-            new THREE.ConeGeometry(0.1, 0.3, 6),
-            new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.9 })
-        );
-        SG.jetpackFlame.position.set(0, -0.35, 0);
-        SG.jetpackFlame.visible = false;
-        SG.jetpackPack.add(SG.jetpackFlame);
+            var inner = new THREE.Mesh(
+                new THREE.ConeGeometry(0.038, 0.23, 10),
+                new THREE.MeshBasicMaterial({ color: 0xfff0a0, transparent: true, opacity: 0.95 })
+            );
+            inner.position.y = -0.02;
+            flameGroup.add(inner);
 
-        // Inner bright flame
-        SG.jetpackFlameInner = new THREE.Mesh(
-            new THREE.ConeGeometry(0.05, 0.18, 6),
-            new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.9 })
-        );
-        SG.jetpackFlameInner.position.set(0, -0.32, 0);
-        SG.jetpackFlameInner.visible = false;
-        SG.jetpackPack.add(SG.jetpackFlameInner);
-
-        SG.jetpackPack.position.set(0, 0.8, -0.3);
+            SG.jetpackPack.add(flameGroup);
+            SG.jetpackFlameGroups.push(flameGroup);
+            return flameGroup;
+        }
+        var leftFlame = createJetpackFlame(-1);
+        var rightFlame = createJetpackFlame(1);
+        SG.jetpackFlame = leftFlame.children[0];
+        SG.jetpackFlameInner = leftFlame.children[1];
+        SG.jetpackFlameRight = rightFlame.children[0];
+        SG.jetpackFlameRightInner = rightFlame.children[1];
+        SG.jetpackPack.position.set(0, 0.72, -0.24);
+        SG.jetpackPack.visible = false;
         SG.player.add(SG.jetpackPack);
+        SG.loadJetpackModel();
 
         SG.scene.add(SG.player);
         SG.loadPlayerModel();

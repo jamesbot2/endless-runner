@@ -1,10 +1,97 @@
-// ===== SUBWAY SURFER - Controls =====
+// ===== ENDLESS RUNNER - Controls =====
 (function() {
     'use strict';
     var SG = window.__SG = window.__SG || {};
     var THREE = window.THREE;
 
     SG.keys = {};
+    SG.defaultKeyBindings = SG.defaultKeyBindings || {
+        left: 'ArrowLeft',
+        right: 'ArrowRight',
+        up: 'ArrowUp',
+        down: 'ArrowDown'
+    };
+
+    SG.keyBindingLabels = SG.keyBindingLabels || {
+        left: 'Left',
+        right: 'Right',
+        up: 'Up',
+        down: 'Down'
+    };
+
+    SG.loadKeyBindings = function() {
+        var saved = null;
+        try { saved = JSON.parse(localStorage.getItem('subwayKeyBindings') || 'null'); } catch(e) {}
+        var bindings = {};
+        for (var action in SG.defaultKeyBindings) {
+            if (!Object.prototype.hasOwnProperty.call(SG.defaultKeyBindings, action)) continue;
+            bindings[action] = (saved && typeof saved[action] === 'string' && saved[action]) ?
+                saved[action] : SG.defaultKeyBindings[action];
+        }
+        SG.keyBindings = bindings;
+        return bindings;
+    };
+
+    SG.getKeyBindings = function() {
+        if (!SG.keyBindings) return SG.loadKeyBindings();
+        return SG.keyBindings;
+    };
+
+    SG.saveKeyBindings = function(bindings) {
+        SG.keyBindings = bindings || SG.getKeyBindings();
+        try { localStorage.setItem('subwayKeyBindings', JSON.stringify(SG.keyBindings)); } catch(e) {}
+    };
+
+    SG.setKeyBinding = function(action, key) {
+        if (!SG.defaultKeyBindings[action] || !key) return false;
+        var bindings = SG.getKeyBindings();
+        bindings[action] = key;
+        SG.saveKeyBindings(bindings);
+        return true;
+    };
+
+    SG.resetKeyBindings = function() {
+        SG.keyBindings = Object.assign({}, SG.defaultKeyBindings);
+        SG.saveKeyBindings(SG.keyBindings);
+    };
+
+    SG.formatKeyName = function(key) {
+        var names = {
+            ArrowLeft: 'Left',
+            ArrowRight: 'Right',
+            ArrowUp: 'Up',
+            ArrowDown: 'Down',
+            ' ': 'Space'
+        };
+        return names[key] || key;
+    };
+
+    SG.getInputActionForKey = function(key) {
+        var bindings = SG.getKeyBindings();
+        for (var action in bindings) {
+            if (Object.prototype.hasOwnProperty.call(bindings, action) && bindings[action] === key) return action;
+        }
+        return null;
+    };
+
+    SG.isActionHeld = function(action) {
+        var key = SG.getKeyBindings()[action];
+        return !!(key && SG.keys[key]);
+    };
+
+    SG.forceJetpackLanding = function() {
+        if (!(SG.state.equippedAbility === 2 && SG.state.canJetpack && SG.state.jetpackFuel > 0)) return false;
+        SG.state.jetpackFuel = 0;
+        SG.state.jetpackCooldown = SG.JETPACK_COOLDOWN_MAX;
+        SG.state.isJumping = false;
+        SG.state.hasDoubleJumped = false;
+        SG.state.jumpingFromRoof = false;
+        SG.state.jumpVelocity = 0;
+        SG.state.playerHeight = SG.PLAYER_Y;
+        SG.state.targetPlayerHeight = SG.PLAYER_Y;
+        if (SG.player) SG.player.position.y = SG.PLAYER_Y;
+        return true;
+    };
 
     SG.moveLeft = function() {
         if (SG.state.homelander && SG.homelanderGroup) {
@@ -74,39 +161,32 @@
     };
 
     SG.roll = function() {
+        var landedFromJetpack = SG.forceJetpackLanding();
         if (SG.state.isRolling) return;
         SG.state.isRolling = true;
         SG.state.targetPlayerHeight = SG.ROLL_HEIGHT;
-        SG.state.rollEndTime = Date.now() + 400;
+        SG.state.rollEndTime = Date.now() + (landedFromJetpack ? 520 : 400);
         SG.playRollSound();
     };
 
     SG.handleKeyInput = function(key) {
         if (SG.state.gameOver || !SG.state.started) return;
-        if (SG.state.homelander && (key === 'ArrowLeft' || key === 'ArrowRight' || key === 'ArrowUp' || key === 'ArrowDown')) return;
+        var action = SG.getInputActionForKey(key);
+        if (SG.state.homelander && action) return;
 
         if (!SG.audioCtx) SG.initAudio();
 
-        switch (key) {
-            case 'ArrowLeft':
-            case 'a':
-            case 'A':
+        switch (action) {
+            case 'left':
                 SG.moveLeft();
                 break;
-            case 'ArrowRight':
-            case 'd':
-            case 'D':
+            case 'right':
                 SG.moveRight();
                 break;
-            case 'ArrowUp':
-            case 'w':
-            case 'W':
-            case ' ':
+            case 'up':
                 SG.jump();
                 break;
-            case 'ArrowDown':
-            case 's':
-            case 'S':
+            case 'down':
                 SG.roll();
                 break;
         }
@@ -117,16 +197,34 @@
             SG.keys[e.key] = true;
             if (e.keyCode) { SG.keys['_kc_' + e.keyCode] = true; }
 
+            if (SG.state.pvpSpectating) {
+                var spectateAction = SG.getInputActionForKey ? SG.getInputActionForKey(e.key) : null;
+                if (spectateAction === 'left') {
+                    if (SG.cyclePvpSpectateTarget) SG.cyclePvpSpectateTarget(-1);
+                    e.preventDefault();
+                    return;
+                }
+                if (spectateAction === 'right') {
+                    if (SG.cyclePvpSpectateTarget) SG.cyclePvpSpectateTarget(1);
+                    e.preventDefault();
+                    return;
+                }
+            }
+
             if (SG.state.homelander && SG.homelanderGroup) {
                 var hlSpeed = 0.25;
-                var k = e.key, kc = e.keyCode || e.which;
-                if (k === 'ArrowLeft' || k === 'a' || k === 'A' || kc === 37 || kc === 65) { SG.homelanderGroup.position.x -= hlSpeed; e.preventDefault(); }
-                if (k === 'ArrowRight' || k === 'd' || k === 'D' || kc === 39 || kc === 68) { SG.homelanderGroup.position.x += hlSpeed; e.preventDefault(); }
-                if (k === 'ArrowUp' || k === 'w' || k === 'W' || kc === 38 || kc === 87) { SG.homelanderGroup.position.y = Math.min(20, SG.homelanderGroup.position.y + hlSpeed); e.preventDefault(); }
-                if (k === 'ArrowDown' || k === 's' || k === 'S' || kc === 40 || kc === 83) { SG.homelanderGroup.position.y = Math.max(1, SG.homelanderGroup.position.y - hlSpeed); e.preventDefault(); }
+                var hla = SG.getInputActionForKey(e.key);
+                if (hla === 'left') { SG.homelanderGroup.position.x -= hlSpeed; e.preventDefault(); }
+                if (hla === 'right') { SG.homelanderGroup.position.x += hlSpeed; e.preventDefault(); }
+                if (hla === 'up') { SG.homelanderGroup.position.y = Math.min(20, SG.homelanderGroup.position.y + hlSpeed); e.preventDefault(); }
+                if (hla === 'down') { SG.homelanderGroup.position.y = Math.max(1, SG.homelanderGroup.position.y - hlSpeed); e.preventDefault(); }
             }
 
             if (e.key === 'Escape') {
+                if (SG.state.pvpMode) {
+                    e.preventDefault();
+                    return;
+                }
                 var devCon = document.getElementById('dev-console');
                 if (devCon && devCon.style.display === 'flex') {
                     SG.toggleConsole();
@@ -139,7 +237,8 @@
             }
             if (e.key === '`' || e.key === '~') {
                 e.preventDefault();
-                if (SG.state.started) SG.toggleConsole();
+                if (SG.state.pvpMode) return;
+                SG.toggleConsole();
                 return;
             }
 
@@ -148,7 +247,18 @@
                 return;
             }
 
+            if ((e.key === 'f' || e.key === 'F') && SG.shootGun && SG.state.started) {
+                if (SG.shootGun()) {
+                    e.preventDefault();
+                    return;
+                }
+            }
+
             if ((e.key === 'm' || e.key === 'M') && SG.state.started) {
+                if (SG.state.pvpMode) {
+                    e.preventDefault();
+                    return;
+                }
                 if (!SG.state.gameOver) {
                     SG.togglePause();
                     setTimeout(SG.quitToMenu, 100);
@@ -163,6 +273,15 @@
 
         document.addEventListener('keyup', function(e) {
             SG.keys[e.key] = false;
+            if (e.keyCode) { SG.keys['_kc_' + e.keyCode] = false; }
+        });
+
+        document.addEventListener('mousedown', function(e) {
+            if (!SG.shootGun || e.button !== 0) return;
+            if (!SG.state.started || SG.state.paused || SG.state.gameOver) return;
+            var target = e.target;
+            if (target && target.closest && target.closest('#menu-overlay,#pause-overlay,#game-over-screen,#settings-overlay,#characters-overlay,#dev-console,button,input,textarea,select,.mobile-btn')) return;
+            if (SG.shootGun()) e.preventDefault();
         });
 
         // Touch controls
