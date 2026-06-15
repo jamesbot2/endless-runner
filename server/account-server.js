@@ -245,7 +245,7 @@ function httpGet(url) {
 }
 
 function adminHTML() {
-  var AUTH_B64 = Buffer.from('admin:admin123').toString('base64');
+  // Auth is handled by browser's native Basic Auth via credentials:'same-origin'
   return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Admin Dashboard - Endless Runner</title>' +
   '<style>' +
   '*{box-sizing:border-box;margin:0;padding:0}' +
@@ -346,20 +346,20 @@ function adminHTML() {
   '<div class="btn-row"><button class="btn btn-green" id="saveEditBtn">Save</button><button class="btn btn-red" id="cancelEditBtn">Cancel</button></div>' +
   '</div></div>' +
   '<script>' +
-  'var AUTH="Basic ' + AUTH_B64 + '";var currentEditEmail=null;' +
+  'var currentEditEmail=null;function esc(s){return String(s??"").replace(/[&<>"\']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","\'":"&#39;"}[c]||c})}' +
   'function msg(t,c){var m=document.getElementById("msg");m.textContent=t;m.className=c||"info";m.style.display="block";setTimeout(function(){m.style.display="none"},3000)}' +
-  'function api(url,opts){opts=opts||{};opts.headers=opts.headers||{};opts.headers.Authorization=AUTH;return fetch(url,opts).then(function(r){return r.json()})}' +
+  'function api(url,opts){opts=opts||{};opts.credentials="same-origin";return fetch(url,opts).then(function(r){return r.json()})}' +
   'document.querySelectorAll(".tab").forEach(function(t){t.addEventListener("click",function(){document.querySelectorAll(".tab").forEach(function(x){x.classList.remove("active")});this.classList.add("active");document.querySelectorAll(".section").forEach(function(s){s.classList.remove("active")});document.getElementById("tab-"+this.getAttribute("data-tab")).classList.add("active")})});' +
   'api("/api/admin/stats").then(function(s){' +
   'document.getElementById("statsRow").innerHTML=' +
-  '"<div class=\"stat-card\"><div class=\"value\">"+s.totalUsers+"</div><div class=\"label\">Total Users</div></div>"+' +
-  '"<div class=\"stat-card\"><div class=\"value\">"+s.verifiedUsers+"</div><div class=\"label\">Verified</div></div>"+' +
-  '"<div class=\"stat-card\"><div class=\"value\">"+s.bannedUsers+"</div><div class=\"label\">Banned</div></div>"+' +
-  '"<div class=\"stat-card\"><div class=\"value\">"+s.todayRegistrations+"</div><div class=\"label\">Today Reg</div></div>"+' +
-  '"<div class=\"stat-card\"><div class=\"value\">"+s.totalRuns+"</div><div class=\"label\">Total Runs</div></div>"+' +
-  '"<div class=\"stat-card\"><div class=\"value\">"+s.highestDistance+"</div><div class=\"label\">Highest Dist</div></div>"+' +
-  '"<div class=\"stat-card\"><div class=\"value\">"+s.totalCredits+"</div><div class=\"label\">Total Credits</div></div>"+' +
-  '"<div class=\"stat-card\"><div class=\"value\">"+s.totalCoins+"</div><div class=\"label\">Total Coins</div></div>"' +
+  '"<div class=\"stat-card\"><div class=\"value\">"+esc(s.totalUsers)+"</div><div class=\"label\">Total Users</div></div>"+' +
+  '"<div class=\"stat-card\"><div class=\"value\">"+esc(s.verifiedUsers)+"</div><div class=\"label\">Verified</div></div>"+' +
+  '"<div class=\"stat-card\"><div class=\"value\">"+esc(s.bannedUsers)+"</div><div class=\"label\">Banned</div></div>"+' +
+  '"<div class=\"stat-card\"><div class=\"value\">"+esc(s.todayRegistrations)+"</div><div class=\"label\">Today Reg</div></div>"+' +
+  '"<div class=\"stat-card\"><div class=\"value\">"+esc(s.totalRuns)+"</div><div class=\"label\">Total Runs</div></div>"+' +
+  '"<div class=\"stat-card\"><div class=\"value\">"+esc(s.highestDistance)+"</div><div class=\"label\">Highest Dist</div></div>"+' +
+  '"<div class=\"stat-card\"><div class=\"value\">"+esc(s.totalCredits)+"</div><div class=\"label\">Total Credits</div></div>"+' +
+  '"<div class=\"stat-card\"><div class=\"value\">"+esc(s.totalCoins)+"</div><div class=\"label\">Total Coins</div></div>"' +
   '});' +
   'function loadUsers(){' +
   'var q="search="+encodeURIComponent(document.getElementById("searchInput").value);' +
@@ -374,8 +374,8 @@ function adminHTML() {
   'var email=u.email;var eid=email.replace(/[^a-zA-Z0-9]/g,"_");' +
   'var abils=(u.gameData.ownedAbilities||[0]).map(function(a){return abilNames[a]||"?"}).join(",");' +
   'h+="<tr>"+' +
-  '"<td>"+email+"</td>"+' +
-  '"<td>"+(u.username||"-")+"</td>"+' +
+  '"<td>"+esc(email)+"</td>"+' +
+  '"<td>"+esc(u.username||"-")+"</td>"+' +
   '"<td>"+(u.verified?"<span class=\"badge badge-green\">Yes</span>":"<span class=\"badge badge-red\">No</span>")+"</td>"+' +
   '"<td>"+(u.banned?"<span class=\"badge badge-red\">Banned</span>":"<span class=\"badge badge-green\">No</span>")+"</td>"+' +
   '"<td>"+new Date(u.createdAt).toLocaleDateString()+"</td>"+' +
@@ -383,7 +383,7 @@ function adminHTML() {
   '"<td>"+(u.gameData.credits||0)+"</td>"+' +
   '"<td>"+(u.gameData.maxDistance||0)+"</td>"+' +
   '"<td>"+(u.gameData.runCount||0)+"</td>"+' +
-  '"<td>"+abils+"</td>"+' +  '"<td>"+(u.gameData.selectedCharacter||"runner")+"</td>"+' +  '"<td><div class=\"actions\">"+' +
+  '"<td>"+esc(abils)+"</td>"+' +  '"<td>"+esc(u.gameData.selectedCharacter||"runner")+"</td>"+' +  '"<td><div class=\"actions\">"+' +
   '"<button class=\"btn btn-sm btn-blue\" data-action=\"edit\" data-email=\""+email+"\">Edit</button>"+' +
   '"<button class=\"btn btn-sm btn-green\" data-action=\"verify\" data-email=\""+email+"\">Verify</button>"+' +
   '"<button class=\"btn btn-sm btn-red\" data-action=\"ban\" data-email=\""+email+"\">Ban</button>"+' +
@@ -398,7 +398,7 @@ function adminHTML() {
   'document.querySelectorAll(".chip").forEach(function(c){c.addEventListener("click",function(){document.querySelectorAll(".chip").forEach(function(x){x.classList.remove("active")});this.classList.add("active");loadUsers()})});' +
   'loadUsers();' +
   'function editUser(email){' +
-  'currentEditEmail=email;document.getElementById("modalTitle").textContent="Edit: "+email;' +
+  'currentEditEmail=email;document.getElementById("modalTitle").textContent="Edit: "+esc(email);' +
   'api("/api/admin/user?email="+encodeURIComponent(email)).then(function(u){' +
   'document.getElementById("editUsername").value=u.username||"";' +
   'document.getElementById("editCoins").value=u.gameData.coins||0;' +
@@ -429,21 +429,21 @@ function adminHTML() {
   'selectedCharacter:document.getElementById("editSelectedCharacter").value.trim()||"runner"' +
   '}};' +
   'api("/api/admin/user/update",{method:"POST",headers:{"Content-Type":"application/json",Authorization:AUTH},body:JSON.stringify(body)}).then(function(r){' +
-  'if(r.error){msg(r.error,"err")}else{msg("Saved "+currentEditEmail,"ok");document.getElementById("editModal").style.display="none";loadUsers()}})' +
+  'if(r.error){msg(esc(r.error),"err")}else{msg("Saved "+currentEditEmail,"ok");document.getElementById("editModal").style.display="none";loadUsers()}})' +
   '});' +
   'function userAction(email,action){' +
   'api("/api/admin/user/action",{method:"POST",headers:{"Content-Type":"application/json",Authorization:AUTH},body:JSON.stringify({email:email,action:action})}).then(function(r){' +
-  'if(r.error){msg(r.error,"err")}else{msg(action+" done for "+email,"ok");loadUsers()}})' +
+  'if(r.error){msg(esc(r.error),"err")}else{msg(action+" done for "+email,"ok");loadUsers()}})' +
   '};' +
   'function resetPW(email){' +
   'var p=prompt("New password for "+email);if(!p||p.length<4)return;' +
   'api("/api/admin/user/action",{method:"POST",headers:{"Content-Type":"application/json",Authorization:AUTH},body:JSON.stringify({email:email,action:"reset-password",newPassword:p})}).then(function(r){' +
-  'if(r.error){msg(r.error,"err")}else{msg("PW reset for "+email,"ok")}})' +
+  'if(r.error){msg(esc(r.error),"err")}else{msg("PW reset for "+email,"ok")}})' +
   '};' +
   'function delUser(email){' +
   'if(!confirm("Delete "+email+"?"))return;' +
   'api("/api/admin/user/action",{method:"POST",headers:{"Content-Type":"application/json",Authorization:AUTH},body:JSON.stringify({email:email,action:"delete",confirm:true})}).then(function(r){' +
-  'if(r.error){msg(r.error,"err")}else{msg("Deleted "+email,"ok");loadUsers()}})' +
+  'if(r.error){msg(esc(r.error),"err")}else{msg("Deleted "+email,"ok");loadUsers()}})' +
   '};' +
   'document.querySelectorAll(".tab").forEach(function(t){t.addEventListener("click",function(){' +
   'if(this.getAttribute("data-tab")==="pvp"){' +
@@ -453,11 +453,11 @@ function adminHTML() {
   'var h="<p style=\"margin-bottom:10px;font-size:14px;color:#aaa\">Total Rooms: "+d.rooms+" | Players: "+d.players+"</p>";' +
   'if(d.roomsList&&d.roomsList.length){h+="<div class=\"pvp-grid\">";' +
   'd.roomsList.forEach(function(r){' +
-  'h+="<div class=\"pvp-card\"><h3>"+r.name+"</h3>"+' +
-  '"<div class=\"info\">Host: "+r.host+"</div>"+' +
+  'h+="<div class=\"pvp-card\"><h3>"+esc(r.name)+"</h3>"+' +
+  '"<div class=\"info\">Host: "+esc(r.host)+"</div>"+' +
   '"<div class=\"info\">Players: "+r.playerCount+"/"+r.maxPlayers+"</div>"+' +
-  '"<div class=\"info\">Status: "+r.status+"</div>"+' +
-  '"<div class=\"info\">ID: "+r.id+"</div></div>"' +
+  '"<div class=\"info\">Status: "+esc(r.status)+"</div>"+' +
+  '"<div class=\"info\">ID: "+esc(r.id)+"</div></div>"' +
   '});h+="</div>"}else{h+="<p style=\"color:#555\">No active rooms</p>"}' +
   'document.getElementById("pvpContent").innerHTML=h})}' +
   'if(this.getAttribute("data-tab")==="audit"){' +
@@ -651,14 +651,17 @@ async function handleRequest(req, res) {
                 saveUsers(users);
                 break;
             case 'ban':
+                if (!body.confirm) { sendJSON(res, 400, { error: 'confirm:true required for dangerous action' }); return; }
                 u.banned = true;
                 saveUsers(users);
                 break;
             case 'unban':
+                if (!body.confirm) { sendJSON(res, 400, { error: 'confirm:true required for dangerous action' }); return; }
                 u.banned = false;
                 saveUsers(users);
                 break;
             case 'reset-password': {
+                if (!body.confirm) { sendJSON(res, 400, { error: 'confirm:true required for dangerous action' }); return; }
                 const np = body.newPassword;
                 if (!np || np.length < 4) { sendJSON(res, 400, { error: 'newPassword required (min 4 chars)' }); return; }
                 const { hash, salt } = hashPassword(np);
@@ -668,18 +671,22 @@ async function handleRequest(req, res) {
                 break;
             }
             case 'clear-save':
+                if (!body.confirm) { sendJSON(res, 400, { error: 'confirm:true required for dangerous action' }); return; }
                 u.gameData = defaultGameData();
                 saveUsers(users);
                 break;
             case 'grant-all-abilities':
+                if (!body.confirm) { sendJSON(res, 400, { error: 'confirm:true required for dangerous action' }); return; }
                 u.gameData = normalizeGameData(Object.assign({}, u.gameData, { ownedAbilities: [0,1,2,3], equippedAbility: 2 }));
                 saveUsers(users);
                 break;
             case 'grant-all-characters':
-                u.gameData = normalizeGameData(Object.assign({}, u.gameData, { ownedCharacters: ['runner','adventurer','ninja','cyborg','punk','zombie','robot','wizard','viking','samurai','clown','angel'] }));
+                if (!body.confirm) { sendJSON(res, 400, { error: 'confirm:true required for dangerous action' }); return; }
+                u.gameData = normalizeGameData(Object.assign({}, u.gameData, { ownedCharacters: ['runner','adventurer','beach','casual2','hoodie','farmer','king','punk','spacesuit','suit','swat','worker'] }));
                 saveUsers(users);
                 break;
             case 'reset-leaderboard':
+                if (!body.confirm) { sendJSON(res, 400, { error: 'confirm:true required for dangerous action' }); return; }
                 u.gameData = normalizeGameData(Object.assign({}, u.gameData, { maxDistance: 0, maxEasy: 0, maxMedium: 0, maxHard: 0, maxEasyAbility: 0, maxMediumAbility: 0, maxHardAbility: 0, highScore: 0, runCount: 0 }));
                 saveUsers(users);
                 break;

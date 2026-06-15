@@ -103,7 +103,7 @@ async function main() {
     check('Credits=999 after admin update', r.body.gameData && r.body.gameData.credits === 999, 'credits=' + (r.body.gameData ? r.body.gameData.credits : 'N/A'));
 
     // 9. Ban the user
-    r = await request('POST', '/api/admin/user/action', { email: testEmail, action: 'ban' }, ADMIN_AUTH);
+    r = await request('POST', '/api/admin/user/action', { email: testEmail, action: 'ban', confirm: true }, ADMIN_AUTH);
     check('Admin ban user', r.status === 200 && r.body.success, 'status=' + r.status);
 
     // 10. Try to login again -- should be rejected
@@ -111,7 +111,7 @@ async function main() {
     check('Banned user cannot login', r.status === 403, 'status=' + r.status + ' body=' + JSON.stringify(r.body));
 
     // 11. Unban
-    r = await request('POST', '/api/admin/user/action', { email: testEmail, action: 'unban' }, ADMIN_AUTH);
+    r = await request('POST', '/api/admin/user/action', { email: testEmail, action: 'unban', confirm: true }, ADMIN_AUTH);
     check('Admin unban user', r.status === 200 && r.body.success, 'status=' + r.status);
 
     // 12. Login again -- should work
@@ -131,7 +131,7 @@ async function main() {
   check('Invalid selectedCharacter falls back to runner', r.status === 200 && r.body.gameData.selectedCharacter === 'runner', 'got=' + (r.body.gameData ? r.body.gameData.selectedCharacter : null));
 
   // 15. Grant all abilities
-  r = await request('POST', '/api/admin/user/action', { email: testEmail, action: 'grant-all-abilities' }, ADMIN_AUTH);
+  r = await request('POST', '/api/admin/user/action', { email: testEmail, action: 'grant-all-abilities', confirm: true }, ADMIN_AUTH);
   check('Grant all abilities', r.status === 200, 'status=' + r.status);
   if (r.status === 200) {
     check('ownedAbilities includes all 4', r.body.gameData.ownedAbilities.length >= 4 && r.body.gameData.ownedAbilities.indexOf(2) >= 0, 'abilities=' + JSON.stringify(r.body.gameData.ownedAbilities));
@@ -151,7 +151,55 @@ async function main() {
   if (r.body && r.body.error) {
     check('PVP status (PVP server likely offline)', true, 'error=' + r.body.error);
   } else {
-    check('PVP status has rooms prop', typeof r.body.rooms === 'number', 'rooms=' + r.body.rooms);
+    check('PVP status has totalRooms prop', typeof r.body.totalRooms === 'number', 'totalRooms=' + r.body.totalRooms);
+  }
+
+  // 18. Verify /admin HTML does NOT contain hardcoded credentials
+  r = await request('GET', '/admin', null, ADMIN_AUTH);
+  check('/admin no hardcoded admin:admin123', r.body.indexOf('admin:admin123') < 0, '');
+  check('/admin no base64 Basic', r.body.indexOf('Basic YWRtaW46YWRtaW4xMjM') < 0, '');
+
+  // 19. Create XSS test user - username with HTML injection
+  const c2 = await getCaptcha();
+  const xssEmail = '_xss_test_' + Date.now() + '@mytest.net';
+  const xssUser = await request('POST', '/api/register', {
+    email: xssEmail, password: 'test123', username: '<img src=x onerror=alert(1)>',
+    captchaId: c2 ? c2.captchaId : 'x', captchaAnswer: c2 ? c2.answer : 'x'
+  });
+  // Even if registration fails (username validation may reject), the check below
+  // verifies the admin endpoint itself doesn't break
+  r = await request('GET', '/api/admin/users?search=xss', null, ADMIN_AUTH);
+  check('XSS username in admin users list is safe (no crash)', r.status === 200, 'status=' + r.status);
+  // Check that the response body does NOT contain literal <img (would be XSS)
+  var bodyStr = JSON.stringify(r.body);
+  check('XSS username not rendered as HTML in API', bodyStr.indexOf('<img') < 0, 'contains img tag');
+
+  // 20. Dangerous actions without confirm:true should be rejected
+  r = await request('POST', '/api/admin/user/action', { email: testEmail, action: 'ban' }, ADMIN_AUTH);
+  check('Ban without confirm returns 400', r.status === 400 && r.body && r.body.error === 'confirm:true required for dangerous action', 'status=' + r.status + ' error=' + JSON.stringify(r.body));
+
+  r = await request('POST', '/api/admin/user/action', { email: testEmail, action: 'grant-all-abilities' }, ADMIN_AUTH);
+  check('Grant-all-abilities without confirm returns 400', r.status === 400 && r.body && r.body.error === 'confirm:true required for dangerous action', 'status=' + r.status);
+
+  // 21. grant-all-characters with confirm:true should return correct catalog
+  const c3 = await getCaptcha();
+  const gcEmail = '_gc_test_' + Date.now() + '@mytest.net';
+  var gcUser = await request('POST', '/api/register', {
+    email: gcEmail, password: 'test123', username: 'GCTester' + String(Date.now()).slice(-6),
+    captchaId: c3 ? c3.captchaId : 'x', captchaAnswer: c3 ? c3.answer : 'x'
+  });
+  if (gcUser.status === 200 || gcUser.status === 201) {
+    // Verify first
+    r = await request('POST', '/api/admin/user/action', { email: gcEmail, action: 'verify', confirm: true }, ADMIN_AUTH);
+    // Grant all characters with confirm
+    r = await request('POST', '/api/admin/user/action', { email: gcEmail, action: 'grant-all-characters', confirm: true }, ADMIN_AUTH);
+    check('Grant-all-characters returns 200', r.status === 200, 'status=' + r.status);
+    if (r.status === 200 && r.body.gameData) {
+      var expectedChars = ['runner','adventurer','beach','casual2','hoodie','farmer','king','punk','spacesuit','suit','swat','worker'];
+      var actualChars = r.body.gameData.ownedCharacters || [];
+      var allMatch = expectedChars.length === actualChars.length && expectedChars.every(function(c) { return actualChars.indexOf(c) >= 0; });
+      check('grant-all-characters has correct catalog', allMatch, 'expected=12 chars got=' + actualChars.length);
+    }
   }
 
   // Print summary
