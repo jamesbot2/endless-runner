@@ -3,9 +3,9 @@
 > Three.js + Electron desktop endless runner with real-time PVP, character system, abilities, cloud saves, and admin backend.
 > Made by Neo 🤖 for James
 
-[![Desktop Build](https://github.com/jamesbot2/subway-surfer/actions/workflows/desktop-build.yml/badge.svg)](https://github.com/jamesbot2/subway-surfer/actions/workflows/desktop-build.yml)
-[![Release Desktop](https://github.com/jamesbot2/subway-surfer/actions/workflows/desktop-release.yml/badge.svg)](https://github.com/jamesbot2/subway-surfer/actions/workflows/desktop-release.yml)
-[![Release](https://img.shields.io/github/v/release/jamesbot2/subway-surfer)](https://github.com/jamesbot2/subway-surfer/releases)
+[![Desktop Build](https://github.com/jamesbot2/endless-runner/actions/workflows/desktop-build.yml/badge.svg)](https://github.com/jamesbot2/endless-runner/actions/workflows/desktop-build.yml)
+[![Release Desktop](https://github.com/jamesbot2/endless-runner/actions/workflows/desktop-release.yml/badge.svg)](https://github.com/jamesbot2/endless-runner/actions/workflows/desktop-release.yml)
+[![Release](https://img.shields.io/github/v/release/jamesbot2/endless-runner)](https://github.com/jamesbot2/endless-runner/releases)
 
 ---
 
@@ -50,7 +50,7 @@
 
 ## 🚀 Downloads
 
-Prebuilt binaries are available from **[GitHub Releases](https://github.com/jamesbot2/subway-surfer/releases)**.
+Prebuilt binaries are available from **[GitHub Releases](https://github.com/jamesbot2/endless-runner/releases)**.
 
 - **Windows**: `Endless-Runner-vX.X.X-win.zip` (portable, no install needed)
 - **Linux / macOS**: Build from source (see below)
@@ -62,8 +62,8 @@ Prebuilt binaries are available from **[GitHub Releases](https://github.com/jame
 ## 🛠 Local Development
 
 ```bash
-git clone https://github.com/jamesbot2/subway-surfer.git
-cd subway-surfer
+git clone https://github.com/jamesbot2/endless-runner.git
+cd endless-runner
 npm install
 cd apps/desktop && npm install && cd ../..
 
@@ -96,7 +96,14 @@ npm run desktop:dist            # Full NSIS installer (requires wine on Linux)
 | Portable directory | `apps/desktop/release/win-unpacked/` |
 | NSIS installer | `apps/desktop/release/Endless Runner Setup.exe` |
 
-> **Important**: Release binaries are **never committed to git**. Upload to [GitHub Releases](https://github.com/jamesbot2/subway-surfer/releases).
+> **Important**: Release binaries are **never committed to git**. Upload to [GitHub Releases](https://github.com/jamesbot2/endless-runner/releases).
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENDLESS_RUNNER_API_BASE_URL` | `http://35.212.200.85:3000` | Account server URL (recommended) |
+| `SUBWAY_API_BASE_URL` | (legacy alias) | Backward-compatible alias for `ENDLESS_RUNNER_API_BASE_URL` |
 
 ### Quick Release Zip
 

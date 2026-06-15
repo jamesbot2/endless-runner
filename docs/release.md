@@ -17,7 +17,7 @@
 
 ### Steps
 
-1. Go to **[GitHub Releases](https://github.com/jamesbot2/subway-surfer/releases)**
+1. Go to **[GitHub Releases](https://github.com/jamesbot2/endless-runner/releases)**
 2. Download the latest `Endless-Runner-vX.X.X-win.zip`
 3. Extract to any folder (e.g. `C:\Games\Endless Runner\`)
 4. Run `Endless Runner.exe`
@@ -28,7 +28,8 @@
 ### Custom Server
 
 ```cmd
-set SUBWAY_API_BASE_URL=http://your-server:3000
+set ENDLESS_RUNNER_API_BASE_URL=http://your-server:3000
+> Legacy: `SUBWAY_API_BASE_URL` also works as a backward-compatible alias.
 "Endless Runner.exe"
 ```
 
@@ -43,8 +44,8 @@ set SUBWAY_API_BASE_URL=http://your-server:3000
 ### Full Pipeline
 
 ```bash
-git clone https://github.com/jamesbot2/subway-surfer.git
-cd subway-surfer
+git clone https://github.com/jamesbot2/endless-runner.git
+cd endless-runner
 npm install
 cd apps/desktop && npm install && cd ../..
 
@@ -69,7 +70,7 @@ cd apps/desktop/release
 zip -r Endless-Runner-v1.0.0-win.zip win-unpacked/
 ```
 
-Upload to [GitHub Releases](https://github.com/jamesbot2/subway-surfer/releases).
+Upload to [GitHub Releases](https://github.com/jamesbot2/endless-runner/releases).
 
 ---
 
