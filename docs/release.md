@@ -136,6 +136,101 @@ Environment="SMTP_PASS=<auth_code>"
 
 ---
 
+
+## 📧 SMTP Configuration
+
+Endless Runner uses SMTP to send verification code emails during registration. The system supports multiple email providers.
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SMTP_USER` | (required) | SMTP login username, typically the email address |
+| `SMTP_PASS` | (required) | SMTP login password or authorization code |
+| `MAIL_PROVIDER` | `163` | Provider name for logging. Use `163`, `resend`, `sendgrid`, `smtp`, etc. |
+| `SMTP_HOST` | `smtp.163.com` | SMTP server hostname. Auto-detected for 163 if not set |
+| `SMTP_PORT` | `465` | SMTP port (465 for SSL, 587 for STARTTLS) |
+| `SMTP_SECURE` | `true` | Use SSL/TLS. Set to `false` for STARTTLS on port 587 |
+| `MAIL_FROM` | `"Endless Runner" <user>` | From address for outgoing emails |
+
+### systemd Configuration
+
+Add a drop-in file to configure SMTP:
+
+```bash
+sudo mkdir -p /etc/systemd/system/endless-runner-account.service.d
+sudo tee /etc/systemd/system/endless-runner-account.service.d/smtp.conf << 'EOF'
+[Service]
+Environment="SMTP_USER=youraccount@163.com"
+Environment="SMTP_PASS=your_auth_code"
+Environment="MAIL_FROM=Endless Runner <youraccount@163.com>"
+EOF
+sudo systemctl daemon-reload
+sudo systemctl restart endless-runner-account
+```
+
+### Provider-Specific Notes
+
+#### 163.com (Free)
+
+- Host: `smtp.163.com:465` (SSL)
+- SMTP_USER: your full 163 email address
+- SMTP_PASS: your **authorization code** (not login password). Get it from Settings > POP3/SMTP/IMAP
+- **⚠️ Known issue**: 163 free email → QQ email delivery may be delayed (5-30 min) or filtered to spam folder.
+  This is a common issue between Chinese email providers. For production, use enterprise SMTP or a transactional email service.
+
+#### Resend (Recommended for production)
+
+1. Sign up at https://resend.com
+2. Verify your domain (enables SPF/DKIM/DMARC)
+3. Create an API key
+4. Configure:
+
+```bash
+Environment="MAIL_PROVIDER=resend"
+Environment="SMTP_HOST=smtp.resend.com"
+Environment="SMTP_PORT=465"
+Environment="SMTP_USER=resend"
+Environment="SMTP_PASS=re_xxxxx"
+Environment="MAIL_FROM=Endless Runner <noreply@yourdomain.com>"
+```
+
+#### SendGrid
+
+```bash
+Environment="MAIL_PROVIDER=sendgrid"
+Environment="SMTP_HOST=smtp.sendgrid.net"
+Environment="SMTP_PORT=465"
+Environment="SMTP_USER=apikey"
+Environment="SMTP_PASS=SG.xxxxx"
+Environment="MAIL_FROM=Endless Runner <noreply@yourdomain.com>"
+```
+
+#### Gmail / Google Workspace (SMTP)
+
+```bash
+Environment="MAIL_PROVIDER=gmail"
+Environment="SMTP_HOST=smtp.gmail.com"
+Environment="SMTP_PORT=587"
+Environment="SMTP_SECURE=false"
+Environment="SMTP_USER=your@gmail.com"
+Environment="SMTP_PASS=your_app_password"
+Environment="MAIL_FROM=Endless Runner <your@gmail.com>"
+```
+
+### Diagnostic Tool
+
+Test email delivery with the admin API:
+
+```bash
+curl -u "admin:admin123" -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com"}' \
+  http://your-server:3000/api/admin-test-email
+```
+
+Returns structured result: `{ ok, messageId, accepted, rejected, response, error }`
+
 ## 📁 Release Contents
 
 ```
