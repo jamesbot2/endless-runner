@@ -312,6 +312,21 @@ async function main() {
   });
   check('Numeric qq.com email registers', qqUser.status === 201 || qqUser.status === 200, 'status=' + qqUser.status + ' body=' + JSON.stringify(qqUser.body));
 
+
+  // 37. /api/admin-test-email without auth returns 401
+  var noAuthTestEmail = await request('POST', '/api/admin-test-email', { email: 'test@test.com' });
+  check('Test email without auth -> 401', noAuthTestEmail.status === 401, 'status=' + noAuthTestEmail.status);
+
+  // 38. /api/admin-test-email with auth returns structured result
+  var testEmail = await request('POST', '/api/admin-test-email', { email: 'test@qq.com' }, ADMIN_AUTH);
+  check('Test email returns 200', testEmail.status === 200, 'status=' + testEmail.status);
+  check('Test email has ok field', testEmail.body && typeof testEmail.body.ok === 'boolean', 'ok=' + testEmail.body.ok);
+  check('Test email has message field', testEmail.body && typeof testEmail.body.message === 'string', 'msg=' + testEmail.body.message);
+  check('Test email has provider field', testEmail.body && typeof testEmail.body.provider === 'string', 'provider=' + testEmail.body.provider);
+
+  // 39. Register without MOCK_EMAIL_SEND and without SMTP should fail
+  // (This test runs with MOCK_EMAIL_SEND=true so SMTP is mocked)
+
   // Print summary
   console.log('\n=== Results: ' + passed + ' passed, ' + failed + ' failed ===');
   process.exit(failed > 0 ? 1 : 0);

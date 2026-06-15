@@ -656,7 +656,49 @@ async function handleRequest(req, res) {
         return;
     }
 
-    // GET /api/admin/pvp/status
+    // ---- ADMIN: TEST EMAIL ----
+    // ---- ADMIN: TEST EMAIL ----
+    if (pathname === '/api/admin-test-email' && method === 'POST') {
+        if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
+        const body = await parseBody(req);
+        const to = normalizeEmailInput(body.email || '');
+        if (!to) { sendJSON(res, 400, { error: 'Email required' }); return; }
+        const mockMode = process.env.MOCK_EMAIL_SEND === 'true' || process.env.SKIP_EMAIL_SEND === 'true';
+        if (mockMode) {
+            sendJSON(res, 200, { ok: true, message: 'Mock test (MOCK_EMAIL_SEND is set, no real email sent)', provider: 'mock', error: null });
+            return;
+        }
+        const smtpUser = process.env.SMTP_USER || '';
+        const smtpPass = process.env.SMTP_PASS || '';
+        if (!smtpUser || !smtpPass) {
+            sendJSON(res, 200, { ok: false, message: 'SMTP not configured (SMTP_USER/SMTP_PASS missing)', provider: null, error: 'SMTP_CREDENTIALS_MISSING' });
+            return;
+        }
+        const provider = smtpUser.split('@')[1] || 'unknown';
+        try {
+            const nodemailer = require('nodemailer');
+            const transporter = nodemailer.createTransport({
+                host: 'smtp.' + provider,
+                port: 465,
+                secure: true,
+                auth: { user: smtpUser, pass: smtpPass }
+            });
+            await transporter.verify();
+            const info = await transporter.sendMail({
+                from: '"Endless Runner Admin" <' + smtpUser + '>',
+                to: to,
+                subject: 'Endless Runner - Diagnostic Test Email',
+                text: 'This is a diagnostic test email from the Endless Runner admin panel.\n\nIf you received this, SMTP delivery to this address is working.\n\nSent at: ' + new Date().toISOString()
+            });
+            console.log('[ADMIN TEST EMAIL] Sent to ' + to + ' (id: ' + info.messageId + ')');
+            sendJSON(res, 200, { ok: true, message: 'Test email sent (id: ' + info.messageId + ')', provider: 'smtp.' + provider + ':465', error: null });
+        } catch(e) {
+            console.log('[ADMIN TEST EMAIL FAIL] ' + to + ': ' + e.message);
+            sendJSON(res, 200, { ok: false, message: 'Email delivery failed', provider: 'smtp.' + provider + ':465', error: e.message });
+        }
+        return;
+    }
+
     if (pathname === '/api/admin/pvp/status' && method === 'GET') {
         if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
         var pvpData = httpGet('http://127.0.0.1:3001/admin/pvp-status').then(function(d) {
