@@ -62,10 +62,23 @@ function stopSnapshotBroadcast(rid) { const t=snapshotTimers.get(rid); if(t){cle
 
 function removeUserFromRoom(roomId, userId) {
   const room = rooms.get(roomId); if (!room) return;
-  if (room.status === 'running') { const p=room.players.get(userId); if(p){p.forfeit=true;p.alive=false;if(aliveCount(room)<=1)endMatch(room);broadcastRoomUpdate(room);} return; }
+  if (room.hostId===userId) {
+    stopSnapshotBroadcast(roomId);
+    broadcast(room.players, {type:'room:left',roomId});
+    rooms.delete(roomId);
+    broadcastRoomList();
+    return;
+  }
+  if (room.status === 'running') {
+    const p=room.players.get(userId);
+    if(p){p.forfeit=true;p.alive=false;p.distance=Math.floor(p.distance||0);if(p.snapshot)p.snapshot.alive=false;broadcast(room.players,{type:'match:dead',roomId:room.id,playerId:p.id,name:p.name,distance:p.distance},p.ws);}
+    room.players.delete(userId);
+    if (room.players.size===0) { stopSnapshotBroadcast(roomId); rooms.delete(roomId); broadcastRoomList(); return; }
+    if(aliveCount(room)<=1)endMatch(room); else broadcastRoomUpdate(room);
+    return;
+  }
   room.players.delete(userId);
   if (room.players.size===0) { stopSnapshotBroadcast(roomId); rooms.delete(roomId); broadcastRoomList(); return; }
-  if (room.hostId===userId) { const f=room.players.values().next().value; if(f){room.hostId=f.id;room.host=f.name;} }
   broadcastRoomUpdate(room);
 }
 function cleanupUser(uid) { for (const [rid,r] of rooms) if (r.players.has(uid)) { removeUserFromRoom(rid,uid); return; } }

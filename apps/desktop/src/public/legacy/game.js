@@ -7950,6 +7950,12 @@
     var active = false;
     var authenticated = false;
     var pending = [];
+    var resetUnsupported = false;
+    var pendingStartAfterReset = false;
+    var pendingCreateAfterLeave = false;
+    var pendingStartAfterCreate = false;
+    var recoveringStaleRoom = false;
+    var leaveCreateAttempts = 0;
 
     SG.pvpRooms = [];
 
@@ -7985,6 +7991,33 @@
     function flushPending() {
         var items = pending.splice(0);
         for (var i = 0; i < items.length; i++) send(items[i]);
+    }
+
+    function createServerRoom(autoStart) {
+        pendingStartAfterCreate = !!autoStart;
+        send({ type: 'room:create', name: 'Cyber Sprint', characterId: SG.state.selectedCharacter || 'runner' });
+    }
+
+    function recoverStaleRoom(autoStart) {
+        if (recoveringStaleRoom) return;
+        recoveringStaleRoom = true;
+        pendingCreateAfterLeave = true;
+        pendingStartAfterCreate = !!autoStart;
+        stopSnapshots();
+        active = false;
+        if (roomId) {
+            send({ type: 'room:leave', roomId: roomId });
+        } else {
+            pendingCreateAfterLeave = false;
+            createServerRoom(autoStart);
+        }
+        roomId = null;
+        if (SG.state) {
+            SG.state.pvpRoom = null;
+            SG.state.pvpResult = null;
+        }
+        if (SG.renderPvpLobby) SG.renderPvpLobby();
+        setTimeout(function() { recoveringStaleRoom = false; }, 1500);
     }
 
     function stopSnapshots() {
@@ -8128,6 +8161,32 @@
                 break;
             case 'error':
                 console.log('[PVP]', msg.error);
+                if (msg.error === 'unknown type:room:reset') {
+                    resetUnsupported = true;
+                    if (pendingStartAfterReset) {
+                        pendingStartAfterReset = false;
+                        if (roomId) send({ type: 'room:start', roomId: roomId });
+                    }
+                } else if (msg.error === 'already started' || msg.error === 'game already started') {
+                    pendingStartAfterReset = false;
+                    leaveCreateAttempts = 0;
+                    recoverStaleRoom(true);
+                } else if (msg.error === 'already in a room') {
+                    leaveCreateAttempts++;
+                    if (leaveCreateAttempts > 2) {
+                        pendingCreateAfterLeave = false;
+                        pendingStartAfterCreate = false;
+                        recoveringStaleRoom = false;
+                        send({ type: 'room:list' });
+                        break;
+                    }
+                    pendingCreateAfterLeave = true;
+                    if (roomId) {
+                        send({ type: 'room:leave', roomId: roomId });
+                    } else {
+                        send({ type: 'room:leave' });
+                    }
+                }
                 break;
             case 'room:list':
                 if (SG.setPvpRoomsFromServer) SG.setPvpRoomsFromServer(msg.rooms || []);
@@ -8138,11 +8197,21 @@
                     roomId = msg.room.id;
                 }
                 if (SG.setPvpRoomFromServer) SG.setPvpRoomFromServer(msg.room);
+                if (pendingStartAfterCreate && msg.room && roomId && (msg.room.hostId === SG.state.pvpLocalPlayerId || msg.room.host === SG.getLocalPvpName())) {
+                    leaveCreateAttempts = 0;
+                    recoveringStaleRoom = false;
+                    pendingStartAfterCreate = false;
+                    setTimeout(function() { send({ type: 'room:start', roomId: roomId }); }, 120);
+                }
                 break;
             case 'room:left':
                 roomId = null;
                 if (SG.state) SG.state.pvpRoom = null;
                 if (SG.renderPvpLobby) SG.renderPvpLobby();
+                if (pendingCreateAfterLeave) {
+                    pendingCreateAfterLeave = false;
+                    createServerRoom(pendingStartAfterCreate);
+                }
                 send({ type: 'room:list' });
                 break;
             case 'match:start':
@@ -8244,7 +8313,8 @@
 
         SG.createLocalPvpRoom = function() {
             SG.connectPvp();
-            send({ type: 'room:create', name: 'Cyber Sprint', characterId: SG.state.selectedCharacter || 'runner' });
+            leaveCreateAttempts = 0;
+            createServerRoom(false);
         };
 
         SG.joinLocalPvpRoom = function(id) {
@@ -8270,12 +8340,16 @@
         SG.startPvpRace = function() {
             if (roomId) {
                 var needsReset = !!(SG.state && SG.state.pvpRoom && SG.state.pvpRoom.status && SG.state.pvpRoom.status !== 'waiting');
-                if (needsReset) {
+                if (needsReset && !resetUnsupported) {
                     SG.state.pvpRoom.status = 'waiting';
+                    pendingStartAfterReset = true;
                     send({ type: 'room:reset', roomId: roomId });
                     setTimeout(function() {
-                        send({ type: 'room:start', roomId: roomId });
-                    }, 80);
+                        if (pendingStartAfterReset) {
+                            pendingStartAfterReset = false;
+                            send({ type: 'room:start', roomId: roomId });
+                        }
+                    }, 120);
                 } else {
                     send({ type: 'room:start', roomId: roomId });
                 }
