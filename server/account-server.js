@@ -231,36 +231,68 @@ function normalizeGameData(g) {
     };
 }
 
-function sendEmail(to, subject, body) {
+function getMailTransport() {
+    var provider = (process.env.MAIL_PROVIDER || '163').trim().toLowerCase();
+    var host = process.env.SMTP_HOST || '';
+    var port = parseInt(process.env.SMTP_PORT, 10) || 465;
+    var secure = process.env.SMTP_SECURE !== 'false';
+    var user = process.env.SMTP_USER || '';
+    var pass = process.env.SMTP_PASS || '';
+    var from = process.env.MAIL_FROM || '';
+
+    if (!host && provider === '163') host = 'smtp.163.com';
+    if (!from && user) from = '"Endless Runner" <' + user + '>';
+
+    return { provider, host, port, secure, user, pass, fromMasked: from.replace(/:([^@]+)@/, ':***@'), from: from };
+}
+
+function sendEmail(to, subject, body, htmlBody) {
     return new Promise(function(resolve) {
-        const smtpUser = process.env.SMTP_USER || '';
-        const smtpPass = process.env.SMTP_PASS || '';
-        if (!smtpUser || !smtpPass) { console.log('[EMAIL] No SMTP credentials configured'); resolve(false); return; }
+        var cfg = getMailTransport();
+        var result = { ok: false, messageId: null, accepted: [], rejected: [], response: null, error: null };
+
+        if (!cfg.user || !cfg.pass) {
+            console.log('[EMAIL] No SMTP credentials configured (SMTP_USER/SMTP_PASS)');
+            result.error = 'SMTP_CREDENTIALS_MISSING';
+            resolve(result); return;
+        }
+
+        var mailOpts = {
+            from: cfg.from,
+            to: to,
+            subject: subject,
+            text: body
+        };
+        if (htmlBody) mailOpts.html = htmlBody;
+
         try {
-            const nodemailer = require('nodemailer');
-            const transporter = nodemailer.createTransport({
-                host: 'smtp.163.com',
-                port: 465,
-                secure: true,
-                auth: { user: smtpUser, pass: smtpPass }
+            var nodemailer = require('nodemailer');
+            var transporter = nodemailer.createTransport({
+                host: cfg.host,
+                port: cfg.port,
+                secure: cfg.secure,
+                auth: { user: cfg.user, pass: cfg.pass }
             });
-            transporter.sendMail({
-                from: '"Endless Runner" <' + smtpUser + '>',
-                to: to,
-                subject: subject,
-                text: body
-            }, function(err, info) {
+
+            transporter.sendMail(mailOpts, function(err, info) {
                 if (err) {
-                    console.log('[EMAIL FAIL] ' + to + ': ' + err.message);
-                    resolve(false);
+                    console.log('[EMAIL FAIL] to=' + to + ' provider=' + cfg.provider + ' host=' + cfg.host + ' err=' + err.message);
+                    result.error = err.message;
+                    resolve(result);
                 } else {
-                    console.log('[EMAIL SENT] ' + to + ' (id: ' + info.messageId + ')');
-                    resolve(true);
+                    result.ok = true;
+                    result.messageId = info.messageId;
+                    result.accepted = info.accepted || [];
+                    result.rejected = info.rejected || [];
+                    result.response = info.response || null;
+                    console.log('[EMAIL SENT] to=' + to + ' provider=' + cfg.provider + ' id=' + info.messageId + ' accepted=' + JSON.stringify(result.accepted) + ' rejected=' + JSON.stringify(result.rejected) + ' response=' + (result.response || 'none'));
+                    resolve(result);
                 }
             });
         } catch(e) {
-            console.log('[EMAIL EXCEPTION] ' + e.message);
-            resolve(false);
+            console.log('[EMAIL EXCEPTION] to=' + to + ' provider=' + cfg.provider + ' err=' + e.message);
+            result.error = e.message;
+            resolve(result);
         }
     });
 }
@@ -658,6 +690,7 @@ async function handleRequest(req, res) {
 
     // ---- ADMIN: TEST EMAIL ----
     // ---- ADMIN: TEST EMAIL ----
+    // ---- ADMIN: TEST EMAIL ----
     if (pathname === '/api/admin-test-email' && method === 'POST') {
         if (!checkAdminAuth(req.headers)) { sendJSON(res, 401, { error: 'Admin auth required' }); return; }
         const body = await parseBody(req);
@@ -665,37 +698,27 @@ async function handleRequest(req, res) {
         if (!to) { sendJSON(res, 400, { error: 'Email required' }); return; }
         const mockMode = process.env.MOCK_EMAIL_SEND === 'true' || process.env.SKIP_EMAIL_SEND === 'true';
         if (mockMode) {
-            sendJSON(res, 200, { ok: true, message: 'Mock test (MOCK_EMAIL_SEND is set, no real email sent)', provider: 'mock', error: null });
+            sendJSON(res, 200, { ok: true, messageId: 'mock-' + Date.now(), accepted: [to], rejected: [], response: 'mock', error: null, provider: 'mock', mailFrom: 'mock' });
             return;
         }
-        const smtpUser = process.env.SMTP_USER || '';
-        const smtpPass = process.env.SMTP_PASS || '';
-        if (!smtpUser || !smtpPass) {
-            sendJSON(res, 200, { ok: false, message: 'SMTP not configured (SMTP_USER/SMTP_PASS missing)', provider: null, error: 'SMTP_CREDENTIALS_MISSING' });
+        var cfg = getMailTransport();
+        if (!cfg.user) {
+            sendJSON(res, 200, { ok: false, messageId: null, accepted: [], rejected: [], response: null, error: 'SMTP_CREDENTIALS_MISSING', provider: cfg.provider, mailFrom: cfg.fromMasked });
             return;
         }
-        const provider = smtpUser.split('@')[1] || 'unknown';
-        try {
-            const nodemailer = require('nodemailer');
-            const transporter = nodemailer.createTransport({
-                host: 'smtp.' + provider,
-                port: 465,
-                secure: true,
-                auth: { user: smtpUser, pass: smtpPass }
-            });
-            await transporter.verify();
-            const info = await transporter.sendMail({
-                from: '"Endless Runner Admin" <' + smtpUser + '>',
-                to: to,
-                subject: 'Endless Runner - Diagnostic Test Email',
-                text: 'This is a diagnostic test email from the Endless Runner admin panel.\n\nIf you received this, SMTP delivery to this address is working.\n\nSent at: ' + new Date().toISOString()
-            });
-            console.log('[ADMIN TEST EMAIL] Sent to ' + to + ' (id: ' + info.messageId + ')');
-            sendJSON(res, 200, { ok: true, message: 'Test email sent (id: ' + info.messageId + ')', provider: 'smtp.' + provider + ':465', error: null });
-        } catch(e) {
-            console.log('[ADMIN TEST EMAIL FAIL] ' + to + ': ' + e.message);
-            sendJSON(res, 200, { ok: false, message: 'Email delivery failed', provider: 'smtp.' + provider + ':465', error: e.message });
-        }
+        var result = await sendEmail(to,
+            'Endless Runner - Diagnostic Test Email',
+            'This is a diagnostic test email from the Endless Runner admin panel.\n\nIf you received this, SMTP delivery to this address is working.\n\nSent at: ' + new Date().toISOString(),
+            '<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:20px;background:#1a1a2e;color:#e0e0e0;border-radius:12px;">' +
+            '<h2 style="color:#ff6600;margin:0 0 16px;">\u260a\ufe0f Endless Runner - Diagnostic Email</h2>' +
+            '<p style="font-size:14px;color:#aaa;">If you received this, SMTP delivery to this address is working.</p>' +
+            '<p style="font-size:12px;color:#555;">Sent at: ' + new Date().toISOString() + '</p></div>'
+        );
+        result.provider = cfg.provider;
+        result.mailFrom = cfg.fromMasked;
+        result.host = cfg.host + ':' + cfg.port;
+        console.log('[ADMIN TEST EMAIL] to=' + to + ' ok=' + result.ok + ' id=' + (result.messageId || 'none') + ' accepted=' + JSON.stringify(result.accepted));
+        sendJSON(res, 200, result);
         return;
     }
 
@@ -802,26 +825,37 @@ async function handleRequest(req, res) {
         const code = generateCode();
 
         // Send verification email FIRST - only create account if email succeeds
-        let emailSent = false;
+        var emailResult = { ok: false };
         const mockMode = process.env.MOCK_EMAIL_SEND === 'true' || process.env.SKIP_EMAIL_SEND === 'true';
         try {
             if (mockMode) {
-                emailSent = true;
+                emailResult = { ok: true, messageId: 'mock-' + Date.now(), accepted: [email], rejected: [], response: 'mock', error: null };
                 console.log('[EMAIL MOCK] Simulated success for ' + email);
             } else {
-                emailSent = await sendEmail(email, 'Endless Runner - Verification Code',
-                    'Your verification code is: ' + code + '\n\n' +
-                    'Enter this code in the app to verify your email.\n\n' +
-                    'Code: ' + code + '\n\n' +
-                    'This code expires in 10 minutes.');
-                console.log(emailSent ? '[EMAIL SENT] to ' + email : '[EMAIL NOT SENT] to ' + email);
+                var emailSubject = 'Endless Runner \u9a8c\u8bc1\u7801\uff1a' + code;
+                var emailText = '\u60a8\u7684 Endless Runner \u8d26\u53f7\u9a8c\u8bc1\u7801\u4e3a\uff1a' + code + '\n\n' +
+                    '\u9a8c\u8bc1\u7801\uff1a' + code + '\n' +
+                    '\u6709\u6548\u65f6\u95f4\uff1a10 \u5206\u949f\n\n' +
+                    '\u5982\u679c\u4e0d\u662f\u60a8\u672c\u4eba\u64cd\u4f5c\uff0c\u8bf7\u5ffd\u7565\u6b64\u90ae\u4ef6\u3002';
+                var emailHtml = '<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:20px;background:#1a1a2e;color:#e0e0e0;border-radius:12px;">' +
+                    '<h2 style="color:#ff6600;margin:0 0 16px;font-size:20px;">\u260a\ufe0f Endless Runner</h2>' +
+                    '<p style="font-size:14px;color:#aaa;margin:0 0 20px;">\u60a8\u7684\u8d26\u53f7\u9a8c\u8bc1\u7801</p>' +
+                    '<div style="text-align:center;background:#0d1b2a;border-radius:10px;padding:20px;margin:20px 0;border:1px solid #2a2a4a;">' +
+                    '<span style="font-size:42px;font-weight:bold;color:#ff6600;letter-spacing:8px;">' + code + '</span></div>' +
+                    '<p style="font-size:13px;color:#888;margin:8px 0;">\u9a8c\u8bc1\u7801\u6709\u6548\u65f6\u95f4\uff1a10 \u5206\u949f</p>' +
+                    '<hr style="border:none;border-top:1px solid #2a2a4a;margin:20px 0;">' +
+                    '<p style="font-size:12px;color:#555;margin:0;">\u5982\u679c\u4e0d\u662f\u60a8\u672c\u4eba\u64cd\u4f5c\uff0c\u8bf7\u5ffd\u7565\u6b64\u90ae\u4ef6\u3002</p></div>';
+                emailResult = await sendEmail(email, emailSubject, emailText, emailHtml);
+                console.log('[REGISTER EMAIL] to=' + email + ' ok=' + emailResult.ok + ' id=' + (emailResult.messageId || 'none'));
             }
         } catch(e) {
-            console.log('[EMAIL FAILED] ' + e.message);
+            console.log('[REGISTER EMAIL EXCEPTION] ' + e.message);
+            emailResult = { ok: false, error: e.message };
         }
 
-        if (!emailSent) {
-            sendJSON(res, 502, { error: 'Verification email could not be sent. Please use a real reachable email address.' });
+        if (!emailResult.ok) {
+            var errMsg = emailResult.error || 'unknown';
+            sendJSON(res, 502, { error: 'Verification email could not be sent. Error: ' + errMsg + '. Please try another email address or contact support.' });
             return;
         }
 
@@ -841,7 +875,7 @@ async function handleRequest(req, res) {
         console.log('=========================\n');
 
         sendJSON(res, 201, {
-            message: 'Verification code sent to ' + email + '. Check your inbox.',
+            message: 'Verification code sent to ' + email + '. Check your inbox. If using QQ email and not received, please check spam folder or wait 5-30 minutes.',
             emailSent: true
         });
         return;
