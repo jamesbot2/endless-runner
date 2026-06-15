@@ -732,9 +732,33 @@ async function handleRequest(req, res) {
 
         // Generate verification code
         const code = generateCode();
-        verifyCodes[email] = { code, expires: Date.now() + 10 * 60 * 1000 }; // 10 min expiry
 
-        // Store user with unverified flag
+        // Send verification email FIRST - only create account if email succeeds
+        let emailSent = false;
+        const mockMode = process.env.MOCK_EMAIL_SEND === 'true' || process.env.SKIP_EMAIL_SEND === 'true';
+        try {
+            if (mockMode) {
+                emailSent = true;
+                console.log('[EMAIL MOCK] Simulated success for ' + email);
+            } else {
+                emailSent = await sendEmail(email, 'Endless Runner - Verification Code',
+                    'Your verification code is: ' + code + '\n\n' +
+                    'Enter this code in the app to verify your email.\n\n' +
+                    'Code: ' + code + '\n\n' +
+                    'This code expires in 10 minutes.');
+                console.log(emailSent ? '[EMAIL SENT] to ' + email : '[EMAIL NOT SENT] to ' + email);
+            }
+        } catch(e) {
+            console.log('[EMAIL FAILED] ' + e.message);
+        }
+
+        if (!emailSent) {
+            sendJSON(res, 502, { error: 'Verification email could not be sent. Please use a real reachable email address.' });
+            return;
+        }
+
+        // Only save user + verification code after successful email
+        verifyCodes[email] = { code, expires: Date.now() + 10 * 60 * 1000 }; // 10 min expiry
         const { hash, salt } = hashPassword(password);
         users[email] = {
             email, username: username, passwordHash: hash, passwordSalt: salt,
@@ -748,22 +772,9 @@ async function handleRequest(req, res) {
         console.log('Code:  ' + code);
         console.log('=========================\n');
 
-        // Send verification email
-        let emailSent = false;
-        try {
-            emailSent = await sendEmail(email, 'Endless Runner - Verification Code',
-                'Your verification code is: ' + code + '\n\n' +
-                'Enter this code in the app to verify your email.\n\n' +
-                'Code: ' + code + '\n\n' +
-                'This code expires in 10 minutes.');
-            console.log(emailSent ? '[EMAIL SENT] to ' + email : '[EMAIL NOT SENT] to ' + email);
-        } catch(e) {
-            console.log('[EMAIL FAILED] ' + e.message);
-        }
-
         sendJSON(res, 201, {
-            message: emailSent ? 'Verification code sent to ' + email + '. Check your inbox.' : 'Account created, but email delivery failed. Use /verify-codes in admin.',
-            emailSent: emailSent
+            message: 'Verification code sent to ' + email + '. Check your inbox.',
+            emailSent: true
         });
         return;
     }

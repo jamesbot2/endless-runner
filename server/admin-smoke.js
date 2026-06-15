@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // Endless Runner Admin Smoke Test
+process.env.MOCK_EMAIL_SEND = 'true';
 const http = require('http');
 const HOST = 'http://127.0.0.1:3000';
 const ADMIN_AUTH = 'Basic ' + Buffer.from('admin:admin123').toString('base64');
