@@ -18,6 +18,8 @@ export function initDesktopAuth(
   callbacks: AuthCallbacks
 ): void {
   if (!SG) return
+  const CAPTCHA_TIMEOUT_MS = 10000
+  const AUTH_TIMEOUT_MS = 30000
   let currentTab: 'login' | 'register' | 'verify' = 'login'
   let captchaId: string | null = null
   let pendingEmail = ''
@@ -33,7 +35,7 @@ export function initDesktopAuth(
   // ── Load captcha ────────────────────────────────────
   async function loadCaptcha(): Promise<void> {
     try {
-      const r = await fetch(API_BASE_URL + '/api/captcha', { signal: AbortSignal.timeout(5000) })
+      const r = await fetch(API_BASE_URL + '/api/captcha', { signal: AbortSignal.timeout(CAPTCHA_TIMEOUT_MS) })
       const d = await r.json()
       captchaId = d.captchaId
       const el = document.getElementById('dc-captcha-svg')
@@ -150,7 +152,7 @@ export function initDesktopAuth(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password: pass }),
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(AUTH_TIMEOUT_MS),
       })
       const data = await r.json()
       if (data.error) { setMsg('dc-login-msg', data.error, true); btn.disabled = false; btn.textContent = 'LOGIN'; return }
@@ -187,7 +189,7 @@ export function initDesktopAuth(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password: pass, username: name, captchaId, captchaAnswer }),
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(AUTH_TIMEOUT_MS),
       })
       const data = await r.json()
       if (data.error) { setMsg('dc-reg-msg', data.error, true); btn.disabled = false; btn.textContent = 'REGISTER'; loadCaptcha(); return }
@@ -202,8 +204,12 @@ export function initDesktopAuth(
       if (data.emailSent === false) {
         setMsg('dc-verify-msg', 'Email delivery failed. Open /verify-codes in admin to get the code.', true)
       }
-    } catch {
-      setMsg('dc-reg-msg', 'Cannot reach server. Try again.', true)
+    } catch (error: any) {
+      if (error && error.name === 'TimeoutError') {
+        setMsg('dc-reg-msg', 'Server is taking too long to send the verification email. Please wait a bit and try again.', true)
+      } else {
+        setMsg('dc-reg-msg', 'Cannot reach server. Try again.', true)
+      }
       btn.disabled = false; btn.textContent = 'REGISTER'
     }
   }
@@ -222,7 +228,7 @@ export function initDesktopAuth(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: pendingEmail, code }),
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(AUTH_TIMEOUT_MS),
       })
       const data = await r.json()
       if (data.error) { setMsg('dc-verify-msg', data.error, true); btn.disabled = false; btn.textContent = 'VERIFY'; return }

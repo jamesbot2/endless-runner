@@ -294,7 +294,10 @@ function sendEmail(to, subject, body, htmlBody) {
                 host: cfg.host,
                 port: cfg.port,
                 secure: cfg.secure,
-                auth: { user: cfg.user, pass: cfg.pass }
+                auth: { user: cfg.user, pass: cfg.pass },
+                connectionTimeout: 8000,
+                greetingTimeout: 8000,
+                socketTimeout: 15000
             });
 
             transporter.sendMail(mailOpts, function(err, info) {
