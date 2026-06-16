@@ -7852,8 +7852,18 @@
 
     function wsUrl() {
         var base = apiBase();
-        var host = base.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
-        return base.indexOf('https://') === 0 ? 'wss://' + host + '/pvp' : 'ws://' + host + ':3001/pvp';
+        try {
+            var u = new URL(base);
+            var protocol = u.protocol === 'https:' ? 'wss:' : 'ws:';
+            var hostname = u.hostname;
+            var isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+            var hostForUrl = hostname.indexOf(':') >= 0 ? '[' + hostname + ']' : hostname;
+            if (isLocal || u.port === '3000') return protocol + '//' + hostForUrl + ':3001/pvp';
+            return protocol + '//' + u.host + '/pvp';
+        } catch(e) {
+            var host = base.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
+            return base.indexOf('https://') === 0 ? 'wss://' + host + '/pvp' : 'ws://' + host + '/pvp';
+        }
     }
 
     function setStatus(state) {
