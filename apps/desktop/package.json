@@ -15,6 +15,7 @@
     "build": "npm run build:three && npm run build:renderer && npm run build:electron",
     "prepack": "npm run build",
     "pack": "electron-builder build --win --dir --config.win.signAndEditExecutable=false",
+    "postpack": "node scripts/set-exe-icon.mjs",
     "predist": "npm run build",
     "dist": "electron-builder build --win",
     "start": "electron .",
@@ -29,6 +30,7 @@
     "cross-env": "^7.0.3",
     "electron": "^33.3.1",
     "electron-builder": "^25.1.8",
+    "rcedit": "^5.0.2",
     "typescript": "^5.9.3",
     "vite": "^6.1.0",
     "wait-on": "^8.0.3"
