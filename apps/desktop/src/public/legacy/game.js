@@ -7371,7 +7371,7 @@
     var SG = window.__SG = window.__SG || {};
     var API = (window.__ENDLESS_RUNNER_CONFIG__ && window.__ENDLESS_RUNNER_CONFIG__.API_BASE_URL) ||
         (window.__SUBWAY_CONFIG__ && window.__SUBWAY_CONFIG__.API_BASE_URL) ||
-        'http://' + (window.location.hostname || '35.212.200.85') + ':3000';
+        'http://api.damnatiox.com';
 
     SG.account = {
         token: localStorage.getItem('subwayToken') || null,
@@ -7847,7 +7847,7 @@
         return SG.apiBaseUrl ||
             (window.__ENDLESS_RUNNER_CONFIG__ && window.__ENDLESS_RUNNER_CONFIG__.API_BASE_URL) ||
             (window.__SUBWAY_CONFIG__ && window.__SUBWAY_CONFIG__.API_BASE_URL) ||
-            'http://35.212.200.85:3000';
+            'http://api.damnatiox.com';
     }
 
     function wsUrl() {

@@ -17,7 +17,7 @@ const apiArg = process.argv.find(a => a.startsWith('--api-base-url='))
 // In CI / release builds, ENDLESS_RUNNER_API_BASE_URL or production IP is passed.
 const API_BASE_URL = apiArg
   ? apiArg.split('=', 2)[1]
-  : 'http://35.212.200.85:3000'
+  : 'http://api.damnatiox.com'
 
 contextBridge.exposeInMainWorld('__ENDLESS_RUNNER_CONFIG__', {
   API_BASE_URL,

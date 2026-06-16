@@ -1239,7 +1239,7 @@ app.whenReady().then(async () => {
     check('5c. SG.apiBaseUrl matches env', state.sgApiBaseUrl === envUrl, state.sgApiBaseUrl)
   } else {
     // No env var → should use production default
-    const prodUrl = 'http://35.212.200.85:3000'
+    const prodUrl = 'http://api.damnatiox.com'
     check('4d. API_BASE_URL defaults to production', state.apiBaseUrl === prodUrl, state.apiBaseUrl || 'undefined')
     check('4d-legacy. legacy API_BASE_URL defaults to production', state.legacyApiBaseUrl === prodUrl, state.legacyApiBaseUrl || 'undefined')
     check('5c. SG.apiBaseUrl defaults to production', state.sgApiBaseUrl === prodUrl, state.sgApiBaseUrl || 'undefined')

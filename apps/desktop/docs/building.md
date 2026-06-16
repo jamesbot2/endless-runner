@@ -77,17 +77,17 @@ to a custom account server:
 
 ```powershell
 # PowerShell
-$env:ENDLESS_RUNNER_API_BASE_URL="http://35.212.200.85:3000"
+$env:ENDLESS_RUNNER_API_BASE_URL="http://api.damnatiox.com"
 .\release\win-unpacked\Endless Runner.exe
 ```
 
 ```cmd
 REM Command Prompt
-set ENDLESS_RUNNER_API_BASE_URL=http://35.212.200.85:3000
+set ENDLESS_RUNNER_API_BASE_URL=http://api.damnatiox.com
 "release\win-unpacked\Endless Runner.exe"
 ```
 
-Default: `http://35.212.200.85:3000` (packaged release) or `http://localhost:3000` (development).
+Default: `http://api.damnatiox.com` (packaged release) or `http://localhost:3000` (development).
 
 The API base URL is shown in the app's bottom status bar along with the
 connection status (online / offline).
@@ -171,10 +171,10 @@ input:
 
 ```yaml
 env:
-  ENDLESS_RUNNER_API_BASE_URL: http://35.212.200.85:3000
+  ENDLESS_RUNNER_API_BASE_URL: http://api.damnatiox.com
 ```
 
-Default: `http://35.212.200.85:3000` (packaged release) or `http://localhost:3000` (development).
+Default: `http://api.damnatiox.com` (packaged release) or `http://localhost:3000` (development).
 
 ### Signing
 

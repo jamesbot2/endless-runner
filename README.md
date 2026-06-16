@@ -102,7 +102,7 @@ npm run desktop:dist            # Full NSIS installer (requires wine on Linux)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ENDLESS_RUNNER_API_BASE_URL` | `http://35.212.200.85:3000` | Account server URL (recommended) |
+| `ENDLESS_RUNNER_API_BASE_URL` | `http://api.damnatiox.com` | Account server URL (recommended) |
 | `SUBWAY_API_BASE_URL` | (legacy alias) | Backward-compatible alias for `ENDLESS_RUNNER_API_BASE_URL` |
 
 ### Quick Release Zip

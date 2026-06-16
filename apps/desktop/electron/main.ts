@@ -88,11 +88,11 @@ function createWindow(): void {
   // ── API base URL ───────────────────────────────────
   // Priority: ENDLESS_RUNNER_API_BASE_URL env -> legacy SUBWAY_API_BASE_URL env -> dev default -> production server
   // Dev default: http://localhost:3000
-  // Production (packaged app, CI, release) default: http://35.212.200.85:3000
+  // Production (packaged app, CI, release) default: http://api.damnatiox.com
   // Override by setting ENDLESS_RUNNER_API_BASE_URL at build/launch time.
   const apiBaseUrl = process.env.ENDLESS_RUNNER_API_BASE_URL
     || process.env.SUBWAY_API_BASE_URL
-    || (isDev ? 'http://localhost:3000' : 'http://35.212.200.85:3000')
+    || (isDev ? 'http://localhost:3000' : 'http://api.damnatiox.com')
 
   mainWindow = new BrowserWindow({
     width: 1280,

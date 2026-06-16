@@ -15,12 +15,12 @@ on:
       ENDLESS_RUNNER_API_BASE_URL:
         description: 'Account server URL'
         required: false
-        default: 'http://35.212.200.85:3000'
+        default: 'http://api.damnatiox.com'
         type: string
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  ENDLESS_RUNNER_API_BASE_URL: ${{ inputs.ENDLESS_RUNNER_API_BASE_URL || 'http://35.212.200.85:3000' }}
+  ENDLESS_RUNNER_API_BASE_URL: ${{ inputs.ENDLESS_RUNNER_API_BASE_URL || 'http://api.damnatiox.com' }}
 
 jobs:
   build:
